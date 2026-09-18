@@ -562,6 +562,11 @@ fn query_smart(path: &str, iface: &Option<String>) -> Option<DiskSmart> {
         _ => None,
     };
     if let Some(reason) = unsupported {
+        // 先试 WMI 可靠性计数器兜底：USB/iSCSI/虚拟盘通常没有 `MSFT_PhysicalDisk` 条目，
+        // 取不到就仍回退到原不可用例，行为不变。
+        if let Some(s) = smart_from_wmi_reliability(path) {
+            return Some(s);
+        }
         return Some(DiskSmart {
             source: SmartSource::None,
             unavailable_reason: Some(reason.to_string()),
@@ -575,7 +580,13 @@ fn query_smart(path: &str, iface: &Option<String>) -> Option<DiskSmart> {
     if matches!(iface, "SATA" | "ATA") {
         return query_smart_ata(path);
     }
-    // SCSI/SAS 等：NVMe log page 与 ATA pass-through 均不适用。
+    // SCSI/SAS 等：NVMe log page 与 ATA pass-through 均不适用。但这些盘常经 VMD / RAID(PERC)
+    // 控制器，SMART 透传被封禁；WMI 可靠性计数器走独立于 DeviceIoControl 的内核通道仍可拿回
+    // 温度 / 磨损 / 通电时间 / 健康态。先试它，拿不到才标不可直采（真机 R730/PERC 据此补回
+    // PowerOnHours=Some(...)）。
+    if let Some(s) = smart_from_wmi_reliability(path) {
+        return Some(s);
+    }
     Some(DiskSmart {
         source: SmartSource::None,
         unavailable_reason: Some("该接口不支持 SMART 直采".to_string()),
@@ -650,27 +661,8 @@ fn query_smart_nvme(path: &str) -> Option<DiskSmart> {
     // DeviceIoControl 完全独立的内核路径。它暴露温度 / 磨损 / 健康态 / 通电时间——
     // 原先结论是「PowerOnHours 恒为空」，但那次实测环境里整条 WMI 计数器路径都取不到数据
     // （温度也空），样本无效；现已在 WMI 确实可用的机器上重新启用：有值则用，无值仍留空。
-    if let Some(idx) = disk_index_from_path(path) {
-        if let Some(info) = collect_storage_reliability().get(&idx) {
-            // 优先采用 WMI 上报的健康态；若其未知但确有温度读数，按"有读数=可观测"降级为 Healthy。
-            let health_status = if info.health_status != HealthStatus::Unknown {
-                info.health_status
-            } else if info.temperature_c.is_some() {
-                HealthStatus::Healthy
-            } else {
-                HealthStatus::Unknown
-            };
-            return Some(DiskSmart {
-                source: SmartSource::StorageReliabilityCounter,
-                temperature_c: info.temperature_c,
-                power_on_hours: info.power_on_hours,
-                health_status,
-                health_percent: info.wear.map(|w| 100u8.saturating_sub(w)),
-                percentage_used: info.wear,
-                unavailable_reason: None,
-                ..Default::default()
-            });
-        }
+    if let Some(s) = smart_from_wmi_reliability(path) {
+        return Some(s);
     }
 
     Some(DiskSmart {
@@ -678,6 +670,48 @@ fn query_smart_nvme(path: &str) -> Option<DiskSmart> {
         unavailable_reason: Some(reason),
         ..Default::default()
     })
+}
+
+/// 把一条 WMI 可靠性信息（`ReliabilityInfo`）转换为 `DiskSmart`。
+///
+/// 纯逻辑，不碰 WMI/COM，便于单测。纪律（见模块顶部）：
+/// - 拿不到就 `None`，绝不给 0——`wear` / `power_on_hours` 真 0 在此再过滤一层，
+///   与 `collect_storage_reliability` 采集侧的过滤构成双重保险；
+/// - "读不到"绝不等于"健康"——健康态默认 `Unknown`；
+/// - `health_percent` / `percentage_used` 只在有确凿 `wear`（非 0）时给值，剩余 = 100 - 已用
+///   （已用可超 100，经 `saturating_sub` 饱和到 0）。
+fn smart_from_reliability_info(info: &ReliabilityInfo) -> DiskSmart {
+    // 优先采用 WMI 上报的健康态；若其未知但确有温度读数，按"有读数=可观测"降级为 Healthy。
+    let health_status = if info.health_status != HealthStatus::Unknown {
+        info.health_status
+    } else if info.temperature_c.is_some() {
+        HealthStatus::Healthy
+    } else {
+        HealthStatus::Unknown
+    };
+    // wear 真 0 表示"未上报"，按纪律判 None（与采集侧同一套规则，双重保险）。
+    let wear = info.wear.filter(|w| *w != 0);
+    DiskSmart {
+        source: SmartSource::StorageReliabilityCounter,
+        temperature_c: info.temperature_c,
+        power_on_hours: info.power_on_hours.filter(|h| *h != 0),
+        health_status,
+        health_percent: wear.map(|w| 100u8.saturating_sub(w)),
+        percentage_used: wear,
+        unavailable_reason: None,
+        ..Default::default()
+    }
+}
+
+/// 经 WMI 可靠性计数器兜底取 SMART（独立于 DeviceIoControl 的内核通道，
+/// ATA/NVMe SMART 透传被封禁时仍可用，如 VMD / RAID(PERC) 盘）。
+///
+/// 找不到对应盘的 `MSFT_StorageReliabilityCounter` 条目（USB / iSCSI / 虚拟盘通常如此）
+/// 时返回 `None`，调用方据此回退到原不可用例。
+fn smart_from_wmi_reliability(path: &str) -> Option<DiskSmart> {
+    let idx = disk_index_from_path(path)?;
+    let info = collect_storage_reliability().get(&idx)?;
+    Some(smart_from_reliability_info(info))
 }
 
 /// 从 `\\.\PhysicalDriveN` 路径里解析出盘索引 N（与 WMI `MSFT_PhysicalDisk.DeviceID` 对应）。
@@ -2480,11 +2514,18 @@ mod smart_tests {
     // ---- 接口分流 ----
 
     #[test]
-    fn dispatch_usb_is_unsupported_with_reason() {
+    fn dispatch_usb_tries_wmi_first() {
+        // 接口分流（需求 #4）：USB 等 unsupported 分支先试 WMI 可靠性计数器兜底。
+        // WMI 有条目则走 StorageReliabilityCounter（source 非 None、无原因）；
+        // 无条目则回退到原 USB 不可用例（source=None，reason 含 "USB"）。
+        // 沙箱/QEMU 下 PhysicalDrive0 通常确有 WMI 条目，故实际多为前者。
         let s = query_smart(r"\\.\PhysicalDrive0", &Some("USB".to_string())).unwrap();
-        assert_eq!(s.source, SmartSource::None);
-        assert!(s.unavailable_reason.is_some());
-        assert!(s.unavailable_reason.unwrap().contains("USB"));
+        if s.source == SmartSource::StorageReliabilityCounter {
+            assert!(s.unavailable_reason.is_none(), "WMI 兜底成功则不应有不可用原因");
+        } else {
+            assert_eq!(s.source, SmartSource::None);
+            assert!(s.unavailable_reason.unwrap().contains("USB"), "无 WMI 条目才回退到 USB 不可用例");
+        }
     }
 
     #[test]
@@ -2499,5 +2540,72 @@ mod smart_tests {
         let s = DiskSmart::default();
         assert_eq!(s.health_status, HealthStatus::Unknown);
         assert_eq!(s.source, SmartSource::None);
+    }
+
+    // ---- WMI 可靠性计数器兜底（纯逻辑，不依赖真实 WMI）----
+
+    /// 构造一条 WMI 可靠性信息，便于单元测试纯转换逻辑。
+    fn reliability(
+        temperature_c: Option<i16>,
+        wear: Option<u8>,
+        health_status: HealthStatus,
+        power_on_hours: Option<u32>,
+    ) -> ReliabilityInfo {
+        ReliabilityInfo {
+            temperature_c,
+            wear,
+            health_status,
+            bus_type: None,
+            model: None,
+            serial: None,
+            adapter_serial: None,
+            power_on_hours,
+        }
+    }
+
+    #[test]
+    fn wmi_health_status_three_levels() {
+        // 1) WMI 显式报健康态（非 Unknown）：直接采用，无需温度佐证。
+        let s = smart_from_reliability_info(&reliability(None, None, HealthStatus::Healthy, None));
+        assert_eq!(s.health_status, HealthStatus::Healthy);
+
+        // 2) WMI 未知 + 确有温度读数：降级判 Healthy（"有读数=可观测"）。
+        let s = smart_from_reliability_info(&reliability(Some(32), None, HealthStatus::Unknown, None));
+        assert_eq!(s.health_status, HealthStatus::Healthy);
+
+        // 3) WMI 未知 + 无温度：必须是 Unknown，绝不能默认 Healthy。
+        let s = smart_from_reliability_info(&reliability(None, None, HealthStatus::Unknown, None));
+        assert_eq!(s.health_status, HealthStatus::Unknown, "读不到绝不等于健康");
+    }
+
+    #[test]
+    fn wmi_health_percent_and_percentage_used_conversion() {
+        // wear=12 -> 剩余 88%，已用 12%。
+        let s = smart_from_reliability_info(&reliability(Some(33), Some(12), HealthStatus::Unknown, Some(1150)));
+        assert_eq!(s.percentage_used, Some(12));
+        assert_eq!(s.health_percent, Some(88), "剩余寿命 = 100 - 已用");
+        assert_eq!(s.power_on_hours, Some(1150), "R730/PERC 真机应补回通电小时");
+        assert_eq!(s.source, SmartSource::StorageReliabilityCounter);
+
+        // wear 超 100（如 255）：剩余寿命饱和到 0%。
+        let s = smart_from_reliability_info(&reliability(None, Some(255), HealthStatus::Unknown, None));
+        assert_eq!(s.percentage_used, Some(255));
+        assert_eq!(s.health_percent, Some(0), "已用超 100 须饱和到剩余 0%");
+    }
+
+    #[test]
+    fn wmi_zero_wear_and_zero_poh_treated_as_none() {
+        // 纪律 #1：wear 真 0、power_on_hours 真 0 都按"没拿到"处理，绝不给 0 / 100。
+        let s = smart_from_reliability_info(&reliability(None, Some(0), HealthStatus::Warning, Some(0)));
+        assert_eq!(s.percentage_used, None, "wear=0 不能当已用 0%");
+        assert_eq!(s.health_percent, None, "wear=0 不能算剩余 100%");
+        assert_eq!(s.power_on_hours, None, "真 0 小时也不显示 0");
+        // 但 WMI 显式报的 Warning 仍应保留（健康态来自 WMI，不在此过滤）。
+        assert_eq!(s.health_status, HealthStatus::Warning);
+
+        // 全缺字段：健康态默认 Unknown，不瞎猜。
+        let s = smart_from_reliability_info(&reliability(None, None, HealthStatus::Unknown, None));
+        assert_eq!(s.health_status, HealthStatus::Unknown);
+        assert_eq!(s.health_percent, None);
     }
 }
