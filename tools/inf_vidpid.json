@@ -1,0 +1,2851 @@
+[
+  {
+    "vid": "0D8C",
+    "pid": "01DA",
+    "model": "Cougar Phontum Pro UIX",
+    "class": "Media",
+    "file": "pwnage\\PwnageStormBreaker\\CougarPHPro\\Win10\\x64\\COUGARPHPRO.Inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0472",
+    "model": "SteelSeries Rival 150 Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0475",
+    "model": "SteelSeries Rival 160 Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0615",
+    "model": "SteelSeries Apex M650 Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0616",
+    "model": "SteelSeries Apex M750 Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0617",
+    "model": "SteelSeries Apex M750 TKL Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "0619",
+    "model": "SteelSeries Apex M750 TKL PUBG Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1200",
+    "model": "SteelSeries Apex [RAW] Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1202",
+    "model": "SteelSeries Apex Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1204",
+    "model": "SteelSeries Guild Wars 2 Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1206",
+    "model": "SteelSeries Apex 350",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1208",
+    "model": "SteelSeries Apex 300",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "120A",
+    "model": "Omen Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1228",
+    "model": "SteelSeries Siberia 150",
+    "class": "Media",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\win10\\ssdtshpx.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1229",
+    "model": "SteelSeries Siberia 350",
+    "class": "Media",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\win10\\ssdtshpx.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "122A",
+    "model": "Dell Performance Headset AE2",
+    "class": "Media",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\win10\\ssdtshpx.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1250",
+    "model": "SteelSeries Arctis 5 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1251",
+    "model": "SteelSeries Arctis 5 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1252",
+    "model": "SteelSeries Arctis Pro Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1260",
+    "model": "Arctis 7 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1282",
+    "model": "GameDAC Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1294",
+    "model": "Arctis Pro Wireless Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "12A8",
+    "model": "Arctis 5 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "12AA",
+    "model": "Arctis 5 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "12AD",
+    "model": "Arctis 7 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "12C4",
+    "model": "SteelSeries Arctis 9 Game",
+    "class": "Extension",
+    "file": "SteelSeries\\Bin\\sshz_dtshpx\\amd64\\UWP\\wdma_usb_ext.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1356",
+    "model": "SteelSeries Sensei Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1358",
+    "model": "SteelSeries Sensei Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "135A",
+    "model": "SteelSeries Sensei Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1361",
+    "model": "SteelSeries Sensei Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1362",
+    "model": "SteelSeries Diablo III Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1369",
+    "model": "SteelSeries Sensei [RAW]",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "136B",
+    "model": "SteelSeries Sensei MLG Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "136D",
+    "model": "SteelSeries Guild Wars 2 Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "136F",
+    "model": "SteelSeries Call of Duty Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "137C",
+    "model": "SteelSeries Sensei Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "137E",
+    "model": "SteelSeries Sensei Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1380",
+    "model": "SteelSeries World of Tanks Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1384",
+    "model": "SteelSeries Rival",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1386",
+    "model": "SteelSeries The Sims 4 Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1388",
+    "model": "SteelSeries Kinzu v3",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1390",
+    "model": "SteelSeries Heroes of the Storm Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1392",
+    "model": "SteelSeries Rival Dota 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1394",
+    "model": "SteelSeries Rival 300 CS:GO Fade Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1600",
+    "model": "SteelSeries Apex M800",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1603",
+    "model": "SteelSeries Apex M800 Dota 2 TI5 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1605",
+    "model": "SteelSeries Apex M800 Dota 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1607",
+    "model": "SteelSeries Apex M500",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1609",
+    "model": "SteelSeries Apex M500 Evil Geniuses",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "160C",
+    "model": "SteelSeries Apex M400",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "160E",
+    "model": "SteelSeries Apex 100",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1610",
+    "model": "SteelSeries Apex Pro",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1612",
+    "model": "SteelSeries Apex 7",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1614",
+    "model": "SteelSeries Apex Pro TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1616",
+    "model": "SteelSeries Apex 150",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1618",
+    "model": "SteelSeries Apex 7 TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "161A",
+    "model": "SteelSeries Apex 3",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "161C",
+    "model": "SteelSeries Apex 5",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "161E",
+    "model": "SteelSeries Apex Pro Mini",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1620",
+    "model": "SteelSeries Apex 9 Mini",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1622",
+    "model": "SteelSeries Apex 3 TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1624",
+    "model": "SteelSeries Apex Pro Mini Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1626",
+    "model": "SteelSeries Apex Pro Mini Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1628",
+    "model": "SteelSeries Apex Pro TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1630",
+    "model": "SteelSeries Apex Pro TKL Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1632",
+    "model": "SteelSeries Apex Pro TKL Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1634",
+    "model": "SteelSeries Apex 9 TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1640",
+    "model": "SteelSeries Apex Pro",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1642",
+    "model": "SteelSeries Apex Pro TKL",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1644",
+    "model": "SteelSeries Apex Pro TKL Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1646",
+    "model": "SteelSeries Apex Pro TKL Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1648",
+    "model": "SteelSeries Apex Pro Mini",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1650",
+    "model": "SteelSeries Apex 5",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1652",
+    "model": "SteelSeries Apex 7",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1700",
+    "model": "SteelSeries Rival 700",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1702",
+    "model": "SteelSeries Rival 100",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1704",
+    "model": "SteelSeries Rival 95",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1706",
+    "model": "SteelSeries Rival 95",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1707",
+    "model": "SteelSeries Rival 95 MSI Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1708",
+    "model": "SteelSeries Rival 100",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1709",
+    "model": "SteelSeries Rival 50 MSI Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "170A",
+    "model": "SteelSeries Rival 100 Dell Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "170B",
+    "model": "SteelSeries Rival 100 Dota 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "170C",
+    "model": "SteelSeries Rival 100 Dota 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "170D",
+    "model": "SteelSeries Rival 100 WoT",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "170E",
+    "model": "SteelSeries Rival 500",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1710",
+    "model": "SteelSeries Rival 300",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1712",
+    "model": "SteelSeries Rival 300 Fallout 4 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1714",
+    "model": "Predator Gaming Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1716",
+    "model": "SteelSeries Rival 300 CS:GO Fade Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1718",
+    "model": "Omen Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "171A",
+    "model": "SteelSeries Rival 300 CS:GO Hyper Beast Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "171C",
+    "model": "SteelSeries Rival 300 Evil Geniuses",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "171E",
+    "model": "SteelSeries Rival 310 CS:GO Howl Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1720",
+    "model": "SteelSeries Rival 310 eSports Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1722",
+    "model": "SteelSeries Sensei 310 eSports Mouse",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1724",
+    "model": "SteelSeries Rival 600",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1726",
+    "model": "SteelSeries Rival 650 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1729",
+    "model": "SteelSeries Rival 110",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "172B",
+    "model": "SteelSeries Rival 650 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "172E",
+    "model": "SteelSeries Rival 600 Dota 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1730",
+    "model": "SteelSeries Rival 710",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1736",
+    "model": "SteelSeries Rival 310 PUBG Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1800",
+    "model": "SteelSeries Sensei Raw Optical RGB",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1810",
+    "model": "SteelSeries Rival 300S",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1814",
+    "model": "SteelSeries Rival 105",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1816",
+    "model": "SteelSeries Rival 106",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1824",
+    "model": "SteelSeries Rival 3",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1826",
+    "model": "SteelSeries Sensei Raw Optical RGB",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "182A",
+    "model": "SteelSeries Prime 6 Siege Black Ice Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "182C",
+    "model": "SteelSeries Prime+",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "182E",
+    "model": "SteelSeries Prime",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1830",
+    "model": "SteelSeries Rival 3 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1832",
+    "model": "SteelSeries Sensei Ten",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1834",
+    "model": "SteelSeries Sensei Ten Neon Rider",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1836",
+    "model": "SteelSeries Aerox 3",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1838",
+    "model": "SteelSeries Aerox 3 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "183A",
+    "model": "SteelSeries Aerox 3 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "183C",
+    "model": "SteelSeries Rival 5",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "183E",
+    "model": "SteelSeries Rival 5 Destiny 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1840",
+    "model": "SteelSeries Prime Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1842",
+    "model": "SteelSeries Prime Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1848",
+    "model": "SteelSeries Prime Mini Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "184A",
+    "model": "SteelSeries Prime Mini Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "184C",
+    "model": "SteelSeries Rival 3",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "184D",
+    "model": "SteelSeries Prime Mini",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1850",
+    "model": "SteelSeries Aerox 5",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1852",
+    "model": "SteelSeries Aerox 5 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1854",
+    "model": "SteelSeries Aerox 5 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1856",
+    "model": "SteelSeries Prime CS:GO Neo Noir Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1858",
+    "model": "SteelSeries Aerox 9 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "185A",
+    "model": "SteelSeries Aerox 9 Wireless",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "185C",
+    "model": "SteelSeries Aerox 5 Wireless Destiny 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "185E",
+    "model": "SteelSeries Aerox 5 Wireless Destiny 2 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1860",
+    "model": "SteelSeries Aerox 5 Wireless Diablo 4 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1862",
+    "model": "SteelSeries Aerox 5 Wireless Diablo 4 Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1870",
+    "model": "SteelSeries Rival 3 Gen 2",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1872",
+    "model": "SteelSeries Rival 3 Wireless Gen 2",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1874",
+    "model": "SteelSeries Aerox 9 Wireless WOW Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1876",
+    "model": "SteelSeries Aerox 9 Wireless WOW Edition",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "1878",
+    "model": "SteelSeries Aerox 3 Wireless DLE",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "187A",
+    "model": "SteelSeries Aerox 3 Wireless DLE",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\DriverStore\\FileRepository\\sshid.inf_amd64_6b704b894f96a4e8\\sshid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2000",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2001",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2002",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2003",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2004",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2005",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2006",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2007",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2008",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2009",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "200F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2010",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2011",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2012",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2013",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2014",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2015",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2016",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2017",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2018",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2019",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "201F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2020",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2021",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2022",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2023",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2024",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2025",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2026",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2027",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2028",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2029",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "202F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2030",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2031",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2032",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2033",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2034",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2035",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2036",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2037",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2038",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2039",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "203F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2040",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2041",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2042",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2043",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2044",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2045",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2046",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2047",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2048",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2049",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "204F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2050",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2051",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2052",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2053",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2054",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2055",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2056",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2057",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2058",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2059",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "205F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2060",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2061",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2062",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2063",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2064",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2065",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2066",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2067",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2068",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "2069",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206A",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206B",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206C",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206D",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206E",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1038",
+    "pid": "206F",
+    "model": "SteelSeries Gaming Keyboard",
+    "class": "HIDClass",
+    "file": "SteelSeries\\Bin\\Program Files\\SteelSeries\\GG\\apps\\engine\\driver\\Win10\\amd64\\msihid.inf"
+  },
+  {
+    "vid": "1915",
+    "pid": "520F",
+    "model": "nRF52 USB CDC Demo",
+    "class": "Ports",
+    "file": "AngryMiao\\AM_Master\\driver\\nordic_cdc_acm.inf"
+  },
+  {
+    "vid": "1915",
+    "pid": "521A",
+    "model": "nRF52 USB CDC BLE Demo",
+    "class": "Ports",
+    "file": "AngryMiao\\AM_Master\\driver\\nordic_cdc_acm.inf"
+  },
+  {
+    "vid": "1915",
+    "pid": "521B",
+    "model": "nRF52 USB CDC Connectivity",
+    "class": "Ports",
+    "file": "AngryMiao\\AM_Master\\driver\\nordic_cdc_acm.inf"
+  },
+  {
+    "vid": "1915",
+    "pid": "521F",
+    "model": "nRF52 SDFU USB",
+    "class": "Ports",
+    "file": "AngryMiao\\AM_Master\\driver\\nordic_cdc_acm.inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "0113",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "011D",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "0129",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "012B",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "01C7",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2516",
+    "pid": "01EA",
+    "model": "CoolerMater MHGS USB Gaming Headset",
+    "class": "Media",
+    "file": "kuleng\\MasterPlus\\cm_drv_installer\\CM_MHGS\\Win10\\COOLERMASTER_MHGS.Inf"
+  },
+  {
+    "vid": "2D99",
+    "pid": "0026",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "2D99",
+    "pid": "0028",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A006",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A007",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A008",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A009",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00A",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00B",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00C",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00D",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00E",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A00F",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2wireless\\driver\\Driver\\HECATE_HP_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06A",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06B",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06C",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06D",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06E",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A06F",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A070",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A071",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A072",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A073",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g5wired\\driver\\Driver\\HECATE_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A100",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A100",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A101",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A101",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A102",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A102",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A103",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A103",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A104",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A104",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A105",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A105",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A106",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A106",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A107",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A107",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A108",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A109",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A10F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A110",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A111",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A112",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A113",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A114",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A115",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A116",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A117",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A118",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A119",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A11F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A120",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A121",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A122",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A123",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A124",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A125",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A126",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A127",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A128",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A129",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A12F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A130",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A131",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A132",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A133",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A134",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A135",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A136",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A137",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A138",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A139",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A13F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A140",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A141",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A142",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A143",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A144",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A145",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A146",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A147",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A148",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A149",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A14F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A150",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A151",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A152",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A153",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A154",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A155",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A156",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A157",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A158",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A159",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15A",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15B",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15C",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15D",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15E",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A15F",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A160",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A161",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A162",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A163",
+    "model": "HECATE G2 PRO",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\CM6646X1_Driver_V11.1.1.6\\CM6646X1_HECATE_G2_PRO.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A164",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "A165",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g2pro\\driver\\HECATE_HD_AUDIO_DEVICE-Driver-V11.1.1.0\\HECATE_HD_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B001",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B002",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B003",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B004",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B005",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B006",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B007",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B008",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B009",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "35BB",
+    "pid": "B00A",
+    "model": "HECATE Audio Device",
+    "class": "Media",
+    "file": "Edifier\\HECATE\\data\\deviceresource\\g1500bar\\driver\\Driver\\HECATE_SPK_AUDIO_DEVICE.Inf"
+  },
+  {
+    "vid": "3837",
+    "pid": "60C6",
+    "model": "K20 Turbo",
+    "class": "Media",
+    "file": "maicong\\MCHOSE HUB\\libs\\K20_GT\\drivers\\Package\\MCHOSE_K20_TURBO.Inf"
+  }
+]

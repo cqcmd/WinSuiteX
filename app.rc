@@ -1,0 +1,62 @@
+﻿#include <windows.h>
+#include "resource.h"
+
+// 关键：声明 RC 源文件为 UTF-8，否则 windres 按 ANSI 处理，
+// 版本信息里的“中文”在文件属性里会变成乱码。
+#pragma code_page(65001)
+
+IDI_APP_ICON ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,7,0,260916
+PRODUCTVERSION 1,7,0,260916
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "CompanyName", "重庆持玛多网络科技有限公司"
+            VALUE "FileDescription", "WinSuiteX Windows 套件"
+            VALUE "FileVersion", "1.7.0.20260916"
+            VALUE "InternalName", "WinSuiteX"
+            VALUE "LegalCopyright", "持玛多网络 / Z.W."
+            VALUE "OriginalFilename", "WinSuiteX.exe"
+            VALUE "ProductName", "WinSuiteX"
+            VALUE "ProductVersion", "1.7.0.20260916"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END
+
+// ------------------------------------------------------------
+// 应用清单（关键）：将 app.manifest 嵌入 exe。
+// 资源 ID 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID，类型 24 = RT_MANIFEST。
+// 缺少这一行会导致 requireAdministrator 不生效，
+// 双击不弹 UAC，写 HKLM 被拒 → "请以管理员运行"。
+// ------------------------------------------------------------
+1 24 "app.manifest"
+
+// ------------------------------------------------------------
+// 内嵌 Shell COM 服务器 DLL（WinSuiteXShell.dll）
+// 启用任意功能时，管理器将其释放到 C:\Windows\WinSuiteXShell.dll 并注册。
+// 资源 ID 200 = IDR_SHELL_DLL（见 resource.h）。
+// 注意：编译 app.rc 前必须先构建出 WinSuiteXShell.dll，否则 windres 找不到文件。
+// ------------------------------------------------------------
+200 RCDATA "WinSuiteXShell.dll"
+
+// ------------------------------------------------------------
+// 界面版权行显示的版本号字符串（由 version_stamp.py 在每次编译时更新为 主.次.修订.日期戳）
+// main.cpp 用 LoadString(IDS_VERSION) 读取，拼到版权行 "© ... · Z.W.  vX.Y.Z.日期"
+// ------------------------------------------------------------
+STRINGTABLE
+BEGIN
+    IDS_VERSION "1.7.0.20260916"
+END

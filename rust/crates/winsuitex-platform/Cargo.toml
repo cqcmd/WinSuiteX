@@ -1,0 +1,48 @@
+[package]
+name = "winsuitex-platform"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winsuitex-core = { path = "../winsuitex-core" }
+thiserror = { workspace = true }
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_SystemInformation",
+    "Win32_System_Registry",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    # SMART 采集（ATA pass-through）：IOCTL_ATA_PASS_THROUGH / ATA_PASS_THROUGH_EX
+    "Win32_Storage_IscsiDisc",
+    "Win32_System_LibraryLoader",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Gdi",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    # 键盘 / 鼠标（hid.rs）：Raw Input + HID 字符串 / 属性
+    "Win32_UI_Input",
+    "Win32_Devices_HumanInterfaceDevice",
+    # COM / 音频默认设备（audio.rs 需要）
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_Media_Audio",
+    "Win32_Devices_FunctionDiscovery",
+    # WMI（第三兜底）：NVMe 在 VMD 存储栈下 DeviceIoControl 被拦，改走
+    # ROOT\Microsoft\Windows\Storage 的 MSFT_StorageReliabilityCounter（COM/WMI）。
+    "Win32_System_Wmi",
+    # WMI 的 IWbemClassObject::Get 与 VariantToUInt16 需要 Ole 特性。
+    "Win32_System_Ole",
+    # 排障用堆完整性自检（HeapValidate，仅 WSX_TRACE=1 时调用）
+    "Win32_System_Memory",
+    # WMI 兜底诊断：进程提权状态自检（OpenProcessToken / GetTokenInformation，仅 WSX_WMI_DEBUG 时）
+    "Win32_System_Threading",
+]

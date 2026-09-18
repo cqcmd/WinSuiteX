@@ -1,0 +1,151 @@
+{
+  "info": {
+    "os": {
+      "product": "Windows 10 Pro",
+      "version": "22H2",
+      "build": "19045",
+      "arch": "x64",
+      "logical_processors": 8
+    },
+    "machine": {
+      "computer_name": "PC-20260719YDFT",
+      "user_name": "Administrator"
+    },
+    "board": {
+      "vendor": null,
+      "product": null,
+      "chipset": null,
+      "bios_vendor": "Proxmox distribution of EDK II",
+      "bios_version": "4.2025.05-2",
+      "bios_date": "11/13/2025"
+    },
+    "cpus": [
+      {
+        "socket": "CPU 0",
+        "model": "pc-q35-10.1",
+        "vendor": "QEMU",
+        "codename": "Broadwell-E (Xeon)",
+        "cores": 8,
+        "threads": 8,
+        "speed_mhz": 2000
+      }
+    ],
+    "memory": {
+      "total_mb": 16364,
+      "sticks": [
+        {
+          "locator": "DIMM 0",
+          "bank": null,
+          "part_no": null,
+          "vendor": "QEMU",
+          "mem_type": null,
+          "capacity_mb": 16384,
+          "speed_mhz": null
+        }
+      ]
+    },
+    "gpus": [
+      {
+        "name": "Microsoft Basic Render Driver",
+        "vram_mb": null,
+        "kind": "Software",
+        "telemetry": null
+      },
+      {
+        "name": "Microsoft Remote Display Adapter",
+        "vram_mb": null,
+        "kind": "Virtual",
+        "telemetry": null
+      }
+    ],
+    "displays": [],
+    "nics": [
+      {
+        "desc": "Red Hat VirtIO Ethernet Adapter",
+        "mac": "BC-24-11-6F-1F-DA",
+        "ipv4": [
+          "192.168.10.233"
+        ],
+        "ipv6": null,
+        "up": true,
+        "kind": "Physical"
+      }
+    ],
+    "disks": [
+      {
+        "index": 0,
+        "model": "QEMU QEMU HARDDISK",
+        "iface": "SAS",
+        "media": "SSD",
+        "serial": null,
+        "size_bytes": 107374182400
+      },
+      {
+        "index": 1,
+        "model": "QEMU QEMU HARDDISK",
+        "iface": "SAS",
+        "media": "SSD",
+        "serial": null,
+        "size_bytes": 214748364800
+      }
+    ],
+    "audio": [],
+    "usb": [
+      {
+        "name": "USB 输入设备",
+        "class": "HID"
+      }
+    ],
+    "input_devices": [],
+    "is_server": false
+  },
+  "volumes": [
+    {
+      "letter": "C:",
+      "type_name": "本地磁盘",
+      "fs_name": "NTFS",
+      "sectors_per_cluster": 8,
+      "bytes_per_sector": 512,
+      "cluster_bytes": 4096,
+      "total_bytes": 107041763328,
+      "free_bytes": 50483855360,
+      "vol_label": "系统",
+      "disk_index": 0
+    },
+    {
+      "letter": "D:",
+      "type_name": "本地磁盘",
+      "fs_name": "NTFS",
+      "sectors_per_cluster": 8,
+      "bytes_per_sector": 512,
+      "cluster_bytes": 4096,
+      "total_bytes": 214729486336,
+      "free_bytes": 153878835200,
+      "vol_label": null,
+      "disk_index": 1
+    }
+  ],
+  "diagnostics": [],
+  "features": [
+    [
+      "ComputerManagement",
+      false
+    ],
+    [
+      "DeviceManager",
+      false
+    ],
+    [
+      "SuperHidden",
+      false
+    ],
+    [
+      "CmdHere",
+      false
+    ],
+    [
+      "PowerShellHere",
+      false
+    ]
+  ]
+}

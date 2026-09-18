@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/winsuitex-core",
+  "crates/winsuitex-platform",
+  "crates/winsuitex-report",
+  "crates/winsuitex-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+# 单 exe 分发是硬需求（网吧/电竞酒店一台台拷贝），体积直接影响传输与启动。
+# 用 opt-level="z" + LTO + strip 换体积：本工具是采集 + 拼字符串，IO 与系统调用
+# 才是瓶颈，CPU 密集计算可忽略，损失的运行期性能换不到的体积是白赚的。
+# panic="abort" 只作用于 release：dev/test 仍用 unwind，`cargo test` 不受影响。
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[workspace.dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

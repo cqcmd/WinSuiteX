@@ -1,0 +1,15 @@
+[package]
+name = "winsuitex-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winsuitex-core = { path = "../winsuitex-core" }
+winsuitex-platform = { path = "../winsuitex-platform" }
+winsuitex-report = { path = "../winsuitex-report" }
+serde.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "winsuitex"
+path = "src/main.rs"

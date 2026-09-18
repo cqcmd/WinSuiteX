@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinSuiteX v3.5 — UI 设计方案 (Ant Design 语言)</title>
+<style>
+  :root {
+    /* v3.5 · Ant Design 语言（与 main.cpp / preview.py / DESIGN_SYSTEM.md 同步） */
+    --bg: #F5F5F5;
+    --surface: #FFFFFF;
+    --border: #D9D9D9;
+    --divider: #F0F0F0;
+    --text-1: #1F1F1F;
+    --text-2: #595959;
+    --text-3: #595959;
+    --primary: #1677FF;
+    --primary-hover: #4096FF;
+    --green: #16A34A;
+    --green-bg: #DFF2E6;
+    --green-dark: #15803D;
+    --amber: #CA6E04;
+    --amber-bg: #FEF4E1;
+    /* Ant Design boxShadowTertiary / boxShadow —— 浏览器能做真·高斯模糊，GDI 做不到（只能实色近似） */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05), 0 1px 6px -1px rgba(0,0,0,0.03), 0 2px 4px 0 rgba(0,0,0,0.03);
+    --shadow-md: 0 6px 16px 0 rgba(0,0,0,0.08), 0 3px 6px -4px rgba(0,0,0,0.12), 0 9px 28px 8px rgba(0,0,0,0.05);
+    --radius: 12px;
+    --font: "Microsoft YaHei", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #E3E5E9;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 48px 24px;
+    color: var(--text-1);
+  }
+
+  /* ===== 窗口外壳 ===== */
+  .window {
+    width: 560px;
+    background: var(--bg);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+    overflow: hidden;
+  }
+  .titlebar {
+    height: 38px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--divider);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+  }
+  .titlebar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .titlebar .r { background: #FF5F57; }
+  .titlebar .y { background: #FEBC2E; }
+  .titlebar .g { background: #28C840; }
+  .titlebar .name {
+    margin-left: 10px; font-size: 12px; color: var(--text-3);
+    font-weight: 500;
+  }
+  .content { padding: 28px; }
+
+  /* ===== 页头 ===== */
+  .header { margin-bottom: 8px; }
+  .header h1 {
+    font-size: 24px; font-weight: 700; color: var(--text-1);
+    letter-spacing: -0.4px; line-height: 32px;
+  }
+  .accent-bar {
+    width: 32px; height: 3px; background: var(--primary);
+    border-radius: 2px; margin: 8px 0 10px;
+  }
+  .header .sub { font-size: 13px; color: var(--text-2); line-height: 18px; }
+  .divider { height: 1px; background: var(--divider); margin: 18px 0 20px; }
+
+  /* ===== 功能卡片 ===== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow .18s ease, transform .18s ease;
+  }
+  .card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .card .bar {
+    position: absolute; left: 0; top: 10px; bottom: 10px;
+    width: 3px; border-radius: 0 3px 3px 0;
+  }
+  .card.green .bar { background: var(--green); }
+  .card.amber .bar { background: var(--amber); }
+
+  /* 图标 */
+  .icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    flex-shrink: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; gap: 4px;
+  }
+  .card.green .icon { background: var(--green); }
+  .card.amber .icon { background: var(--amber); }
+  .icon .line {
+    width: 22px; height: 2px; background: #fff; border-radius: 2px;
+    position: relative;
+  }
+  .icon .knob {
+    position: absolute; width: 6px; height: 6px; border-radius: 50%;
+    background: #fff; top: -2px;
+  }
+  .icon .l1 .knob { left: 6px; }
+  .icon .l2 .knob { left: 12px; }
+  .icon .l3 .knob { left: 4px; }
+
+  /* 文字区 */
+  .info { flex: 1; min-width: 0; padding-left: 4px; }
+  .info .name { font-size: 15px; font-weight: 600; color: var(--text-1); line-height: 22px; }
+  .info .desc {
+    font-size: 12px; color: var(--text-2); line-height: 18px;
+    margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 8px; height: 22px; padding: 0 10px;
+    border-radius: 11px; font-size: 11px; font-weight: 500;
+  }
+  .badge.on { background: var(--green-bg); color: var(--green-dark); }
+  .badge.off { background: #F0F0F0; color: var(--text-3); }
+  .badge .dot { font-size: 9px; line-height: 1; }
+
+  /* 按钮 */
+  .btn {
+    flex-shrink: 0; width: 90px; height: 32px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 1px solid transparent; display: flex;
+    align-items: center; justify-content: center;
+    transition: background .15s ease;
+    font-family: var(--font);
+  }
+  .btn.primary { background: var(--primary); color: #fff; }
+  .btn.primary:hover { background: var(--primary-hover); }
+  .btn.secondary { background: var(--surface); color: var(--text-1); border-color: #D9D9D9; }
+  .btn.secondary:hover { background: #FAFAFA; }
+
+  /* 页脚 */
+  .footer {
+    font-size: 11px; color: var(--text-3); line-height: 16px;
+    margin-top: 18px;
+  }
+
+  /* 标注 */
+  .note {
+    margin-top: 24px; padding: 14px 16px; background: #EEF2FF;
+    border: 1px solid #DBE3FF; border-radius: 8px;
+    font-size: 12px; color: #4338CA; line-height: 18px;
+  }
+  .note b { color: #3730A3; }
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="name">Windows 个性化</span>
+    </div>
+    <div class="content">
+      <!-- 页头 -->
+      <div class="header">
+        <h1>Windows 个性化</h1>
+        <div class="accent-bar"></div>
+        <div class="sub">Windows 11 (Build 22631)</div>
+      </div>
+      <div class="divider"></div>
+
+      <!-- 卡片 1：计算机管理（已启用）-->
+      <div class="card green">
+        <div class="bar"></div>
+        <div class="icon">
+          <div class="line l1"><span class="knob"></span></div>
+          <div class="line l2"><span class="knob"></span></div>
+          <div class="line l3"><span class="knob"></span></div>
+        </div>
+        <div class="info">
+          <div class="name">计算机管理</div>
+          <div class="desc">打开计算机管理控制台（compmgmt.msc）</div>
+          <div class="badge on"><span class="dot">●</span> 已启用</div>
+        </div>
+        <div class="btn secondary">停用</div>
+      </div>
+
+      <!-- 卡片 2：设备管理器（已启用）-->
+      <div class="card green">
+        <div class="bar"></div>
+        <div class="icon">
+          <div class="line l1"><span class="knob"></span></div>
+          <div class="line l2"><span class="knob"></span></div>
+          <div class="line l3"><span class="knob"></span></div>
+        </div>
+        <div class="info">
+          <div class="name">设备管理器</div>
+          <div class="desc">打开设备管理器（devmgmt.msc）</div>
+          <div class="badge on"><span class="dot">●</span> 已启用</div>
+        </div>
+        <div class="btn secondary">停用</div>
+      </div>
+
+      <!-- 卡片 3：显示/隐藏 系统文件（未启用）-->
+      <div class="card amber">
+        <div class="bar"></div>
+        <div class="icon">
+          <div class="line l1"><span class="knob"></span></div>
+          <div class="line l2"><span class="knob"></span></div>
+          <div class="line l3"><span class="knob"></span></div>
+        </div>
+        <div class="info">
+          <div class="name">显示/隐藏 系统文件</div>
+          <div class="desc">在"此电脑"右键切换隐藏文件与扩展名显示</div>
+          <div class="badge off"><span class="dot">○</span> 未启用</div>
+        </div>
+        <div class="btn primary">启用</div>
+      </div>
+
+      <!-- 页脚 -->
+      <div class="footer">
+        在"此电脑"上右键即可看到效果（Windows 11 需"显示更多选项"）。本工具需管理员权限写入。
+      </div>
+
+      <div class="note">
+        <b>设计说明（v3.5 · Ant Design 语言）：</b>配色迁到 Ant Design 5 —— 主色 daybreak blue <code>#1677FF</code>、
+        中性灰阶（<code>#F5F5F5 / #D9D9D9 / #F0F0F0</code>）、文字 <code>#1F1F1F / #595959</code>，
+        阴影用 Ant 的原生 box-shadow 层级（此页可做真·高斯模糊；GDI 只能多层实色近似，见 DESIGN_SYSTEM.md）。
+        绿/琥珀语义色与"三级浅灰文字"刻意未照搬 Ant，以守 WCAG AA。
+      </div>
+    </div>
+  </div>
+</body>
+</html>

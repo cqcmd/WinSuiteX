@@ -1,0 +1,42 @@
+# Windows 保留设备名垃圾文件
+# 成因：build.bat 若在 Git Bash 下被 bash 执行，'>nul' 会被当成真实文件名写出。
+# 这类文件极难删除（DeleteFileW 返回 ERROR_ACCESS_DENIED），必须挡在版本库外。
+nul
+con
+aux
+prn
+
+# 构建中间产物（可由 g++ / windres 重新生成）
+*.o
+build_main.exe
+WinSuiteXShell.dll
+selftest_report.txt
+
+# 不跟踪 exe 与发布 zip，二进制走 GitHub Release
+WinSuiteX.exe
+WinSuiteX_v*.zip
+
+# UI 预览图（按需手工生成；preview.py 还在项目里）
+ui_preview_*.html
+
+# 保留：version.ini（版本号）、全部源码与文档
+
+# ---- Rust workspace 产物（cargo build 生成，体积大不入库）----
+/target
+**/target
+dist/*.exe
+*.bak
+dist/inventory.json
+dist/inventory.html
+dist/wmi_debug.log
+
+# ---- 二进制与生成物（全局，避免把构建产物/旧版本进库）----
+*.exe
+*.log
+_archive/
+
+# ---- Rust 对比/验证产物（脚本生成，非源码）----
+rust/dist/
+
+# ---- 临时备份（build 产生，命名 winsuitex.exe.bak_YYYYMMDD_HHMMSS）----
+winsuitex.exe.bak_*

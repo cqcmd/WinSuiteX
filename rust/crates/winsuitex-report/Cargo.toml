@@ -1,0 +1,7 @@
+[package]
+name = "winsuitex-report"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winsuitex-core = { path = "../winsuitex-core" }
