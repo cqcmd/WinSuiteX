@@ -40,3 +40,6 @@ rust/dist/
 
 # ---- 临时备份（build 产生，命名 winsuitex.exe.bak_YYYYMMDD_HHMMSS）----
 winsuitex.exe.bak_*
+
+# ---- 真机采集产物（含序列号/MAC/IP，禁止入库）----
+dist/*/

@@ -1610,6 +1610,7 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
         ("AVAGO", "Avago"),
         ("WDC", "Western Digital"),
         ("WESTERN DIGITAL", "Western Digital"),
+        ("WUH", "Western Digital"),
         ("HITACHI", "Hitachi"),
         ("HGST", "HGST"),
         ("SANDISK", "SanDisk"),
@@ -1628,13 +1629,21 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
             });
         }
     }
-    // Seagate 型号以 ST<数字> 开头（如 ST8000NM000A-2KE101）
-    if m.starts_with("ST")
-        && m.get(2..3)
-            .and_then(|c| c.chars().next())
-            .is_some_and(|ch| ch.is_ascii_digit())
-    {
-        return Some("Seagate (希捷)".to_string());
+    // Seagate 型号以 ST<数字> 开头（如 ST8000NM000A-2KE101）；
+    // 型号串常带接口前缀（如 "ATA ST16000NM002H-3K"），故按空白分词后判任一词元。
+    if m.split_whitespace().any(|tok| {
+        tok.starts_with("ST")
+            && tok
+                .get(2..3)
+                .and_then(|c| c.chars().next())
+                .is_some_and(|ch| ch.is_ascii_digit())
+    }) {
+        let en = "Seagate";
+        let zh = brand_zh(en);
+        return Some(match zh {
+            Some(zh) => format!("{} ({})", en, zh),
+            None => en.to_string(),
+        });
     }
     None
 }
@@ -3029,6 +3038,31 @@ mod tests {
             txt.contains("英特尔") && txt.contains("希捷"),
             "文本硬盘应显示中文厂商: {txt}"
         );
+    }
+
+    #[test]
+    fn disk_vendor_from_model_unit() {
+        // 问题1修复：带接口前缀的希捷盘（真机 ATA ST16000NM002H-3K）
+        assert_eq!(
+            disk_vendor_from_model("ATA ST16000NM002H-3K"),
+            Some("Seagate (希捷)".to_string())
+        );
+        // 原行为不变：无前缀的希捷盘
+        assert_eq!(
+            disk_vendor_from_model("ST8000NM000A-2KE101"),
+            Some("Seagate (希捷)".to_string())
+        );
+        // 问题3：西部数据 Ultrastar He 氦气盘（WUH 前缀）
+        assert_eq!(
+            disk_vendor_from_model("WUH721816ALE6L4"),
+            Some("Western Digital (西部数据)".to_string())
+        );
+        // 纪律：未知品牌一律 None，绝不臆造
+        assert_eq!(disk_vendor_from_model("X4020S173A15TNQF"), None);
+        // 反例：含 "ST" 子串但非希捷的不误判（KINGSTON 含 ST，应识别为金士顿）
+        let r = disk_vendor_from_model("KINGSTON SA400S37");
+        assert_eq!(r, Some("Kingston (金士顿)".to_string()));
+        assert_ne!(r, Some("Seagate (希捷)".to_string()));
     }
 
     #[test]
