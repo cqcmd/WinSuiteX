@@ -10,6 +10,7 @@ pub mod feature;
 pub mod model;
 pub mod smbios;
 pub mod traits;
+pub mod vendor_zh;
 
 pub use error::{CollectResult, Diagnostic, Error, Result};
 pub use model::nic_vendor_from_desc;
@@ -19,3 +20,4 @@ pub use model::{
     RegValueKind, UsbDevice, Volume,
 };
 pub use traits::{collect_all, CollectContext, HardwareSource, Registry, ThreadAffinity};
+pub use vendor_zh::{brand_zh, brand_zh_or};

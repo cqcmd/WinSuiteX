@@ -17,12 +17,14 @@
 //!
 //! # 用途
 //! - `brand_for_vid`：把原始 `VID_xxxx` 还原成可识别品牌（如 `1038`→`SteelSeries`）。
-//! - `brand_display`：品牌 key → 中文显示名（报告更友好）。
+//! - `brand_display`：品牌 key → 中文显示名（报告更友好，统一查 `winsuitex_core::brand_zh_or`）。
 //! - `is_usb_audio_vid`：识别 USB 声卡类 VID，支撑"USB 声卡耳机"判定。
 //! - `model_for_pid`：由 `VID+PID` 查真实型号（离线种子表 `pid_model_table`，
 //!   来自 `Drives` 各厂商驱动 INF 的硬件 ID）。注意：共享鼠标 ODM VID
 //!   （`258A`/`248A`/`3554`/`1915`）在 INF 中**无**型号数据，只能靠运行时
 //!   `HidD_GetProductString`；本表仅覆盖干净品牌与音频方案，不作兜底误报。
+
+use winsuitex_core::brand_zh_or;
 
 /// 干净 VID → 品牌（英文规范名）。仅收录可唯一归属者。
 ///
@@ -49,33 +51,6 @@ const VID_BRAND: &[(&str, &str)] = &[
     ("1C4F", "SiGma Micro"), // 国产键鼠 ODM（1C4F:0002 键盘、0032 鼠标等）
     ("062A", "MosArt"), // 2.4G 无线键鼠接收器常见 ODM
     ("04F2", "Chicony"), // 群光 —— 笔电内置摄像头/键鼠
-];
-
-/// 品牌 key（来自 `VID_BRAND` 右值或驱动目录名）→ 中文显示名。
-/// 未列出的品牌 `brand_display` 会原样返回输入（多为英文品牌名，已是可读名）。
-const BRAND_DISPLAY: &[(&str, &str)] = &[
-    ("Cherry", "樱桃"),
-    ("Logitech", "罗技"),
-    ("Microsoft", "微软"),
-    ("A4Tech", "双飞燕"),
-    ("Apple", "苹果"),
-    ("Kingston", "金士顿"),
-    ("HP", "惠普"),
-    ("ASUS", "华硕"),
-    ("Realtek", "瑞昱"),
-    ("C-Media", "骅讯"),
-    ("Rapoo", "雷柏"),
-    ("SteelSeries", "赛睿"),
-    ("Razer", "雷蛇"),
-    ("Corsair", "海盗船"),
-    ("SINO_WEALTH", "定制鼠标(ODM)"),
-    ("SEMICO", "华润上华(ODM)"),
-    ("SiGma Micro", "Sigma Micro(ODM)"),
-    ("MosArt", "MosArt(ODM)"),
-    ("Chicony", "群光"),
-    ("HyperX", "极度未知"),
-    ("Edifier", "漫步者"),
-    ("ROG", "玩家国度"),
 ];
 
 /// 归一化 VID 输入：剥离 `VID_` / `0x` 前缀、统一大写，返回 4 位十六进制 `String`。
@@ -117,12 +92,9 @@ pub fn brand_for_vid(vid: &str) -> Option<&'static str> {
 }
 
 /// 品牌 key → 中文显示名；未知则原样返回（多为英文品牌名，已可读）。
+/// 统一委托 `winsuitex_core::brand_zh_or`，中文来源收敛为单一数据源。
 pub fn brand_display(brand: &str) -> &str {
-    BRAND_DISPLAY
-        .iter()
-        .find(|(b, _)| b.eq_ignore_ascii_case(brand))
-        .map(|(_, d)| *d)
-        .unwrap_or(brand)
+    brand_zh_or(brand)
 }
 
 /// 是否为 USB 声卡类 VID（C-Media / Realtek / HP 等）。

@@ -24,71 +24,75 @@ use windows::Win32::Graphics::Gdi::{
 
 use crate::edid::{parse_edid, read_edid_bytes};
 use crate::wide_to_string;
+use winsuitex_core::brand_zh_or;
 use winsuitex_core::error::Result;
 use winsuitex_core::model::Display;
 use winsuitex_core::traits::{CollectContext, HardwareSource};
 
-/// PnP / EISA 显示器厂商码 → 可读厂商名（对齐 C++ 版 `kPnpMonitorVendor`）。
+/// PnP / EISA 显示器厂商码 → 品牌 key（对齐 C++ 版 `kPnpMonitorVendor`）。
 ///
 /// 硬件 ID 第二段的前 3 个字母即 PnP 厂商码（如 `GSM` / `SAM` / `DEL`），
-/// 映射到中文/品牌名。少数显示器固件会填错厂商码（如 AOC 屏报 LG 的 `GSM`），
-/// 这是硬件 EDID 问题，本表按 PnP 标准码翻译，与 Windows 设备管理器行为一致。
+/// 映射到**英文品牌 key**；中文名统一回查 `winsuitex_core::brand_zh_or`
+/// （全项目唯一数据源），本表不再直接写中文。
+/// 少数显示器固件会填错厂商码（如 AOC 屏报 LG 的 `GSM`），这是硬件 EDID 问题，
+/// 本表按 PnP 标准码翻译，与 Windows 设备管理器行为一致。
 const K_PNP_VENDOR: &[(&str, &str)] = &[
     ("GSM", "LG"),
     ("LGD", "LG Display"),
-    ("ACR", "宏碁"),
-    ("AAC", "宏碁"),
-    ("API", "宏碁"),
+    ("ACR", "Acer"),
+    ("AAC", "Acer"),
+    ("API", "Acer"),
     ("AOC", "AOC"),
-    ("ACI", "华硕"),
-    ("SAM", "三星"),
-    ("SEC", "三星"),
-    ("DEL", "戴尔"),
-    ("HWP", "惠普"),
-    ("HPN", "惠普"),
-    ("SNY", "索尼"),
-    ("PHL", "飞利浦"),
-    ("BNQ", "明基"),
-    ("VSC", "优派"),
+    ("ACI", "ASUS"),
+    ("SAM", "Samsung"),
+    ("SEC", "Samsung"),
+    ("DEL", "Dell"),
+    ("HWP", "HP"),
+    ("HPN", "HP"),
+    ("SNY", "Sony"),
+    ("PHL", "Philips"),
+    ("BNQ", "BenQ"),
+    ("VSC", "ViewSonic"),
     ("IVM", "iiyama"),
-    ("EIZ", "艺卓"),
-    ("ENC", "艺卓"),
+    ("EIZ", "Eizo"),
+    ("ENC", "Eizo"),
     ("NEC", "NEC"),
-    ("CMN", "群创"),
-    ("AUO", "友达"),
-    ("BOE", "京东方"),
-    ("HSD", "瀚宇彩晶"),
+    ("CMN", "Innolux"),
+    ("AUO", "AUO"),
+    ("BOE", "BOE"),
+    ("HSD", "HannStar"),
     ("TCL", "TCL"),
-    ("SPT", "夏普"),
-    ("MEI", "松下"),
-    ("FUS", "富士通"),
-    ("MAG", "美格"),
-    ("CPT", "中华映管"),
-    ("DGC", "大宇"),
-    ("TAT", "大同"),
+    ("SPT", "Sharp"),
+    ("MEI", "Panasonic"),
+    ("FUS", "Fujitsu"),
+    ("MAG", "Mag"),
+    ("CPT", "CPT"),
+    ("DGC", "Daewoo"),
+    ("TAT", "Tatung"),
     ("ZCM", "Zenith"),
-    ("WDE", "西屋"),
+    ("WDE", "Westinghouse"),
     ("ONN", "Onn"),
-    ("SHP", "夏普"),
+    ("SHP", "Sharp"),
     // —— 二次核对补全：国内常见与办公/电竞品牌 ——
-    ("LEN", "联想"),
-    ("CMO", "奇美"), // Chi Mei，后并入群创(Innolux)
-    ("HKC", "惠科"),
-    ("XMI", "小米"),
+    ("LEN", "Lenovo"),
+    ("CMO", "CMO"), // Chi Mei，后并入群创(Innolux)
+    ("HKC", "HKC"),
+    ("XMI", "Xiaomi"),
     ("VIZ", "Vizio"),
-    ("CPQ", "康柏"),
-    ("TOS", "东芝"),
+    ("CPQ", "Compaq"),
+    ("TOS", "Toshiba"),
     ("AUI", "AOpen"),
 ];
 
-/// 把 3 字母 PnP 厂商码转大写后查表，命中返回可读厂商名。
+/// 把 3 字母 PnP 厂商码转大写后查表，命中返回可读厂商名（中文经 core 统一解析）。
 ///
 /// 大小写不敏感；未知码返回 `None`。
 pub(crate) fn pnp_vendor(code3: &str) -> Option<&'static str> {
     let code = code3.to_ascii_uppercase();
     K_PNP_VENDOR
         .iter()
-        .find_map(|(c, name)| (*c == code.as_str()).then_some(*name))
+        .find_map(|(c, key)| (*c == code.as_str()).then_some(*key))
+        .map(brand_zh_or)
 }
 
 /// 厂商展示名：已知码→可读名；未知码→原样回退为 3 字母码（避免"无厂商"或把原始码漏进型号）。
@@ -359,7 +363,8 @@ mod tests {
         // 大小写不敏感
         assert_eq!(pnp_vendor("gsm"), Some("LG"));
         assert_eq!(pnp_vendor("GSM"), Some("LG"));
-        assert_eq!(pnp_vendor("AOC"), Some("AOC"));
+        // 注：AOC 的中文（冠捷）已统一收敛到 winsuitex_core，故此处随单一数据源一并改为「冠捷」。
+        assert_eq!(pnp_vendor("AOC"), Some("冠捷"));
         // 二次核对补全的国内/办公品牌
         assert_eq!(pnp_vendor("LEN"), Some("联想"));
         assert_eq!(pnp_vendor("HKC"), Some("惠科"));
@@ -371,10 +376,11 @@ mod tests {
 
     #[test]
     fn monitor_model_from_device_id_ok() {
-        // 真实用例：AOC 2769（MSI B75MA-P45 + AOC 2769）
+        // 真实用例：AOC 2769（MSI B75MA-P45 + AOC 2769）。
+        // 注：AOC 中文（冠捷）已随单一数据源收敛到 winsuitex_core，故此处一并改为「冠捷」。
         assert_eq!(
             monitor_model_from_device_id(r"MONITOR\AOC2769\4&1a2b3c4&0&UID0"),
-            Some(("AOC".to_string(), "2769".to_string()))
+            Some(("冠捷".to_string(), "2769".to_string()))
         );
         // DISPLAY\ 前缀 + 型号以字母开头（C34J）
         assert_eq!(

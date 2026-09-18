@@ -14,6 +14,7 @@
 use std::fmt::Write as _;
 
 use winsuitex_core::feature::FEATURES;
+use winsuitex_core::{brand_zh, brand_zh_or};
 use winsuitex_core::model::{
     FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic, NicKind,
     PhysicalDisk, SmartSource, Volume,
@@ -1543,117 +1544,11 @@ fn is_degenerate_serial(t: &str) -> bool {
 /// 未收录的厂商原样返回英文，绝不错译。
 ///
 /// 收录原则：只收 PC 硬件领域常见、可被唯一归属的厂商。ODM（代工厂）即便收录
-/// 也标厂商名而非零售品牌（与 `peripheral_db::BRAND_DISPLAY` 一致）。
-fn vendor_zh(raw: &str) -> String {
-    const MAP: &[(&str, &str)] = &[
-        // 主板 / 整机
-        ("MSI", "微星"),
-        ("Gigabyte", "技嘉"),
-        ("GIGABYTE", "技嘉"),
-        ("Gigabyte Technology Co., Ltd.", "技嘉"),
-        ("ASRock", "华擎"),
-        ("ASRock Incorporation", "华擎"),
-        ("Supermicro", "超微"),
-        ("Inspur", "浪潮"),
-        ("Biostar", "映泰"),
-        ("Colorful", "七彩虹"),
-        ("COLORFUL", "七彩虹"),
-        ("Maxsun", "铭瑄"),
-        ("ONDA", "昂达"),
-        // 显卡板卡品牌（AIB），与芯片厂（NVIDIA/AMD/Intel）区分；键名需与平台层
-        // `gpu.rs` 的 PCI 子系统厂商 ID 表 / 名称兜底返回的英文名一致。
-        ("Zotac", "索泰"),
-        ("Sapphire", "蓝宝石"),
-        ("XFX", "讯景"),
-        ("PowerColor", "撼讯"),
-        ("Palit", "同德"),
-        ("Gainward", "耕升"),
-        ("Galax", "影驰"),
-        ("Inno3D", "映众"),
-        // 服务器 BMC 显示芯片（采集层常把 vendor 留空，需从名称兜底识别）
-        ("ASPEED", "信骅"),
-        ("PNY", "PNY"),
-        ("Club 3D", "Club 3D"),
-        ("VisionTek", "VisionTek"),
-        ("ASUS", "华硕"),
-        ("ASUSTeK", "华硕"),
-        ("ASUSTeK COMPUTER INC.", "华硕"),
-        ("Dell", "戴尔"),
-        ("Lenovo", "联想"),
-        ("Hewlett-Packard", "惠普"),
-        ("HP", "惠普"),
-        // CPU / GPU
-        ("Intel", "英特尔"),
-        ("Intel(R) Corporation", "英特尔"),
-        ("GenuineIntel", "英特尔"),
-        ("Advanced Micro Devices", "AMD"),
-        ("AMD", "AMD"),
-        ("NVIDIA", "英伟达"),
-        ("Qualcomm", "高通"),
-        ("Broadcom", "博通"),
-        // Avago 2014 收购 LSI 存储业务、2016 年被 Broadcom 收购，现法律实体即 Broadcom（博通）。
-        // RAID 卡（如 MegaRAID MR9361-8i）当年以 Avago（Nasdaq: AVGO）品牌出货。
-        ("AVAGO", "博通"),
-        ("MediaTek", "联发科"),
-        // 内存
-        ("Kingston", "金士顿"),
-        ("Crucial", "英睿达"),
-        ("Micron", "美光"),
-        ("Samsung", "三星"),
-        ("SK Hynix", "SK 海力士"),
-        ("Hynix", "海力士"),
-        // 存储
-        ("Western Digital", "西部数据"),
-        ("WDC", "西部数据"),
-        ("Seagate", "希捷"),
-        ("Toshiba", "东芝"),
-        ("Lite-On", "建兴"),
-        // 显示器
-        ("AOC", "冠捷"),
-        // 网卡 / 音频 / 外设
-        ("Realtek", "瑞昱"),
-        ("Mellanox", "迈络思"),
-        ("Logitech", "罗技"),
-        // BIOS 厂商
-        ("American Megatrends", "美商安迈"),
-        ("American Megatrends Inc.", "美商安迈"),
-        ("AMI", "美商安迈"),
-        ("Insyde", "系微"),
-        ("Phoenix", "凤凰科技"),
-        ("Byosoft", "百敖"),
-        // 服务器 / 整机（HPE 与 Hewlett Packard 是不同实体，分列）
-        ("HPE", "慧与"),
-        ("Matrox", "迈创"),
-        // 网络 / 通信芯片厂
-        ("Marvell", "迈威"),
-        ("Cisco", "思科"),
-        ("TP-LINK", "普联"),
-        ("TP-Link", "普联"),
-        ("D-Link", "友讯"),
-        ("Netgear", "网件"),
-        ("Tenda", "腾达"),
-        ("Xiaomi", "小米"),
-        ("Huawei", "华为"),
-        ("ZTE", "中兴"),
-    ];
-    let t = raw.trim();
-    // 1) 精确匹配（大小写不敏感）：覆盖 "Dell"、"Intel(R) Corporation" 等完整写法。
-    for (k, v) in MAP {
-        if t.eq_ignore_ascii_case(k) {
-            return v.to_string();
-        }
-    }
-    // 2) 退化为"取首个单词再匹配"：覆盖 "Dell Inc." → "Dell" → 戴尔 这类带后缀的写法，
-    //    不靠穷举后缀。大小写仍不敏感。
-    if let Some(first) = t.split_whitespace().next() {
-        for (k, v) in MAP {
-            if first.eq_ignore_ascii_case(k) {
-                return v.to_string();
-            }
-        }
-    }
-    // 3) 仍不匹配：原样返回，绝不错译。
-    raw.to_string()
+/// 也标厂商名而非零售品牌（与 `winsuitex_core::brand_zh_or` 一致）。
+pub fn vendor_zh(raw: &str) -> String {
+    // 中文来源已收敛为 winsuitex_core::brand_zh_or（全项目唯一数据源），此处仅做转发，
+    // 保留函数名以免大改调用点。匹配顺序与旧实现一致：trim → 精确(忽略大小写) → 首词降级。
+    brand_zh_or(raw).to_string()
 }
 
 /// 渲染用厂商名：`英文原名 (中文名)` 括号形式，中文名跟在英文厂商名之后。
@@ -1705,27 +1600,32 @@ fn gpu_brand_for_display(vendor: &Option<String>, name: &str) -> Option<String> 
 /// 其余一律返回 `None`，绝不臆造品牌。
 fn disk_vendor_from_model(model: &str) -> Option<String> {
     let m = model.to_ascii_uppercase();
-    const FULL: &[(&str, &str, &str)] = &[
-        ("INTEL", "Intel", "英特尔"),
-        ("SEAGATE", "Seagate", "希捷"),
-        ("TOSHIBA", "Toshiba", "东芝"),
-        ("SAMSUNG", "Samsung", "三星"),
-        ("DELL", "Dell", "戴尔"),
-        ("AVAGO", "Avago", "博通"),
-        ("WDC", "Western Digital", "西部数据"),
-        ("WESTERN DIGITAL", "Western Digital", "西部数据"),
-        ("HITACHI", "Hitachi", "日立"),
-        ("HGST", "HGST", "昱科"),
-        ("SANDISK", "SanDisk", "闪迪"),
-        ("CRUCIAL", "Crucial", "英睿达"),
-        ("KINGSTON", "Kingston", "金士顿"),
-        ("SOLIDIGM", "Solidigm", "Solidigm"),
-        ("LITEON", "LiteOn", "建兴"),
-        ("LITE-ON", "LiteOn", "建兴"),
+    // 仅保留 (型号关键字, 英文厂商)；中文统一回查 winsuitex_core::brand_zh（单一数据源）。
+    const FULL: &[(&str, &str)] = &[
+        ("INTEL", "Intel"),
+        ("SEAGATE", "Seagate"),
+        ("TOSHIBA", "Toshiba"),
+        ("SAMSUNG", "Samsung"),
+        ("DELL", "Dell"),
+        ("AVAGO", "Avago"),
+        ("WDC", "Western Digital"),
+        ("WESTERN DIGITAL", "Western Digital"),
+        ("HITACHI", "Hitachi"),
+        ("HGST", "HGST"),
+        ("SANDISK", "SanDisk"),
+        ("CRUCIAL", "Crucial"),
+        ("KINGSTON", "Kingston"),
+        ("SOLIDIGM", "Solidigm"),
+        ("LITEON", "LiteOn"),
+        ("LITE-ON", "LiteOn"),
     ];
-    for (kw, en, zh) in FULL {
+    for (kw, en) in FULL {
         if m.contains(kw) {
-            return Some(format!("{} ({})", en, zh));
+            let zh = brand_zh(en);
+            return Some(match zh {
+                Some(zh) => format!("{} ({})", en, zh),
+                None => en.to_string(),
+            });
         }
     }
     // Seagate 型号以 ST<数字> 开头（如 ST8000NM000A-2KE101）
