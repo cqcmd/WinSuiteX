@@ -282,6 +282,11 @@ fn gpu_vendor_from_name(name: &str) -> Option<String> {
         ("inno3d", "Inno3D"),
         ("映众", "Inno3D"),
         ("pny", "PNY"),
+        // 服务器 BMC / 集成显示芯片（vendor 采集常为空，需从名称兜底识别）
+        ("matrox", "Matrox"),
+        ("迈创", "Matrox"),
+        ("aspeed", "ASPEED"),
+        ("信骅", "ASPEED"),
     ];
     let lower = name.to_lowercase();
     KW.iter()
@@ -298,6 +303,16 @@ mod tests {
     use crate::GpuSource;
     use winsuitex_core::model::{Gpu, GpuKind};
     use winsuitex_core::traits::{CollectContext, HardwareSource};
+
+    #[test]
+    fn gpu_vendor_from_name_recognizes_bmc_chips() {
+        // 服务器 BMC / 集成显示芯片：vendor 采集常为空，需从名称兜底识别。
+        assert_eq!(
+            gpu_vendor_from_name("Matrox G200eR (Renesas) WDDM 1.2"),
+            Some("Matrox".to_string())
+        );
+        assert_eq!(gpu_vendor_from_name("ASPEED Graphics Family"), Some("ASPEED".to_string()));
+    }
 
     #[test]
     fn merge_gdi_keeps_virtual_display_and_dedups_real_gpu() {

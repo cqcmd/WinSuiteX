@@ -230,9 +230,14 @@ fn resolve_device(name: &str, info: Option<&RID_DEVICE_INFO>) -> Option<InputDev
         open_hid(&handle_path).and_then(|guard| get_hid_manufacturer_string(guard.0));
 
     // 厂商：HID 厂商串 > peripheral_db 由 VID 推断。
+    // 注意：由 VID 推断出的英文品牌 key 要再过一遍 `brand_display` 翻译成中文，
+    // 否则键鼠只会输出英文（如 SEMICO / SiGma Micro）。HID 自身提供的厂商串
+    // 不走此路径，避免改动原始标识。
     let manufacturer = manufacturer_hid.or_else(|| {
-        vid.as_ref()
-            .and_then(|v| peripheral_db::brand_for_vid(v).map(|s| s.to_string()))
+        vid.as_ref().and_then(|v| {
+            peripheral_db::brand_for_vid(v)
+                .map(|s| peripheral_db::brand_display(s).to_string())
+        })
     });
 
     // 离线种子：VID+PID → 真实型号（来自 Drives 各厂商驱动 INF）。

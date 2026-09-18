@@ -1620,13 +1620,39 @@ fn vendor_zh(raw: &str) -> String {
         ("AMI", "美商安迈"),
         ("Insyde", "系微"),
         ("Phoenix", "凤凰科技"),
+        ("Byosoft", "百敖"),
+        // 服务器 / 整机（HPE 与 Hewlett Packard 是不同实体，分列）
+        ("HPE", "慧与"),
+        ("Matrox", "迈创"),
+        // 网络 / 通信芯片厂
+        ("Marvell", "迈威"),
+        ("Cisco", "思科"),
+        ("TP-LINK", "普联"),
+        ("TP-Link", "普联"),
+        ("D-Link", "友讯"),
+        ("Netgear", "网件"),
+        ("Tenda", "腾达"),
+        ("Xiaomi", "小米"),
+        ("Huawei", "华为"),
+        ("ZTE", "中兴"),
     ];
     let t = raw.trim();
+    // 1) 精确匹配（大小写不敏感）：覆盖 "Dell"、"Intel(R) Corporation" 等完整写法。
     for (k, v) in MAP {
         if t.eq_ignore_ascii_case(k) {
             return v.to_string();
         }
     }
+    // 2) 退化为"取首个单词再匹配"：覆盖 "Dell Inc." → "Dell" → 戴尔 这类带后缀的写法，
+    //    不靠穷举后缀。大小写仍不敏感。
+    if let Some(first) = t.split_whitespace().next() {
+        for (k, v) in MAP {
+            if first.eq_ignore_ascii_case(k) {
+                return v.to_string();
+            }
+        }
+    }
+    // 3) 仍不匹配：原样返回，绝不错译。
     raw.to_string()
 }
 
@@ -2549,6 +2575,33 @@ mod tests {
     fn vendor_zh_maps_avago() {
         // Avago 2014 收购 LSI 存储业务、2016 年被 Broadcom 收购，现法律实体即 Broadcom（博通）。
         assert_eq!(vendor_zh("AVAGO"), "博通");
+    }
+
+    #[test]
+    fn vendor_zh_degrade_to_first_word() {
+        // "Dell Inc." 精确匹配不到 "Dell"，应退化为首个单词 → 戴尔。
+        assert_eq!(vendor_zh("Dell Inc."), "戴尔");
+        // 退化后大小写不敏感
+        assert_eq!(vendor_zh("dell inc."), "戴尔");
+    }
+
+    #[test]
+    fn vendor_zh_maps_matrox_and_network_vendors() {
+        // 服务器 BMC/集成显卡芯片厂
+        assert_eq!(vendor_zh("Matrox"), "迈创");
+        // 网络 / 通信芯片厂
+        assert_eq!(vendor_zh("HPE"), "慧与");
+        assert_eq!(vendor_zh("Marvell"), "迈威");
+        assert_eq!(vendor_zh("Cisco"), "思科");
+        assert_eq!(vendor_zh("TP-LINK"), "普联");
+        assert_eq!(vendor_zh("TP-Link"), "普联");
+        assert_eq!(vendor_zh("D-Link"), "友讯");
+        assert_eq!(vendor_zh("Netgear"), "网件");
+        assert_eq!(vendor_zh("Tenda"), "腾达");
+        assert_eq!(vendor_zh("Xiaomi"), "小米");
+        assert_eq!(vendor_zh("Huawei"), "华为");
+        assert_eq!(vendor_zh("ZTE"), "中兴");
+        assert_eq!(vendor_zh("Byosoft"), "百敖");
     }
 
     #[test]

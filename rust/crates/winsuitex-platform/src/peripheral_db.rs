@@ -179,6 +179,16 @@ mod tests {
     }
 
     #[test]
+    fn brand_display_maps_hid_odm_chinese() {
+        // 键鼠 ODM VID 推断出的英文品牌 key 必须能翻译成中文，
+        // 否则 hid/audio 链路只输出英文（真机实测 1A2C:6004 键盘、1C4F:0048 鼠标）。
+        assert_eq!(brand_display("SEMICO"), "华润上华(ODM)");
+        assert_eq!(brand_display("SiGma Micro"), "Sigma Micro(ODM)");
+        // 大小写不敏感
+        assert_eq!(brand_display("semico"), "华润上华(ODM)");
+    }
+
+    #[test]
     fn audio_vid_detection() {
         assert!(is_usb_audio_vid("VID_0D8C"));
         assert!(is_usb_audio_vid("0x0BDA"));
