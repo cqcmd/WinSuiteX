@@ -235,8 +235,7 @@ fn resolve_device(name: &str, info: Option<&RID_DEVICE_INFO>) -> Option<InputDev
     // 不走此路径，避免改动原始标识。
     let manufacturer = manufacturer_hid.or_else(|| {
         vid.as_ref().and_then(|v| {
-            peripheral_db::brand_for_vid(v)
-                .map(|s| peripheral_db::brand_display(s).to_string())
+            peripheral_db::brand_for_vid(v).map(|s| peripheral_db::brand_display(s).to_string())
         })
     });
 

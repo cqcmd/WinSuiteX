@@ -2521,10 +2521,16 @@ mod smart_tests {
         // 沙箱/QEMU 下 PhysicalDrive0 通常确有 WMI 条目，故实际多为前者。
         let s = query_smart(r"\\.\PhysicalDrive0", &Some("USB".to_string())).unwrap();
         if s.source == SmartSource::StorageReliabilityCounter {
-            assert!(s.unavailable_reason.is_none(), "WMI 兜底成功则不应有不可用原因");
+            assert!(
+                s.unavailable_reason.is_none(),
+                "WMI 兜底成功则不应有不可用原因"
+            );
         } else {
             assert_eq!(s.source, SmartSource::None);
-            assert!(s.unavailable_reason.unwrap().contains("USB"), "无 WMI 条目才回退到 USB 不可用例");
+            assert!(
+                s.unavailable_reason.unwrap().contains("USB"),
+                "无 WMI 条目才回退到 USB 不可用例"
+            );
         }
     }
 
@@ -2570,7 +2576,8 @@ mod smart_tests {
         assert_eq!(s.health_status, HealthStatus::Healthy);
 
         // 2) WMI 未知 + 确有温度读数：降级判 Healthy（"有读数=可观测"）。
-        let s = smart_from_reliability_info(&reliability(Some(32), None, HealthStatus::Unknown, None));
+        let s =
+            smart_from_reliability_info(&reliability(Some(32), None, HealthStatus::Unknown, None));
         assert_eq!(s.health_status, HealthStatus::Healthy);
 
         // 3) WMI 未知 + 无温度：必须是 Unknown，绝不能默认 Healthy。
@@ -2581,14 +2588,20 @@ mod smart_tests {
     #[test]
     fn wmi_health_percent_and_percentage_used_conversion() {
         // wear=12 -> 剩余 88%，已用 12%。
-        let s = smart_from_reliability_info(&reliability(Some(33), Some(12), HealthStatus::Unknown, Some(1150)));
+        let s = smart_from_reliability_info(&reliability(
+            Some(33),
+            Some(12),
+            HealthStatus::Unknown,
+            Some(1150),
+        ));
         assert_eq!(s.percentage_used, Some(12));
         assert_eq!(s.health_percent, Some(88), "剩余寿命 = 100 - 已用");
         assert_eq!(s.power_on_hours, Some(1150), "R730/PERC 真机应补回通电小时");
         assert_eq!(s.source, SmartSource::StorageReliabilityCounter);
 
         // wear 超 100（如 255）：剩余寿命饱和到 0%。
-        let s = smart_from_reliability_info(&reliability(None, Some(255), HealthStatus::Unknown, None));
+        let s =
+            smart_from_reliability_info(&reliability(None, Some(255), HealthStatus::Unknown, None));
         assert_eq!(s.percentage_used, Some(255));
         assert_eq!(s.health_percent, Some(0), "已用超 100 须饱和到剩余 0%");
     }
@@ -2596,7 +2609,12 @@ mod smart_tests {
     #[test]
     fn wmi_zero_wear_and_zero_poh_treated_as_none() {
         // 纪律 #1：wear 真 0、power_on_hours 真 0 都按"没拿到"处理，绝不给 0 / 100。
-        let s = smart_from_reliability_info(&reliability(None, Some(0), HealthStatus::Warning, Some(0)));
+        let s = smart_from_reliability_info(&reliability(
+            None,
+            Some(0),
+            HealthStatus::Warning,
+            Some(0),
+        ));
         assert_eq!(s.percentage_used, None, "wear=0 不能当已用 0%");
         assert_eq!(s.health_percent, None, "wear=0 不能算剩余 100%");
         assert_eq!(s.power_on_hours, None, "真 0 小时也不显示 0");

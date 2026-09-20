@@ -14,11 +14,11 @@
 use std::fmt::Write as _;
 
 use winsuitex_core::feature::FEATURES;
-use winsuitex_core::{brand_zh, brand_zh_or};
 use winsuitex_core::model::{
     FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic, NicKind,
     PhysicalDisk, SmartSource, Volume,
 };
+use winsuitex_core::{brand_zh, brand_zh_or};
 
 const UNKNOWN: &str = "未知";
 
@@ -1645,6 +1645,22 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
             None => en.to_string(),
         });
     }
+    // Kioxia（原东芝内存）型号以 VO<数字> 开头（如 VO001000KWJSE）；
+    // 同 Seagate，按空白分词后判任一词元，避免误中 "NVMe" 里的 "VO"。
+    if m.split_whitespace().any(|tok| {
+        tok.starts_with("VO")
+            && tok
+                .get(2..3)
+                .and_then(|c| c.chars().next())
+                .is_some_and(|ch| ch.is_ascii_digit())
+    }) {
+        let en = "Kioxia";
+        let zh = brand_zh(en);
+        return Some(match zh {
+            Some(zh) => format!("{} ({})", en, zh),
+            None => en.to_string(),
+        });
+    }
     None
 }
 
@@ -2533,6 +2549,22 @@ mod tests {
         assert!(disk_vendor_from_model("SAMSUNG MZQLB960HBJR-00W07")
             .unwrap()
             .contains("三星"));
+    }
+
+    #[test]
+    fn disk_vendor_from_model_maps_kioxia() {
+        // Kioxia（原东芝内存）NVMe 型号以 VO<数字> 开头（真实样本 VO001000KWJSE）。
+        // 注意模型常带 "NVMe " 接口前缀，而 "NVMe" 里含 "VO"，故须按分词后词元判定，
+        // 绝不能 contains("VO") 否则每块 NVMe 盘都会被误判成铠侠。
+        let r = disk_vendor_from_model("NVMe VO001000KWJSE");
+        assert_eq!(r.as_deref(), Some("Kioxia (铠侠)"));
+        // 普通 NVMe 盘（含 "NVMe" 前缀）不得被误判为 Kioxia。
+        assert!(disk_vendor_from_model("NVMe INTEL SSDPE2KX02")
+            .unwrap()
+            .contains("英特尔"));
+        assert!(disk_vendor_from_model("INTEL SSDPE2KE076T8")
+            .unwrap()
+            .contains("英特尔"));
     }
 
     #[test]

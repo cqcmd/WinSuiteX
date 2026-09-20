@@ -9,17 +9,8 @@ use winsuitex_report::vendor_zh;
 fn cross_layer_vendor_zh_consistent() {
     // 覆盖四张原表中的代表品牌：键鼠 / 声卡 / 主板 / 显卡 / 网卡 / 硬盘 / 显示器 PnP。
     let brands = [
-        "Logitech",
-        "Razer",
-        "Realtek",
-        "Intel",
-        "Dell",
-        "Matrox",
-        "HKC",
-        "Seagate",
-        "Kingston",
-        "Broadcom",
-        "SEMICO",
+        "Logitech", "Razer", "Realtek", "Intel", "Dell", "Matrox", "HKC", "Seagate", "Kingston",
+        "Broadcom", "SEMICO",
     ];
     for b in brands {
         let zh = brand_zh(b).unwrap_or_else(|| panic!("core::brand_zh({b:?}) 不应为 None"));

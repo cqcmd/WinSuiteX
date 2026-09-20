@@ -91,6 +91,7 @@ pub const VENDOR_ZH: &[(&str, &str)] = &[
     ("WDC", "西部数据"),
     ("Seagate", "希捷"),
     ("Toshiba", "东芝"),
+    ("Kioxia", "铠侠"),
     ("Lite-On", "建兴"),
     ("LiteOn", "建兴"),
     ("AOC", "冠捷"),

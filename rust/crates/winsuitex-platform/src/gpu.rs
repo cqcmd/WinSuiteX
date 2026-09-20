@@ -311,7 +311,10 @@ mod tests {
             gpu_vendor_from_name("Matrox G200eR (Renesas) WDDM 1.2"),
             Some("Matrox".to_string())
         );
-        assert_eq!(gpu_vendor_from_name("ASPEED Graphics Family"), Some("ASPEED".to_string()));
+        assert_eq!(
+            gpu_vendor_from_name("ASPEED Graphics Family"),
+            Some("ASPEED".to_string())
+        );
     }
 
     #[test]
