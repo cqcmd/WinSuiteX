@@ -24,6 +24,27 @@ def fmt_uptime(sec):
         return "约 %d 分" % m
     return "约 %d 秒" % sec
 
+# 占位/回声串识别：固件常把「空槽」回显成槽位名当 manufacturer/partno
+# （如 Supermicro 双路板空槽 vendor="Dimm1_Manufacturer"、part_no="Dimm1_PartNum"），
+# 也用 "Undefined"/"NO DIMM" 等占位。这些不是真·已插内存，缺容量是正确状态。
+PLACEHOLDER = ("", "None", "Unknown", "unknown", "NO DIMM", "NODIMM",
+               "To Be Filled By O.E.M.", "Default string", "N/A", "OEM",
+               "Undefined", "undefined")
+def is_placeholder(s):
+    if s is None:
+        return True
+    t = (s.strip() if isinstance(s, str) else "")
+    if t in PLACEHOLDER:
+        return True
+    tl = t.lower()
+    if tl.endswith("_manufacturer") or tl.endswith("_partnum"):
+        return True
+    return False
+
+def is_real_stick(m):
+    """真实已插内存条 = 厂商不是占位/回声串。空槽（含固件回声）判为非真实。"""
+    return not is_placeholder(m.get("vendor"))
+
 # 收集所有 inventory.json（递归，处理 主/副 双服务器子夹）
 all_json = []
 for root, dirs, files in os.walk(BASE):
@@ -55,8 +76,12 @@ def analyze(site, sub, jf):
     rec["cpu_model"] = (cpus[0].get("model") if cpus else "") or ""
     sticks = info.get("memory", {}).get("sticks", []) or []
     rec["mem_n"] = len(sticks)
+    rec["mem_real"] = sum(1 for m in sticks if is_real_stick(m))          # 真实已插（剔除空槽回声）
     rec["mem_nocap"] = sum(1 for m in sticks if not m.get("capacity_mb"))
     rec["mem_nomanu"] = sum(1 for m in sticks if not m.get("vendor"))
+    # 真实口径缺口：只在「真·已插」里数，空槽回声不报成缺容量
+    rec["mem_nocap_real"] = sum(1 for m in sticks if is_real_stick(m) and not m.get("capacity_mb"))
+    rec["mem_nomanu_real"] = sum(1 for m in sticks if is_real_stick(m) and not m.get("vendor"))
     gpus = info.get("gpus", []) or []
     rec["gpu_n"] = len(gpus)
     rec["gpu_unknown"] = sum(1 for g in gpus if ("标准 VGA" in (g.get("name") or "")) or ("Microsoft 基本" in (g.get("name") or "")) or ("Mirage" in (g.get("name") or "")))
@@ -113,7 +138,7 @@ for r in records:
     if r.get("stale_days") and r["stale_days"] > 0: note.append("陈旧"+str(r["stale_days"])+"天")
     if r.get("uptime_sec") and r["uptime_sec"] > 30*86400: note.append("长时间未重启%d天"%int(r["uptime_sec"]//86400))
     if r.get("gpu_n") == 0: note.append("无GPU")
-    memc = str(r["mem_n"]) + "(" + str(r["mem_nocap"]) + "空)"
+    memc = str(r["mem_real"]) + "实/" + str(r["mem_nocap_real"]) + "空"
     line = cell(r["site"],24)+cell(r.get("sub","") or "-",6)+cell(r["os"],22)+cell((r["collected"] or "")[5:16],12)+cell(r["cpu"],4)+cell(memc,7)+cell(r["gpu_n"],5)+cell(r["disp"],4)+cell(r["disk_n"],4)+cell(r["nic"],4)+cell(r["diag"],5)+cell(r["heap_bad"],5)+cell(r.get("trace_err",0),6)+";".join(note)
     print(line)
 
@@ -138,13 +163,18 @@ if not flagged:
 
 print("\n=== 字段空缺率（后续统一修复备料）===")
 tot_disk=tot_noserial=tot_noiface=0
-tot_mem=tot_memnocap=tot_memnomanu=0
+tot_mem=tot_memreal=tot_memnocap=tot_memnomanu=tot_memnocap_real=tot_memnomanu_real=0
 for r in records:
     if "parse_error" in r: continue
     tot_disk+=r.get("disk_n",0); tot_noserial+=r.get("disk_noserial",0); tot_noiface+=r.get("disk_noiface",0)
-    tot_mem+=r.get("mem_n",0); tot_memnocap+=r.get("mem_nocap",0); tot_memnomanu+=r.get("mem_nomanu",0)
+    tot_mem+=r.get("mem_n",0); tot_memreal+=r.get("mem_real",0)
+    tot_memnocap+=r.get("mem_nocap",0); tot_memnomanu+=r.get("mem_nomanu",0)
+    tot_memnocap_real+=r.get("mem_nocap_real",0); tot_memnomanu_real+=r.get("mem_nomanu_real",0)
+echo_blank = tot_mem - tot_memreal   # 固件回声/占位（非真实已插）
 print("盘: 总%d, serial空%d(%d%%), iface空%d(%d%%)" % (tot_disk, tot_noserial, 100*tot_noserial//max(tot_disk,1), tot_noiface, 100*tot_noiface//max(tot_disk,1)))
-print("内存: 总%d根, capacity空%d(%d%%), vendor空%d(%d%%)" % (tot_mem, tot_memnocap, 100*tot_memnocap//max(tot_mem,1), tot_memnomanu, 100*tot_memnomanu//max(tot_mem,1)))
+print("内存: 总%d根(真实已插%d, 回声/占位空槽%d)" % (tot_mem, tot_memreal, echo_blank))
+print("  容量空(全部)%d(%d%%) / (真实已插)%d(%d%%)" % (tot_memnocap, 100*tot_memnocap//max(tot_mem,1), tot_memnocap_real, 100*tot_memnocap_real//max(tot_memreal,1)))
+print("  厂商空(全部)%d(%d%%) / (真实已插)%d(%d%%)" % (tot_memnomanu, 100*tot_memnomanu//max(tot_mem,1), tot_memnomanu_real, 100*tot_memnomanu_real//max(tot_memreal,1)))
 
 with open(os.path.join(BASE, "..", "网吧服务器配置_审核报告.md"), "w", encoding="utf-8") as f:
     f.write("# 网吧服务器配置 批量审核报告\n\n")
@@ -155,7 +185,7 @@ with open(os.path.join(BASE, "..", "网吧服务器配置_审核报告.md"), "w"
             f.write("- JSON 解析失败: "+r["parse_error"]+"\n"); continue
         f.write("- OS: "+r["os"]+" | app "+str(r["app"])+" | 收集 "+str(r["collected"])+" | 提权="+str(r["admin"])+" 服务器="+str(r["server"])+"\n")
         f.write("- CPU "+str(r["cpu"])+" 颗: "+r["cpu_model"]+"\n")
-        f.write("- 内存 "+str(r["mem_n"])+" 根 (容量空 "+str(r["mem_nocap"])+", 厂商空 "+str(r["mem_nomanu"])+")\n")
+        f.write("- 内存 "+str(r["mem_n"])+" 根 (真实已插 "+str(r["mem_real"])+", 回声/占位空槽 "+str(r["mem_n"]-r["mem_real"])+", 容量空(真实) "+str(r["mem_nocap_real"])+", 厂商空(真实) "+str(r["mem_nomanu_real"])+")\n")
         f.write("- GPU "+str(r["gpu_n"])+" 块: "+r["gpu_names"]+" (疑似未装驱 "+str(r["gpu_unknown"])+")\n")
         f.write("- 显示器 "+str(r["disp"])+" / 盘 "+str(r["disk_n"])+" (serial空 "+str(r["disk_noserial"])+", iface空 "+str(r["disk_noiface"])+") / 网 "+str(r["nic"])+" / 分区 "+str(r["vol"])+" / 键鼠 "+str(r["input"])+" / USB "+str(r["usb"])+" / 音频 "+str(r["audio"])+"\n")
         f.write("- 诊断项 "+str(r["diag"])+" | 堆检查坏 "+str(r["heap_bad"])+" | trace真实报错 "+str(r.get("trace_err",0))+" | 陈旧"+str(r.get("stale_days"))+"天\n")

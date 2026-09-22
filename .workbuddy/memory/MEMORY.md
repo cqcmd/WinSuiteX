@@ -46,3 +46,39 @@
 - 日志要记**清洗前原始值**，否则分不清"数据源没返回"和"返回了但被判废"。
 - 报"发现问题"前**先确认字段名/取值口径**（我曾把网卡字段 `desc` 当成 `name`，误报一次假故障）。
 - 本机 VM 无 NVMe，**任何 NVMe 相关结论都必须靠真机数据或官方文档，不靠记忆**。
+
+## 本机实跑 bat 的方法（别再说"跑不了"，也别退化成静态审阅）
+- Bash 里调 `cmd.exe` / `powershell.exe` **都被工具层安全策略硬拦**（`dangerouslyDisableSandbox` 也过不去）；
+  PowerShell 工具直接跑则 **stdout 全空**（本机 ConPTY 禁用）。
+- **可行解**：PowerShell 工具跑 bat + `Out-File` 写文件 → Bash `cat` 读回。
+  跑之前必须先 `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8`，否则中文按 GBK 解码全乱码。
+  末尾 `pause` 在 PowerShell 管道下会自动被消费，不会挂住。
+- **本项目 bat 一律 UTF-8 无 BOM + CRLF**：带 BOM 时 cmd 按 GBK 读第一行会把 `@echo off` 顶成乱码命令
+  （`'锘緻echo' 不是内部或外部命令`）→ echo 失效、整屏刷回显。已修 inventory.bat / inventory_debug.bat。
+
+## windows-rs 0.62 运行时 FFI 坑（LoadLibrary/GetProcAddress，做 NVML/ADL/libcpuid 都会遇到）
+- `FreeLibrary` 在 **`Win32::Foundation`**，**不在** `Win32::System::LibraryLoader`
+  （`LoadLibraryW` / `GetProcAddress` 才在 LibraryLoader）。
+- `GetProcAddress` 返回 **`Option<unsafe extern "system" fn() -> isize>`**（不是 Result）→ 用 `.map()`。
+- **不要在泛型 `fn get_proc<F>` 里 transmute**：`F` 尺寸未知 → E0512。改法：`get_proc` 返回
+  **具体**的 `Option<unsafe extern "system" fn() -> isize>`，在**调用点**（目标类型具体）再 transmute，
+  且 transmute 必须包 `unsafe {}`（否则 E0133）。fn→fn 的 transmute 不触发 clippy。
+- 运行时加载（非构建期链接）才能保持"无驱动机器零影响 + 零新增依赖"。
+
+## windows-rs 0.62 WMI/COM 坑（`memory_wmi.rs` / `physical_disk.rs` 必踩）
+- **`ComGuard` 绝不能在本源函数内 `CoUninitialize`**：WMI 源函数里 `IWbemClassObject`/`IWbemServices`
+  等 COM 对象在作用域末尾 Release，**若此刻 `CoUninitialize()` 先跑 → 公寓被拆 + 对象释放交叉 →
+  STATUS_HEAP_CORRUPTION / 段错误（EXIT=139），且"before X ok / after X 崩"会让人误判凶手**。
+- **正确范式（与 `physical_disk.rs` 一致）**：`ComGuard { own: false }` —— COM 只初始化、进程退出由 OS 回收；
+  guard 放进 `OnceLock` 或函数内返回并持有到查询完成，**Drop 是 no-op，永不 `CoUninitialize`**。
+- `VariantToStringAlloc` 返回 `windows_core::PWSTR`（**非 BSTR**），用 `CoTaskMemFree` 释放是**对的**（PWSTR 无 Drop，不会双释放）；
+  别误以为该用 `SysFreeString` 去"修"——那才是真 bug。
+- 容错 `RPC_E_CHANGED_MODE(0x80010106)`：低 16 位比较 `hr.0 & 0xFFFF == 0x0106` 即视作已初始化、沿用即可。
+- 段错误验证法：`WSX_TRACE=1 WSX_WMI_DEBUG=1 ./winsuitex.exe --selftest`，看 `[heap] after memory.wmi` 是否 `ok` 且 EXIT=0。
+
+## GPU 遥测（2026-09-20 完成，Z.W. 拍板）
+- `winsuitex-platform/src/gpu_telemetry.rs`：NVML(N 卡) + ADL(A 卡)，运行时加载；
+  NVML 按名匹配，ADL 按 DXGI 中 AMD 显卡顺序匹配；无驱动 → `telemetry = None`，**绝不填 0/100%**。
+- NVML 功耗单位是毫瓦，需 ÷1000 转瓦。
+- Z.W. 已明确：**VMD 诊断提示不做**（保持"未透传"诚实态，不加新文案）。
+- ADL/AMD 数据待真机 A 卡验证；N 卡待 Z.W. 带回服务器数据对拍。
