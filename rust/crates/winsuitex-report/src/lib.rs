@@ -15,8 +15,8 @@ use std::fmt::Write as _;
 
 use winsuitex_core::feature::FEATURES;
 use winsuitex_core::model::{
-    FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic, NicKind,
-    PhysicalDisk, SmartSource, Volume,
+    format_uptime, FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic,
+    NicKind, PhysicalDisk, SmartSource, Volume,
 };
 use winsuitex_core::{brand_zh, brand_zh_or};
 
@@ -299,7 +299,8 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                     }
                     if let Some(sp) = m.speed_mhz {
                         // 同 HTML 路径：SMBIOS 给的是传输率，单位 MT/s 而非 MHz。
-                        s.push_str(&format!(" · {sp} MT/s"));
+                        // DDR 双倍数据率，真实时钟频率 = 传输率 / 2，附后防误解。
+                        s.push_str(&format!(" · {sp} MT/s (时钟 {} MHz)", sp / 2));
                     }
                     s.push_str(" | ");
                     s.push_str(&vendor_label(&m.vendor).unwrap_or_else(|| UNKNOWN.to_string()));
@@ -504,9 +505,9 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             if let (Some(v), Some(p)) = (&a.vid, &a.pid) {
                 s.push_str(&format!(" · {v}:{p}"));
             }
-            if let Some(m) = &a.manufacturer {
-                if !a.name.contains(m) {
-                    s.push_str(&format!(" · {m}"));
+            if let Some(lbl) = vendor_label(&a.manufacturer) {
+                if !a.name.contains(&lbl) {
+                    s.push_str(&format!(" · {lbl}"));
                 }
             }
             push_kv(&mut out, &format!("  #{}", i + 1), s);
@@ -536,9 +537,9 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             if let (Some(v), Some(p)) = (&d.vid, &d.pid) {
                 s.push_str(&format!(" · {v}:{p}"));
             }
-            if let Some(m) = &d.manufacturer {
-                if !d.name.contains(m) {
-                    s.push_str(&format!(" · {m}"));
+            if let Some(lbl) = vendor_label(&d.manufacturer) {
+                if !d.name.contains(&lbl) {
+                    s.push_str(&format!(" · {lbl}"));
                 }
             }
             push_kv(&mut out, &format!("  {}", d.kind.label()), s);
@@ -576,6 +577,14 @@ fn os_section(hw: &HardwareInfo, out: &mut String) {
         "架构",
         &opt_cell(&hw.os.as_ref().and_then(|o| o.arch.clone())),
     );
+    // 开机时间 + 在线时长：资产盘点里判断「这台服务器多久没重启过」很关键。
+    // 旧快照无这两个字段 → 跳过，不显示"未知"（与 collected_at 同策略）。
+    if let Some(boot) = hw.os.as_ref().and_then(|o| o.boot_at.clone()) {
+        row(out, "开机时间", &esc(&boot));
+    }
+    if let Some(sec) = hw.os.as_ref().and_then(|o| o.uptime_seconds) {
+        row(out, "在线时长", &esc(&format_uptime(sec)));
+    }
     out.push_str("</table></section>\n");
 }
 
@@ -740,7 +749,8 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
                 // 不是时钟频率：DDR4-2400 的实际时钟是 1200 MHz。
                 // 标 MHz 是行业惯例（Windows 任务管理器也这么写），但这里是资产盘点，
                 // 选准确写法，避免"内存 2400 MHz"被当成超频依据。
-                td.push_str(&format!(" &middot; {sp} MT/s"));
+                // 附真实时钟频率（= 传输率 / 2）防误解。
+                td.push_str(&format!(" &middot; {sp} MT/s (时钟 {} MHz)", sp / 2));
             }
             td.push_str("<br><span class=\"mono\">");
             td.push_str(&esc(
@@ -1306,9 +1316,9 @@ fn audio_section(hw: &HardwareInfo, out: &mut String) {
                 esc(p)
             ));
         }
-        if let Some(m) = &a.manufacturer {
-            if !a.name.contains(m) {
-                td.push_str(&format!(" &middot; {}", esc(m)));
+        if let Some(lbl) = vendor_label(&a.manufacturer) {
+            if !a.name.contains(&lbl) {
+                td.push_str(&format!(" &middot; {}", esc(&lbl)));
             }
         }
         out.push_str(&format!("<tr><th>#{}</th><td>{}</td></tr>\n", i + 1, td));
@@ -1353,9 +1363,9 @@ fn input_section(hw: &HardwareInfo, out: &mut String) {
                 esc(p)
             ));
         }
-        if let Some(m) = &d.manufacturer {
-            if !d.name.contains(m) {
-                td.push_str(&format!(" &middot; {}", esc(m)));
+        if let Some(lbl) = vendor_label(&d.manufacturer) {
+            if !d.name.contains(&lbl) {
+                td.push_str(&format!(" &middot; {}", esc(&lbl)));
             }
         }
         out.push_str(&format!(
@@ -1874,6 +1884,7 @@ mod tests {
                 build: Some("19045".into()),
                 arch: Some("x64".into()),
                 logical_processors: Some(8),
+                ..Default::default()
             }),
             machine: Some(MachineInfo {
                 computer_name: Some("TEST-PC".into()),
@@ -2140,6 +2151,48 @@ mod tests {
     }
 
     #[test]
+    fn peripheral_vendor_renders_english_zh() {
+        // 厂商在 JSON 中存英文品牌 key，报告层统一出「英文 (中文)」，
+        // 与 GPU/CPU 等 structured 源口径一致。音频与键鼠此前存中文、直接原样输出，
+        // 与 GPU 的中文呈现不一致——这里锁定统一规格。
+        let mut hw = base_hw();
+        hw.audio.clear();
+        hw.audio.push(AudioDevice {
+            name: "USB Audio Device".into(),
+            role: 0,
+            kind: AudioKind::Headphone,
+            is_bluetooth: false,
+            vid: Some("03F0".into()),
+            pid: Some("0B92".into()),
+            manufacturer: Some("HP".into()), // 源现统一存英文品牌 key
+        });
+        hw.input_devices.clear();
+        hw.input_devices.push(InputDevice {
+            name: "G402 Gaming Mouse".into(),
+            kind: InputKind::Mouse,
+            vid: Some("046D".into()),
+            pid: Some("C07E".into()),
+            manufacturer: Some("Logitech".into()),
+            is_bluetooth: false,
+            location: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("HP (惠普)"),
+            "音频厂商应渲染为「HP (惠普)」: {html}"
+        );
+        assert!(
+            html.contains("Logitech (罗技)"),
+            "键鼠厂商应渲染为「Logitech (罗技)」: {html}"
+        );
+        // 不应再出现纯中文厂商（旧口径）。
+        assert!(
+            !html.contains("&middot; 惠普") && !html.contains("&middot; 罗技"),
+            "不应出现纯中文厂商呈现: {html}"
+        );
+    }
+
+    #[test]
     fn empty_list_hides_section() {
         let mut hw = base_hw(); // 清空所有变长列表
         hw.cpus.clear();
@@ -2184,6 +2237,34 @@ mod tests {
         );
         // CPU 段仍应展示核/线程，交叉校验信息不丢。
         assert!(html.contains("线程"), "CPU 段应仍含核/线程信息: {html}");
+    }
+
+    #[test]
+    fn os_section_renders_boot_time_and_uptime() {
+        // 新增字段（2026-09-22）：系统开机时间 + 在线时长。两者应出现在 OS 段，
+        // 且在线时长走 format_uptime 的人类可读串，而非裸秒数。
+        let mut hw = base_hw();
+        hw.os.as_mut().unwrap().boot_at = Some("2026-09-20 08:00:00".into());
+        hw.os.as_mut().unwrap().uptime_seconds = Some(5073600); // 约 58 天 17 小时
+        let html = build_html(&hw, &[]);
+        assert!(html.contains("开机时间"), "OS 段应含『开机时间』");
+        assert!(html.contains("2026-09-20 08:00:00"), "开机时间串应原样渲染");
+        assert!(html.contains("在线时长"), "OS 段应含『在线时长』");
+        assert!(
+            html.contains("约 58 天 17 小时"),
+            "在线时长应走 format_uptime 可读串，而非裸秒: {html}"
+        );
+    }
+
+    #[test]
+    fn os_section_omits_boot_fields_when_absent() {
+        // 老快照无这两个字段（base_hw 默认 None）→ 不应渲染，避免显示"未知"。
+        let html = build_html(&base_hw(), &[]);
+        assert!(!html.contains("开机时间"), "无 boot_at 时不渲染开机时间");
+        assert!(
+            !html.contains("在线时长"),
+            "无 uptime_seconds 时不渲染在线时长"
+        );
     }
 
     #[test]
@@ -2660,6 +2741,36 @@ mod tests {
         let html2 = build_html(&hw2, &[]);
         assert!(html2.contains("金士顿"), "真实厂商应正常中文化: {html2}");
         assert!(!html2.contains("未知"), "真实厂商不应显示未知: {html2}");
+    }
+
+    #[test]
+    fn memory_speed_shows_clock_frequency_hint() {
+        // SMBIOS 的 speed 是传输率(MT/s)，不是时钟频率；DDR 双倍数据率，
+        // 真实时钟 = 传输率 / 2。报告须附「(时钟 N MHz)」防误解（Z.W. 2026-09-22）。
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM_A1".into()),
+            bank: Some("BANK0".into()),
+            serial: Some("S1".into()),
+            part_no: Some("P1".into()),
+            vendor: Some("Kingston".into()),
+            mem_type: Some("DDR5".into()),
+            capacity_mb: Some(MebiBytes::new(32768)),
+            speed_mhz: Some(6000),
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("6000 MT/s (时钟 3000 MHz)"),
+            "HTML 应附真实时钟频率: {html}"
+        );
+        let text = build_text(&hw);
+        assert!(
+            text.contains("6000 MT/s (时钟 3000 MHz)"),
+            "文本报告应附真实时钟频率: {text}"
+        );
+        // 时钟值必须是传输率 / 2，而非原值。
+        assert!(!html.contains("6000 MHz)"), "时钟不得等于传输率");
     }
 
     #[test]

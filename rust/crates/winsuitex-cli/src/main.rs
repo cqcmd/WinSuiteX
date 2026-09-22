@@ -20,11 +20,127 @@ struct DiagnosticRow {
     message: String,
 }
 
+/// Win7 兼容的控制台输出垫片。
+///
+/// 背景：本项目的 Win7 通用 exe 用 nightly + `panic=abort` 构建。实测在 Win7/Server
+/// 2008 R2 上，std 自带的 Windows 控制台 writer（`println!`/`eprintln!` 走的那条路）
+/// 走到 `WriteConsoleW` 时会崩溃（0xc0000005 / `panic!("failed printing to stdout")`），
+/// 而 `panic=abort` 下任何 panic 都会直接让进程崩——于是 `--version` 一行带中文的
+/// 横幅打印就把整个采集流程拖崩（好在 JSON/HTML 走管道重定向，已先落盘）。
+///
+/// 这里**完全绕开 std 的 stdout/stderr writer**，自己用 Win32 API 写：
+/// - 真实控制台 → `WriteConsoleW`（UTF-16，与代码页无关，中文永不失真/不崩溃）；
+/// - 被重定向成管道/文件 → `WriteConsoleW` 失败，退回 `WriteFile` 写原始 UTF-8 字节
+///   （管道另一端按 UTF-8 解码，与 --json - 的既有约定一致）；
+/// - **任何错误都静默忽略**，绝不以写失败为由 panic/崩溃。
+#[cfg(windows)]
+mod console_out {
+    use std::ffi::c_void;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    const STD_OUTPUT_HANDLE: i32 = -11;
+    const STD_ERROR_HANDLE: i32 = -12;
+
+    extern "system" {
+        fn GetStdHandle(nStdHandle: i32) -> *mut c_void;
+        fn WriteConsoleW(
+            hConsoleOutput: *mut c_void,
+            lpBuffer: *const u16,
+            nNumberOfCharsToWrite: u32,
+            lpNumberOfCharsWritten: *mut u32,
+            lpReserved: *mut c_void,
+        ) -> i32;
+        fn WriteFile(
+            hFile: *mut c_void,
+            lpBuffer: *const u8,
+            nNumberOfBytesToWrite: u32,
+            lpNumberOfBytesWritten: *mut u32,
+            lpOverlapped: *mut c_void,
+        ) -> i32;
+    }
+
+    fn write_to(handle: *mut c_void, text: &str) {
+        if handle.is_null() {
+            return;
+        }
+        // 真实控制台：UTF-16 直写，代码页无关，中文安全。
+        let wide: Vec<u16> = OsStr::new(text).encode_wide().chain(Some(0)).collect();
+        let mut written = 0u32;
+        let ok = unsafe {
+            WriteConsoleW(
+                handle,
+                wide.as_ptr(),
+                (wide.len() - 1) as u32,
+                &mut written,
+                core::ptr::null_mut(),
+            )
+        };
+        if ok != 0 {
+            return;
+        }
+        // 非控制台（管道/文件）：写原始 UTF-8 字节。
+        let bytes = text.as_bytes();
+        let mut w2 = 0u32;
+        unsafe {
+            let _ = WriteFile(
+                handle,
+                bytes.as_ptr(),
+                bytes.len() as u32,
+                &mut w2,
+                core::ptr::null_mut(),
+            );
+        }
+    }
+
+    pub fn out(text: &str) {
+        unsafe { write_to(GetStdHandle(STD_OUTPUT_HANDLE), text) }
+    }
+    pub fn err(text: &str) {
+        unsafe { write_to(GetStdHandle(STD_ERROR_HANDLE), text) }
+    }
+}
+
+#[cfg(not(windows))]
+mod console_out {
+    pub fn out(text: &str) {
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(text.as_bytes());
+    }
+    pub fn err(text: &str) {
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(text.as_bytes());
+    }
+}
+
+/// 控制台诊断输出：行为等同 `println!` 但走 [`console_out`]（绕开 std writer，绝不 panic）。
+macro_rules! wsx_println {
+    ($($arg:tt)*) => {{
+        let mut __s = format!($($arg)*);
+        __s.push('\n');
+        console_out::out(&__s);
+    }};
+}
+/// 控制台诊断输出：行为等同 `print!` 但走 [`console_out`]。
+macro_rules! wsx_print {
+    ($($arg:tt)*) => {{
+        console_out::out(&format!($($arg)*));
+    }};
+}
+/// 控制台诊断输出：行为等同 `eprintln!` 但走 [`console_out`]（stderr）。
+macro_rules! wsx_eprintln {
+    ($($arg:tt)*) => {{
+        let mut __s = format!($($arg)*);
+        __s.push('\n');
+        console_out::err(&__s);
+    }};
+}
+
 /// 真机排障埋点：`WSX_TRACE=1` 时把阶段进度打到 **stderr**（无缓冲）。
 /// 用途见 core::traits 的说明 —— 进程被硬杀时这是唯一能留下线索的手段。
 fn tprintln(msg: &str) {
     if wsx_trace_enabled_pub() {
-        eprintln!("[phase] {}", msg);
+        wsx_eprintln!("[phase] {}", msg);
     }
 }
 
@@ -92,7 +208,7 @@ WinSuiteX — Windows 硬件信息 / 右键增强工具
   WSX_TRACE=1                       把每个采集源的执行进度打到 stderr（逐行、无缓冲）。
                                      若进程被硬杀，崩溃前最后一行即指明是哪个源引起的。
   WSX_SKIP=<源名>[,<源名>...]        跳过指定采集源。源名以 WSX_TRACE=1 的输出为准
-                                     （smbios / system / gpu.dxgi / display.gdi / nic /
+                                     （smbios / memory.wmi / system / gpu.dxgi / display.gdi / nic /
                                        disk / physical_disk / usb / hid / audio）。
                                      用于某源在特定机器上崩溃时仍能出报告，跳过会记为降级。
 ";
@@ -101,12 +217,12 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     if args.iter().any(|a| a == "--help" || a == "-h") {
-        print!("{}", USAGE);
+        wsx_print!("{}", USAGE);
         return ExitCode::SUCCESS;
     }
 
     if args.iter().any(|a| a == "--version" || a == "-v") {
-        println!("winsuitex {}  (built {})", version_string(), build_time());
+        wsx_println!("winsuitex {}  (built {})", version_string(), build_time());
         return ExitCode::SUCCESS;
     }
 
@@ -122,7 +238,7 @@ fn main() -> ExitCode {
         let input = args.get(pos + 1).cloned().unwrap_or_default();
         let output = args.get(pos + 2).cloned().unwrap_or_default();
         if input.is_empty() || output.is_empty() {
-            eprintln!(
+            wsx_eprintln!(
                 "--render 需要两个参数：输入 JSON 与输出 HTML。\n\n{}",
                 USAGE
             );
@@ -164,7 +280,7 @@ fn main() -> ExitCode {
         return fs_probe(&path);
     }
 
-    eprintln!("未识别的参数。\n\n{}", USAGE);
+    wsx_eprintln!("未识别的参数。\n\n{}", USAGE);
     ExitCode::from(2)
 }
 
@@ -247,7 +363,7 @@ fn run_json(path: &str) -> ExitCode {
     let json = match serde_json::to_string_pretty(&snapshot) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("序列化失败: {}", e);
+            wsx_eprintln!("序列化失败: {}", e);
             return ExitCode::from(2);
         }
     };
@@ -261,18 +377,18 @@ fn run_json(path: &str) -> ExitCode {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
         if let Err(e) = lock.write_all(json.as_bytes()) {
-            eprintln!("写入 stdout 失败: {}", e);
+            wsx_eprintln!("写入 stdout 失败: {}", e);
             return ExitCode::from(2);
         }
         let _ = lock.flush();
-        eprintln!("JSON 已生成（已输出到 stdout，由调用方重定向落盘）");
+        wsx_eprintln!("JSON 已生成（已输出到 stdout，由调用方重定向落盘）");
         return ExitCode::SUCCESS;
     }
 
     match write_verified(path, json.as_bytes()) {
         Ok(()) => {
-            println!("JSON 已写入: {}", path);
-            println!(
+            wsx_println!("JSON 已写入: {}", path);
+            wsx_println!(
                 "采集摘要: CPU {} 颗 / 内存条 {} 根 / 显卡 {} 块 / 显示器 {} 台 / \
                  物理盘 {} 块 / 分区 {} 个 / 网卡 {} 个 / 键鼠 {} 个 / USB {} 个 / 音频 {} 个",
                 snapshot.info.cpus.len(),
@@ -288,13 +404,13 @@ fn run_json(path: &str) -> ExitCode {
             );
             if !snapshot.diagnostics.is_empty() {
                 for d in &snapshot.diagnostics {
-                    eprintln!("[warn] 采集降级 [{}]: {}", d.source, d.message);
+                    wsx_eprintln!("[warn] 采集降级 [{}]: {}", d.source, d.message);
                 }
             }
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("写入 JSON 失败: {}", e);
+            wsx_eprintln!("写入 JSON 失败: {}", e);
             ExitCode::from(2)
         }
     }
@@ -359,9 +475,9 @@ fn fs_probe(path: &str) -> ExitCode {
         }
     };
 
-    println!("{}", test("A 新建", true));
-    println!("{}", test("B 覆盖", false));
-    println!("fs-probe 完成。");
+    wsx_println!("{}", test("A 新建", true));
+    wsx_println!("{}", test("B 覆盖", false));
+    wsx_println!("fs-probe 完成。");
     ExitCode::SUCCESS
 }
 
@@ -374,14 +490,14 @@ fn run_render(input: &str, output: &str) -> ExitCode {
     let text = match std::fs::read_to_string(input) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("读取快照失败: {}", e);
+            wsx_eprintln!("读取快照失败: {}", e);
             return ExitCode::from(2);
         }
     };
     let mut snapshot: Snapshot = match serde_json::from_str(&text) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("解析快照失败（不是本工具导出的 JSON？）: {}", e);
+            wsx_eprintln!("解析快照失败（不是本工具导出的 JSON？）: {}", e);
             return ExitCode::from(2);
         }
     };
@@ -404,11 +520,11 @@ fn run_render(input: &str, output: &str) -> ExitCode {
     );
     match write_verified(output, html.as_bytes()) {
         Ok(()) => {
-            println!("报告已写入: {}", output);
+            wsx_println!("报告已写入: {}", output);
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("写入报告失败: {}", e);
+            wsx_eprintln!("写入报告失败: {}", e);
             ExitCode::from(2)
         }
     }
@@ -424,13 +540,13 @@ fn validate_render(snapshot: &Snapshot) -> Result<(), ExitCode> {
 
     // 内存总计：OS 口径为 0 明显是脏数据（真实机器不可能 0 内存）。
     if info.memory.total_mb == Some(MebiBytes::new(0)) {
-        eprintln!("⚠ 校验告警：内存总计为 0，快照可能损坏");
+        wsx_eprintln!("⚠ 校验告警：内存总计为 0，快照可能损坏");
         hard = true;
     }
     // 各盘容量：size_bytes == Some(0) 是畸形（盘一定有非零容量）。
     for (i, d) in info.disks.iter().enumerate() {
         if d.size_bytes == Some(0) {
-            eprintln!("⚠ 校验告警：PhysicalDrive{} size_bytes=0，快照可能损坏", i);
+            wsx_eprintln!("⚠ 校验告警：PhysicalDrive{} size_bytes=0，快照可能损坏", i);
             hard = true;
         }
     }
@@ -438,7 +554,7 @@ fn validate_render(snapshot: &Snapshot) -> Result<(), ExitCode> {
     for (i, c) in info.cpus.iter().enumerate() {
         if let (Some(cores), Some(threads)) = (c.cores, c.threads) {
             if cores > 0 && threads < cores {
-                eprintln!(
+                wsx_eprintln!(
                     "⚠ 校验告警：CPU #{} 线程数({}) < 核心数({})，请重新采集",
                     i + 1,
                     threads,
@@ -452,15 +568,16 @@ fn validate_render(snapshot: &Snapshot) -> Result<(), ExitCode> {
     if let Some(lp) = info.os.as_ref().and_then(|o| o.logical_processors) {
         let sum_threads: u32 = info.cpus.iter().filter_map(|c| c.threads).sum();
         if lp > 0 && sum_threads > 0 && lp != sum_threads {
-            eprintln!(
+            wsx_eprintln!(
                 "⚠ 校验提示：OS 逻辑处理器={} 与 CPU 线程合计={} 不一致（不影响渲染）",
-                lp, sum_threads
+                lp,
+                sum_threads
             );
         }
     }
 
     if hard {
-        eprintln!("快照校验未通过：存在硬性损坏字段，停止渲染以免误导");
+        wsx_eprintln!("快照校验未通过：存在硬性损坏字段，停止渲染以免误导");
         Err(ExitCode::from(2))
     } else {
         Ok(())
@@ -498,7 +615,7 @@ fn run_report(path: &str) -> ExitCode {
 
     if !result.is_complete() {
         for d in &result.diagnostics {
-            eprintln!("[warn] 采集降级 [{}]: {}", d.source, d.message);
+            wsx_eprintln!("[warn] 采集降级 [{}]: {}", d.source, d.message);
         }
     }
 
@@ -515,12 +632,12 @@ fn run_report(path: &str) -> ExitCode {
         let stdout = std::io::stdout();
         let mut lock = stdout.lock();
         if let Err(e) = lock.write_all(html.as_bytes()) {
-            eprintln!("写入 stdout 失败: {}", e);
+            wsx_eprintln!("写入 stdout 失败: {}", e);
             return ExitCode::from(2);
         }
         let _ = lock.flush();
-        eprintln!("报告已生成（已输出到 stdout，由调用方重定向落盘）");
-        eprintln!(
+        wsx_eprintln!("报告已生成（已输出到 stdout，由调用方重定向落盘）");
+        wsx_eprintln!(
             "采集摘要: CPU {} 颗 / 内存条 {} 根 / 显卡 {} 块 / 显示器 {} 台 / \
              物理盘 {} 块 / 分区 {} 个 / 网卡 {} 个 / 键鼠 {} 个 / USB {} 个 / 音频 {} 个",
             result.info.cpus.len(),
@@ -535,15 +652,15 @@ fn run_report(path: &str) -> ExitCode {
             result.info.audio.len(),
         );
         if !result.is_complete() {
-            eprintln!("注意: 有 {} 项采集降级", result.diagnostics.len());
+            wsx_eprintln!("注意: 有 {} 项采集降级", result.diagnostics.len());
         }
         return ExitCode::SUCCESS;
     }
 
     match write_verified(path, html.as_bytes()) {
         Ok(()) => {
-            println!("报告已写入: {}", path);
-            println!(
+            wsx_println!("报告已写入: {}", path);
+            wsx_println!(
                 "采集摘要: CPU {} 颗 / 内存条 {} 根 / 显卡 {} 块 / 显示器 {} 台 / \
                  物理盘 {} 块 / 分区 {} 个 / 网卡 {} 个 / 键鼠 {} 个 / USB {} 个 / 音频 {} 个",
                 result.info.cpus.len(),
@@ -558,7 +675,7 @@ fn run_report(path: &str) -> ExitCode {
                 result.info.audio.len(),
             );
             if !result.is_complete() {
-                println!(
+                wsx_println!(
                     "注意: 有 {} 项采集降级（详见上方 [warn]）",
                     result.diagnostics.len()
                 );
@@ -566,7 +683,7 @@ fn run_report(path: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("写入报告失败: {}", e);
+            wsx_eprintln!("写入报告失败: {}", e);
             ExitCode::from(2)
         }
     }
@@ -580,29 +697,29 @@ fn debug_smbios() -> ExitCode {
     let raw = match winsuitex_platform::smbios::read_raw() {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("读取 SMBIOS 失败: {}", e);
+            wsx_eprintln!("读取 SMBIOS 失败: {}", e);
             return ExitCode::from(2);
         }
     };
 
-    println!("原始表: {} 字节", raw.len());
-    println!("\n结构清单 (固件提供):");
+    wsx_println!("原始表: {} 字节", raw.len());
+    wsx_println!("\n结构清单 (固件提供):");
     for (i, (typ, len)) in winsuitex_core::smbios::list_structures(&raw)
         .into_iter()
         .enumerate()
     {
-        println!("  [{:2}] type={:<3} len={:<3}", i, typ, len);
+        wsx_println!("  [{:2}] type={:<3} len={:<3}", i, typ, len);
     }
 
     match winsuitex_core::smbios::parse(&raw) {
         Ok(d) => {
-            println!(
+            wsx_println!(
                 "\n解析结果: CPU {} 颗 / 内存条 {} 根",
                 d.cpus.len(),
                 d.mem_sticks.len()
             );
             for (i, c) in d.cpus.iter().enumerate() {
-                println!(
+                wsx_println!(
                     "  CPU{}: {} cores={:?} threads={:?} {}MHz",
                     i,
                     c.model.as_deref().unwrap_or("<无型号>"),
@@ -612,7 +729,7 @@ fn debug_smbios() -> ExitCode {
                 );
             }
             for (i, m) in d.mem_sticks.iter().enumerate() {
-                println!(
+                wsx_println!(
                     "  DIMM{}: {} MB {} {} @ {}MHz",
                     i,
                     m.capacity_mb
@@ -626,7 +743,7 @@ fn debug_smbios() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("解析失败: {}", e);
+            wsx_eprintln!("解析失败: {}", e);
             ExitCode::from(2)
         }
     }
@@ -642,11 +759,11 @@ fn dump_smbios(path: &str) -> ExitCode {
         .and_then(|raw| std::fs::write(path, &raw).map_err(|e| e.to_string()))
     {
         Ok(()) => {
-            println!("原始 SMBIOS 已写入: {}", path);
+            wsx_println!("原始 SMBIOS 已写入: {}", path);
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("导出失败: {}", e);
+            wsx_eprintln!("导出失败: {}", e);
             ExitCode::from(2)
         }
     }
@@ -661,10 +778,10 @@ fn run_selftest() -> ExitCode {
     let mut check = |name: &str, ok: bool| {
         if ok {
             pass += 1;
-            println!("[PASS] {}", name);
+            wsx_println!("[PASS] {}", name);
         } else {
             fail += 1;
-            println!("[FAIL] {}", name);
+            wsx_println!("[FAIL] {}", name);
         }
     };
 
@@ -711,7 +828,7 @@ fn run_selftest() -> ExitCode {
         result.volumes.is_empty() || html.contains("分区"),
     );
 
-    println!("\n自检汇总：通过 {}，失败 {}", pass, fail);
+    wsx_println!("\n自检汇总：通过 {}，失败 {}", pass, fail);
 
     // 与 C++ 版一致：失败项数即退出码
     if fail > 255 {

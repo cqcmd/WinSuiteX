@@ -7,6 +7,7 @@
 
 // `Serialize` 需显式引入作用域：`#[derive(Serialize)]` 才能解析到宏。
 use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // ============================================================
 // 硬件信息
@@ -134,20 +135,53 @@ pub fn format_power_on_duration(hours: u32) -> String {
     }
 }
 
-/// 当前本地时间，格式 `YYYY-MM-DD HH:MM:SS`（用于给采集快照打时间戳）。
+/// 把任意 `SystemTime`（按 UTC 解释）换算成中国本地时间串 `YYYY-MM-DD HH:MM:SS`。
 ///
-/// 不引第三方时区库：工具面向国内网吧 / 电竞酒店，中国全境固定 UTC+8，
-/// 且 1992 年后不再实行夏令时，固定偏移即正确。若将来要支持海外机器，
-/// 需引入 chrono 改为取系统时区 —— 别在这里硬加第二个偏移。
-pub fn local_timestamp_string() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+/// 单一事实源：采集时间戳（`local_timestamp_string`）、系统开机时间（`boot_at`）
+/// 都走这里，保证报告里所有时间口径一致。中国全境固定 UTC+8 且无夏令时
+/// （1992 年后取消），固定偏移即正确。若将来要支持海外机器，需引入 chrono
+/// 改为取系统时区 —— 别在这里硬加第二个偏移。
+pub fn local_timestamp_from_systemtime(t: SystemTime) -> String {
+    let secs = t
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
         + 8 * 3600;
     let (y, m, d, hh, mm, ss) = civil_from_secs(secs);
     format!("{y:04}-{m:02}-{d:02} {hh:02}:{mm:02}:{ss:02}")
+}
+
+/// 当前本地时间，格式 `YYYY-MM-DD HH:MM:SS`（用于给采集快照打时间戳）。
+pub fn local_timestamp_string() -> String {
+    local_timestamp_from_systemtime(SystemTime::now())
+}
+
+/// 把在线时长（秒）换算为人类可读串，用于报告渲染与 JSON 导出。
+///
+/// 单一事实源：HTML 文案（`winsuitex-report`）与 JSON 导出都调用本函数，
+/// 避免两套算法漂移。例：42367s → "约 11 小时 46 分"；259200s → "约 3 天"；
+/// 5073600s → "约 58 天 17 小时"；不足 1 分 → "约 N 秒"。
+pub fn format_uptime(seconds: u64) -> String {
+    let days = seconds / 86400;
+    let hours = (seconds % 86400) / 3600;
+    let minutes = (seconds % 3600) / 60;
+    if days >= 1 {
+        if hours > 0 {
+            format!("约 {days} 天 {hours} 小时")
+        } else {
+            format!("约 {days} 天")
+        }
+    } else if hours >= 1 {
+        if minutes > 0 {
+            format!("约 {hours} 小时 {minutes} 分")
+        } else {
+            format!("约 {hours} 小时")
+        }
+    } else if minutes >= 1 {
+        format!("约 {minutes} 分")
+    } else {
+        format!("约 {seconds} 秒")
+    }
 }
 
 fn civil_from_secs(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
@@ -187,6 +221,17 @@ pub struct OsInfo {
     /// 逻辑处理器数（`GetSystemInfo.dwNumberOfProcessors`）。
     /// 与 C++ 版报告的「逻辑处理器」一致，独立成字段而非塞进 arch 字符串。
     pub logical_processors: Option<u32>,
+    /// 系统开机时间（本地时间串 `YYYY-MM-DD HH:MM:SS`），由采集端经 `GetTickCount64`
+    /// 推算（now − uptime）。资产盘点里判断「这台服务器多久没重启过」很关键：
+    /// 长期不重启可能暗示无人维护 / 潜在隐患（如补丁未生效、内存泄漏累积）。
+    /// 反序列化旧快照时该字段缺失 → `None`，渲染层跳过，不影响老数据。
+    #[serde(default)]
+    pub boot_at: Option<String>,
+    /// 系统已开机时长（秒），与 `boot_at` 同源（uptime = now − boot_at）。
+    /// 仅用于展示 / 导出；渲染层用 `format_uptime` 换算成人类可读串。
+    /// 反序列化旧快照时该字段缺失 → `None`，不影响老数据。
+    #[serde(default)]
+    pub uptime_seconds: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -446,6 +491,34 @@ mod timestamp_tests {
             s[..4].parse::<u32>().is_ok(),
             "年份应可解析为数字，实际: {s}"
         );
+    }
+
+    #[test]
+    fn local_timestamp_from_systemtime_uses_fixed_offset() {
+        // 钉一个已知 UTC 时刻，验证固定 UTC+8（无夏令时）换算正确。
+        // 2024-01-01 00:00:00 UTC = 2024-01-01 08:00:00 中国本地。
+        use std::time::{Duration, UNIX_EPOCH};
+        let t = UNIX_EPOCH + Duration::from_secs(1_704_067_200);
+        assert_eq!(
+            local_timestamp_from_systemtime(t),
+            "2024-01-01 08:00:00",
+            "中国本地时间须为 UTC+8"
+        );
+    }
+
+    #[test]
+    fn format_uptime_buckets() {
+        // 与 system 在线时长报告口径一致：天/小时/分/秒 分桶。
+        assert_eq!(format_uptime(0), "约 0 秒");
+        assert_eq!(format_uptime(59), "约 59 秒");
+        assert_eq!(format_uptime(60), "约 1 分");
+        assert_eq!(format_uptime(3600), "约 1 小时");
+        assert_eq!(format_uptime(3660), "约 1 小时 1 分");
+        assert_eq!(format_uptime(86400), "约 1 天");
+        // 259200s = 恰好 3 天（无余小时）。
+        assert_eq!(format_uptime(259200), "约 3 天");
+        // 5073600s = 58 天余 17 小时（58*86400 + 17*3600 = 5073600）。
+        assert_eq!(format_uptime(5073600), "约 58 天 17 小时");
     }
 }
 

@@ -49,6 +49,10 @@ impl CollectContext {
     pub fn set_memory_sticks(&mut self, v: Vec<MemStick>) {
         self.info.memory.sticks = v;
     }
+    /// 只读访问已采内存条（供 `memory.wmi` 兜底源回填缺失字段用）。
+    pub fn memory_sticks(&self) -> &[MemStick] {
+        &self.info.memory.sticks
+    }
     /// 收 MiB 而非 u64：调用方必须显式构造 `MebiBytes`，杜绝单位误传。
     pub fn set_memory_total(&mut self, v: MebiBytes) {
         self.info.memory.total_mb = Some(v);

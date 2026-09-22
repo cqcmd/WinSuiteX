@@ -6,7 +6,7 @@
 use std::mem::size_of;
 
 use windows::Win32::System::SystemInformation::{
-    GetSystemInfo, GlobalMemoryStatusEx, MEMORYSTATUSEX, SYSTEM_INFO,
+    GetSystemInfo, GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX, SYSTEM_INFO,
 };
 
 use crate::registry::WinRegistry;
@@ -34,6 +34,30 @@ pub(crate) fn logical_processors() -> Option<u32> {
     unsafe { GetSystemInfo(&mut si) };
     let n = si.dwNumberOfProcessors;
     (n > 0).then_some(n)
+}
+
+/// 系统已开机时长（秒），经 `GetTickCount64` 取得（自系统启动以来的毫秒数）。
+///
+/// 跨所有 Windows 版本可用（含 Win7 / Server 2008 R2），且**不需要 COM / WMI**，
+/// 不引入 `CoInitialize` 相关的堆损坏风险（见 `win7_compat.rs` 的纪律）。
+/// 49.7 天回绕对资产报告无影响（我们只展示"约 N 天"）。
+pub(crate) fn uptime_seconds() -> Option<u64> {
+    // SAFETY: GetTickCount64 无参数、无副作用，返回自启动起的毫秒计数（u64）。
+    let ms = unsafe { GetTickCount64() };
+    Some(ms / 1000)
+}
+
+/// 系统开机时间（本地时间串 `YYYY-MM-DD HH:MM:SS`），由 `now − uptime` 推算。
+///
+/// 不查 `Win32_OperatingSystem.LastBootUpTime`（WMI/COM），避免在无盘服务器 / 老系统上
+/// 因 COM 初始化引入额外失败面；`GetTickCount64` 即可满足资产盘点精度需求。
+/// 推算依赖本机时钟准确，对"多久没重启"这类判断足够。
+pub(crate) fn boot_time_local() -> Option<String> {
+    // SAFETY: 同上，GetTickCount64 无参数、无副作用。
+    let ms = unsafe { GetTickCount64() };
+    let now = std::time::SystemTime::now();
+    now.checked_sub(std::time::Duration::from_millis(ms))
+        .map(winsuitex_core::model::local_timestamp_from_systemtime)
 }
 
 const CUR_VER: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
@@ -93,6 +117,8 @@ impl HardwareSource for SystemSource {
             build,
             arch: Some(arch_label()),
             logical_processors: logical_processors(),
+            boot_at: boot_time_local(),
+            uptime_seconds: uptime_seconds(),
         });
 
         // 计算机名/用户名：环境变量与 GetComputerNameW/GetUserNameW 同源，

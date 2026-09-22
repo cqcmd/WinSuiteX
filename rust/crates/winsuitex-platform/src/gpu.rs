@@ -14,9 +14,10 @@ use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE,
 };
 
+use crate::gpu_telemetry::{adl_collect, gtrace, nvml_collect};
 use crate::wide_to_string;
 use winsuitex_core::error::Result;
-use winsuitex_core::model::{Gpu, GpuKind, MebiBytes};
+use winsuitex_core::model::{Gpu, GpuKind, GpuTelemetry, MebiBytes};
 use winsuitex_core::traits::{CollectContext, HardwareSource};
 
 /// 显卡采集源（DXGI）。
@@ -45,7 +46,12 @@ impl HardwareSource for GpuSource {
             gpus = dxgi_adapters(true);
         }
 
-        ctx.set_gpus(dedup_by_name(gpus));
+        let gpus = dedup_by_name(gpus);
+        // 遥测增强：N 卡走 NVML、A 卡走 ADL；无驱动则两项都为空，telemetry 维持 None。
+        let nvml = nvml_collect();
+        let adl = adl_collect();
+        let gpus = enrich_gpus_with_telemetry(gpus, &nvml, &adl);
+        ctx.set_gpus(gpus);
         Ok(())
     }
 }
@@ -75,6 +81,72 @@ fn dedup_by_name(gpus: Vec<Gpu>) -> Vec<Gpu> {
         }
     }
     out
+}
+
+/// 把 NVML/ADL 遥测按显卡匹配回填到 `telemetry` 字段。
+///
+/// - NVML 按名称匹配 N 卡（名称大小写无关，必要时子串匹配）；
+/// - ADL 按「DXGI 中 AMD 显卡的出现顺序」匹配 A 卡（避免触碰 ADL 可变长结构）；
+/// - 任一项读不到 / 无驱动时保持 `None`，不覆盖、不造假。
+fn enrich_gpus_with_telemetry(
+    mut gpus: Vec<Gpu>,
+    nvml: &[(String, GpuTelemetry)],
+    adl: &[GpuTelemetry],
+) -> Vec<Gpu> {
+    for g in gpus.iter_mut() {
+        if let Some(t) = match_nvml_by_name(&g.name, nvml) {
+            gtrace(&format!(
+                "NVML 命中: DXGI 名=\"{}\" → telemetry={:?}",
+                g.name, t
+            ));
+            g.telemetry = Some(t);
+        }
+    }
+
+    let amd_positions: Vec<usize> = gpus
+        .iter()
+        .enumerate()
+        .filter(|(_, g)| is_amd_gpu(&g.name))
+        .map(|(i, _)| i)
+        .collect();
+    for (k, &pos) in amd_positions.iter().enumerate() {
+        if let Some(t) = adl.get(k) {
+            if gpus[pos].telemetry.is_none() {
+                gtrace(&format!(
+                    "ADL 命中(按序): AMD 卡#{} DXGI 名=\"{}\" → telemetry={:?}",
+                    k, gpus[pos].name, t
+                ));
+                gpus[pos].telemetry = Some(t.clone());
+            }
+        }
+    }
+    for g in &gpus {
+        if g.telemetry.is_none() {
+            gtrace(&format!(
+                "无遥测（保持 None）: \"{}\" kind={:?}",
+                g.name, g.kind
+            ));
+        }
+    }
+    gpus
+}
+
+/// AMD 显卡判定（用于把 ADL 遥测按序匹配到 DXGI 的 A 卡）。
+fn is_amd_gpu(name: &str) -> bool {
+    let l = name.to_lowercase();
+    l.contains("amd") || l.contains("radeon") || l.contains("ati")
+}
+
+/// 在 NVML 列表中按名称找匹配项（精确大小写无关优先，子串兜底）。
+fn match_nvml_by_name(name: &str, list: &[(String, GpuTelemetry)]) -> Option<GpuTelemetry> {
+    let target = name.trim();
+    let tl = target.to_lowercase();
+    list.iter()
+        .find(|(n, _)| {
+            let nl = n.trim().to_lowercase();
+            nl == tl || nl.contains(&tl) || tl.contains(&nl)
+        })
+        .map(|(_, t)| t.clone())
 }
 
 /// 枚举 DXGI 适配器。`include_software` 控制是否保留 `DXGI_ADAPTER_FLAG_SOFTWARE`。
@@ -297,11 +369,11 @@ fn gpu_vendor_from_name(name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_gpu_kind, gpu_board_vendor, gpu_vendor_from_name, is_placeholder_gpu_adapter,
-        merge_gdi_into,
+        classify_gpu_kind, enrich_gpus_with_telemetry, gpu_board_vendor, gpu_vendor_from_name,
+        is_placeholder_gpu_adapter, merge_gdi_into,
     };
     use crate::GpuSource;
-    use winsuitex_core::model::{Gpu, GpuKind};
+    use winsuitex_core::model::{Gpu, GpuKind, GpuTelemetry, MebiBytes};
     use winsuitex_core::traits::{CollectContext, HardwareSource};
 
     #[test]
@@ -458,7 +530,68 @@ mod tests {
         let (info, _vols) = ctx.into_parts();
         assert!(!info.gpus.is_empty(), "expected >=1 GPU on this machine");
         for g in &info.gpus {
-            eprintln!("GPU: name={} vram_mb={:?}", g.name, g.vram_mb);
+            eprintln!(
+                "GPU: name={} vram_mb={:?} telemetry={:?}",
+                g.name, g.vram_mb, g.telemetry
+            );
         }
+    }
+
+    #[test]
+    fn nvml_telemetry_matches_by_name() {
+        // NVML 按名称匹配 N 卡；匹配成功后 telemetry 应有温度等数据。
+        let nvml = vec![(
+            "NVIDIA GeForce RTX 4070".to_string(),
+            GpuTelemetry {
+                temp_c: Some(60),
+                fan_pct: Some(45),
+                power_w: Some(180),
+                util_pct: Some(20),
+                mem_used_mb: Some(MebiBytes::new(2048)),
+                clock_mhz: Some(2500),
+            },
+        )];
+        let gpus = vec![Gpu {
+            name: "NVIDIA GeForce RTX 4070".into(),
+            vram_mb: Some(MebiBytes::new(12288)),
+            kind: GpuKind::Physical,
+            telemetry: None,
+            vendor: None,
+        }];
+        let out = enrich_gpus_with_telemetry(gpus, &nvml, &[]);
+        assert_eq!(out[0].telemetry.as_ref().unwrap().temp_c, Some(60));
+    }
+
+    #[test]
+    fn amd_telemetry_matches_by_index_order() {
+        // ADL 按 DXGI 中 AMD 显卡的出现顺序匹配。
+        let adl = vec![GpuTelemetry {
+            temp_c: Some(55),
+            fan_pct: Some(40),
+            ..Default::default()
+        }];
+        let gpus = vec![Gpu {
+            name: "AMD Radeon RX 7900".into(),
+            vram_mb: None,
+            kind: GpuKind::Physical,
+            telemetry: None,
+            vendor: None,
+        }];
+        let out = enrich_gpus_with_telemetry(gpus, &[], &adl);
+        assert_eq!(out[0].telemetry.as_ref().unwrap().temp_c, Some(55));
+    }
+
+    #[test]
+    fn no_telemetry_when_unmatched() {
+        // 软件渲染器 / 无驱动机器：telemetry 必须保持 None，绝不造假。
+        let gpus = vec![Gpu {
+            name: "Microsoft Basic Render Driver".into(),
+            vram_mb: None,
+            kind: GpuKind::Software,
+            telemetry: None,
+            vendor: None,
+        }];
+        let out = enrich_gpus_with_telemetry(gpus, &[], &[]);
+        assert!(out[0].telemetry.is_none());
     }
 }

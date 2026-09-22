@@ -9,7 +9,9 @@ pub mod disk;
 pub mod display;
 pub mod edid;
 pub mod gpu;
+mod gpu_telemetry;
 pub mod hid;
+pub mod memory_wmi;
 pub mod nic;
 pub mod peripheral_db;
 pub mod physical_disk;
@@ -20,6 +22,11 @@ pub mod smbios;
 pub mod sourcetrace;
 pub mod system;
 pub mod usb;
+/// Win7 / Server 2008 R2 兼容垫片：把 `combase.dll!CoTaskMemFree` 重定向到
+/// `ole32.dll`，去掉 Win8+ 才有的 DLL 依赖。仅 `--cfg winsuitex_win7`
+/// （即 `x86_64-win7-windows-msvc` 构建）时编译，Win10/11 构建行为不变。
+#[cfg(winsuitex_win7)]
+pub mod win7_compat;
 
 pub use audio::AudioSource;
 pub use disk::DiskSource;
@@ -27,6 +34,7 @@ pub use display::DisplaySource;
 pub use gpu::GpuSource;
 pub use hid::merge_input_devices;
 pub use hid::HidSource;
+pub use memory_wmi::MemoryWmiSource;
 pub use nic::NicSource;
 pub use physical_disk::{map_volumes_to_disks, PhysicalDiskSource};
 pub use registry::WinRegistry;
@@ -66,6 +74,7 @@ pub fn default_sources() -> Vec<Box<dyn winsuitex_core::traits::HardwareSource>>
 
     vec![
         traced(SmbiosSource),
+        traced(MemoryWmiSource),
         traced(SystemSource::new()),
         traced(GpuSource),
         traced(DisplaySource),

@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul 2>&1
 REM ============================================================
 REM  一键采集（带诊断日志）
@@ -9,8 +9,9 @@ REM  各条采集路径的成功与否及失败错误码）。
 REM
 REM  当前排查 NVMe 序列号与通电时间时请用这个；日常采集用 inventory.bat。
 REM
-REM  跑完把下面两个文件一起发过去即可：
+REM  跑完把下面三个文件一起发过去即可：
 REM    dist\inventory.json
+REM    dist\trace.log         （inventory.bat 默认生成，含 GPU 遥测逐项 rc）
 REM    dist\wmi_debug.log
 REM ============================================================
 call "%~dp0inventory.bat" debug

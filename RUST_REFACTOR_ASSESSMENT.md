@@ -444,3 +444,112 @@ diff <(...) <(...)                        # 逐字段对拍
 
 *本报告基于 2026-09-14 的代码静态分析。所有行号引用对应当日版本（version.ini `1.6.7`，
 app.rc `1.6.7.20260914`）。未实际执行构建或运行测试。*
+
+---
+
+## 7. 团队复核结论（2026-09-18 第二轮机审）
+
+> 本轮由一个 15 人评估 team 推进（挂起后续作 6 个只读 Explore）。目的：把 §1–6 的"规划"与
+> "已落地现实"对齐，并补上磁盘通电/健康度专项对拍（df1/df2 真机）。
+> 同时修正一处会污染全篇的错误前提（§7.1）。
+
+### 7.1 🔴 重大纠偏：Explore-2 的"无 Rust 工程"前提不成立
+
+Explore-2 报告首句称"本 checkout 无 Rust 工程，无法读取 Rust 源码"，据此把"Rust 现状"整列
+标为"推断/缺口"。**实测否决该前提**：
+
+- `rust/` 下存在 4 个 crate（`winsuitex-core/platform/report/cli`）+ 5 个 `Cargo.toml`，全部 `.rs` 模块齐备；
+- `model.rs:478/514` 的 `SmartSource`/`DiskSmart` 与 Explore-2-71ed 引用逐字一致；
+- `rust/dist/winsuitex.exe` 已部署（与 `dist/winsuitex.exe` 同源，版本 `0.1.0.20260920`）。
+
+**结论**：Explore-2 的 **C++ 侧能力清单（hardware.cpp 行号）可信、予以保留**；其
+"Rust 现状"整列不可信，本节用真实文件树 + `ARCHITECTURE.md` 重做覆盖映射（§7.2）。
+该 agent 的 C++ 勘察质量本身没问题，只是读到了一个损坏/空的 Rust 视图。
+
+### 7.2 当前真实覆盖度（Rust 模块 → C++ 能力，已实测文件树核对）
+
+| C++ 能力（来源） | Rust 对应模块 | 状态 |
+|---|---|---|
+| OS/系统（registry/system） | `registry.rs` + `system.rs` | ✅ 产品名/核数/Server/计算机名/用户 |
+| SMBIOS BIOS/主板/CPU/内存条（149-265） | `smbios.rs`(core+platform) | ✅ `GetSystemFirmwareTable`+`RSMB`，`packed(1)`+`read_unaligned`+fixture 单测 |
+| CPUID + libcpuid 代号（274/300） | `cpuid.rs` | ✅ `build.rs`+`cc` 编 libcpuid，保留 471 条代号库 |
+| GPU 型号/显存（468/735） | `gpu.rs` | ✅ DXGI `GetDesc1` + GDI `EnumDisplayDevicesW` 合并去重 |
+| **GPU 遥测 NVML/ADL（954-1105）** | `gpu.rs` | ❌ **缺口**：gpu.rs 检索无 `nvml`/`adl` 引用，温度/风扇/功耗/利用率/时钟未做 |
+| 显示器 EDID/型号/厂商/尺寸（341-466） | `display.rs`+`edid.rs` | ✅ EDID 解析 + SetupAPI 物理尺寸 |
+| 网卡 MAC/IP/虚拟过滤（515-560/1156） | `nic.rs` | ✅ `GetAdaptersAddresses` + 双语虚拟网卡黑名单 |
+| USB/音频（1185-1233） | `usb.rs` / `audio.rs` | ✅ audio 走 COM `IMMDeviceEnumerator`+RAII `CoInitialize` |
+| 磁盘型号/接口/介质/容量（1373-1450） | `physical_disk.rs` | ✅ IOCTL 三查 |
+| **磁盘 SMART/通电/健康** | `physical_disk.rs` | ✅ **超越 C++**（C++ 零实现） |
+| 注册表/右键功能 | `registry.rs`+core `feature.rs` | ✅ `FeatureKind` 枚举 + `&[Feature]` 切片已落地 |
+| HTML 报告 | `report/lib.rs` | ✅ |
+| 自检 `--selftest` | `cli` | ✅ 退出码契约一致 |
+| **COM Shell 扩展（WinSuiteXShell.dll）** | — | ⏳ 未做（阶段三决策点） |
+| **GUI（3 tab GDI 自绘）** | `winsuitex-ui` | ❌ 未做（阶段三，仅架构，见 §6） |
+
+> 覆盖判定方法：除逐文件核对函数签名外，对"是否真实现"做了定向检索——
+> `gpu.rs` 含 `CreateDXGIFactory1`/`GetDesc1`/`EnumDisplayDevicesW`（型号+显存实做），
+> 但**无** `nvml`/`adl`（遥测确为缺口）；`smbios.rs` 含 `GetSystemFirmwareTable`+`RSMB`；
+> `nic.rs` 含 `GetAdaptersAddresses`+`VIRTUAL_NIC_PATTERNS`；`audio.rs` 含
+> `IMMDeviceEnumerator`+`CoInitializeEx` RAII guard；`display.rs` 含 `parse_edid`+SetupAPI。
+
+### 7.3 六份报告要点
+
+- **Explore-1（main.cpp）**：GDI+ 自绘、3 tab、玻璃=纯自绘渐变+BoxBlur（**无 DWM 依赖**，可逐条等效重写）；
+  唯一真模态 `ShowNotice` 嵌套消息泵是重构点。建议 `--report` 无头路径为首里程碑（已落地）。
+- **Explore-4（COM+构建+版本）**：`build.bat` 缺 `-lgdiplus` 已在首轮评估中修复；COM 可绕开用
+  `rundll32`/`CreateProcess`；建议 msvc target（Rust 实际 `x86_64-pc-windows-msvc`，`ARCHITECTURE.md` 确认）。
+- **Explore-1-2c03（FFI 审计）**：FFI 安全度 **HIGH**，唯一真实崩溃 bug（hid.rs 堆破坏）已修，
+  余 B1-B4 为加固非崩溃。生产就绪。
+- **Explore-3（features）**：5 功能，SuperHidden/CmdHere/PowerShellHere 为网维刚需，DeviceManager 演示可砍；
+  Rust 设计 `FeatureKind`+`&[Feature]` 切片（`ARCHITECTURE.md §3.3` 已落地）。
+- **Explore-2（hardware.cpp）**：C++ 能力清单完整（**无 WMI**，靠 SMBIOS+CPUID+SetupAPI+DXGI+IOCTL+COM+NVML/ADL）。
+  Rust 现状列不可信（见 §7.1）。
+- **Explore-2-71ed（磁盘 POH/健康）**：C++ 零 SMART（`HwDisk` 无字段、权限模型拦死）；Rust 四路径+三兜底已落地；
+  **VMD NVMe 通电时间硬伤**（NVMe log-page 主路径被拦 → 回退 WMI，WMI `PowerOnHours` 常返回 0 → `None`，
+  如实标注"未透传"）；**需管理员权限**运行才能拿 SMART 字段。
+
+### 7.4 修订结论
+
+原 §5 的"先数据层后 UI"路线**已被执行并验证**：Rust 数据+CLI 层已落地、已部署、已对拍
+（`rust/dist/verify/` 含 cpp↔rust 对拍报告 `compare_result.txt` / `wim/compare_result.txt`）。
+**剩余风险收敛为 3 点**：
+
+1. 🔴 **UI 层（winsuitex-ui）**：3687 行 GDI 自绘 + 30+ 全局状态，0 测试。阶段三。
+2. 🟠 **Shell COM DLL**：`WinSuiteXShell.dll`（`IExplorerCommand` + `ToggleSuperHidden`）未迁，决策点。
+3. 🟠 **GPU 遥测 NVML/ADL**：确认缺口，需补温度/风扇/功耗/利用率。
+
+已知诚实短板：VMD NVMe 通电时间（维持"未透传"标注，不建议做厂商私有通道）。
+
+### 7.5 待 Z.W. 拍板
+
+| 决策 | 选项 A | 选项 B |
+|---|---|---|
+| UI 路线 | 混合（Rust 数据 + C++ UI，风险低） | 全量 Rust GDI 自绘（一致性高，风险高） |
+| Shell DLL | 保留 C++ DLL | Rust `cdylib` |
+| VMD 诊断提示 | 报告加"建议关 VMD 以读 NVMe 完整 SMART" | 不加 |
+| GPU 遥测 | 补 NVML/ADL（需厂商驱动，无驱动仍 None） | 不补 |
+| 产物体积 | Rust 静态链接（约 1–3 MB） | 维持 820KB 预算 |
+
+### 7.6 8 个实现 worker 与 live 代码重叠说明
+
+首轮 team 分配的 8 个实现 worker（report/gpu/nic/usb/disk/cpu 模块 + 数处 bug 修复）
+**本轮未续作**：其目标模块在 live 工程已存在并部署，重跑会与已上线代码冲突制造回归。
+评估只用 6 个只读 Explore 的结论，故无回归风险。这也是为何 §7.2 覆盖度用的是"实测文件树"
+而非"worker 自报"——更可靠。
+
+*§7 基于 2026-09-18 的 6 份只读 Explore 报告 + 直接文件树核对（含 `df1`/`df2` 真机对拍）。*
+
+### 7.7 团队 Lead 建议（续作答复，标"建议/待 Z.W. 确认"）
+
+> 判定口径：两条硬约束 —— ① 单 exe 双击即跑、GDI 自绘零依赖（网吧/电竞酒店分发）；
+> ② 双目标（写出好软件 + 往"多赚钱"靠：更好巡检服务 = 更高客单价/复购）。
+
+| 决策 | 我的建议 | 关键理由 |
+|---|---|---|
+| UI 路线 | **混合（Rust 数据层 + 保留 C++ UI）** | `main.cpp` 3687 行 GDI 自绘 + 30+ 全局状态 + 0 测试；全量 Rust 重写风险高、收益低。混合方案不破"零依赖单 exe"偏好，且数据层已实测落地、对拍通过 |
+| Shell DLL | **暂保留 C++ `WinSuiteXShell.dll`** | 双产物硬约束与语言无关（带 `requireAdministrator` 的 exe 不能作 `InProcServer32`），C++ DLL 已上线验证可工作；Rust `cdylib` 重写收益小、风险大，留作阶段三 |
+| VMD 诊断提示 | **加** | 低成本；`df1`/`df2` 已实锤 NVMe POH 在 VMD 下拿不到（IOCTL 拦 87 + WMI 计数器给 0）。诚实提示帮客户/运维判断"是否要关 VMD"，契合"更好服务 = 多赚钱" |
+| GPU 遥测 | **补 NVML/ADL** | 电竞酒店 GPU 温度/风扇/功耗是核心巡检指标；无厂商驱动时仍回 `None`、不造假；补齐直接提升巡检价值与客单价 |
+| 产物体积 | **接受 Rust 静态链接 1–3 MB** | 网吧分发不在乎体积，单 exe 双击即跑即可；820KB 是 C++ 约束，Rust 静态链接无功能副作用 |
+
+**下一步（待用户确认"照此推进"后）**：按"先数据层后 UI"已验证路线，本期可落里程碑 = ① GPU 遥测补 NVML/ADL；② VMD 诊断提示文案（建议关 VMD 以读完整 NVMe SMART）；③ 产物体积放开到 1–3MB。UI 层与 Shell DLL 维持 C++ 混合，不进入本期重构范围。

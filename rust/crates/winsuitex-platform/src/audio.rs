@@ -17,7 +17,7 @@ use windows::Win32::Devices::DeviceAndDriverInstallation::{
     SPDRP_HARDWAREID, SP_DEVINFO_DATA,
 };
 
-use crate::peripheral_db::{brand_display, brand_for_vid, is_usb_audio_vid, model_for_pid};
+use crate::peripheral_db::{brand_for_vid, is_usb_audio_vid, model_for_pid};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Media::Audio::{
     eCapture, eConsole, eRender, EDataFlow, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -408,12 +408,13 @@ fn classify_audio_kind(name: &str, role: u8, vid: Option<&str>) -> AudioKind {
 /// 依赖 `mark_default_endpoints` 写入的 `role`（影响耳麦判定）。
 fn enrich_audio_devices(devices: &mut [AudioDevice]) {
     for dev in devices.iter_mut() {
-        // 厂商：VID → 品牌（板载 HDA 无 VID 时为 None）。
-        // 英文品牌 key 再过 `brand_display` 翻译成中文（如 Razer/雷蛇、C-Media/骅讯）。
+        // 厂商：VID → 英文品牌 key（板载 HDA 无 VID 时为 None）。
+        // 统一存英文（如 "HP"/"Razer"），中文译名交给报告层 vendor_label 统一加括号，
+        // 与 GPU/CPU/主板等 structured 源一致（JSON 存英文，渲染层出「英文 (中文)」）。
         dev.manufacturer = dev
             .vid
             .as_ref()
-            .and_then(|v| brand_for_vid(v).map(|s| brand_display(s).to_string()));
+            .and_then(|v| brand_for_vid(v).map(|s| s.to_string()));
         // 型号名补全：仅当名称是通用占位名时，用 PID_MODEL 种子（来自 Drives INF）覆盖。
         if let (Some(v), Some(p)) = (&dev.vid, &dev.pid) {
             if let Some(m) = model_for_pid(v, p) {

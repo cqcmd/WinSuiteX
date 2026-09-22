@@ -7,6 +7,11 @@ edition.workspace = true
 winsuitex-core = { path = "../winsuitex-core" }
 thiserror = { workspace = true }
 
+# `winsuitex_win7` 是 Win7 构建命令里手动 `--cfg` 进去的自定义 cfg，
+# 声明一下避免 rustc 报 unexpected_cfgs。
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(winsuitex_win7)'] }
+
 [dependencies.windows]
 version = "0.62.2"
 features = [

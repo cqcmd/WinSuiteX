@@ -161,6 +161,24 @@ fn combo_primary_kind(keyboard: &InputDevice, mouse: &InputDevice) -> InputKind 
     if kb_specific && mou_specific && keyboard.name != mouse.name {
         return InputKind::Combo;
     }
+    // 同一 VID:PID、两集合共用同一具体型号名（如游戏鼠标兼带 consumer 集合，
+    // Windows 把鼠标本体与辅助集合都命名为 "G402 Gaming Mouse"）：这种「单台设备 + 辅助集合」
+    // 与「真·键鼠套装（两半不同名）」不同，需用产品名里的 鼠标/键盘 关键词判定真实主类型，
+    // 否则游戏鼠标会被误判成键盘（网吧场景极常见）。
+    if keyboard.name == mouse.name {
+        let n = keyboard.name.to_ascii_lowercase();
+        let has_mouse = n.contains("mouse") || n.contains("鼠标");
+        let has_kb = n.contains("keyboard") || n.contains("键盘");
+        if has_mouse && has_kb {
+            return InputKind::Combo;
+        }
+        if has_mouse {
+            return InputKind::Mouse;
+        }
+        if has_kb {
+            return InputKind::Keyboard;
+        }
+    }
     if kb_specific {
         InputKind::Keyboard
     } else if mou_specific {
@@ -230,13 +248,12 @@ fn resolve_device(name: &str, info: Option<&RID_DEVICE_INFO>) -> Option<InputDev
         open_hid(&handle_path).and_then(|guard| get_hid_manufacturer_string(guard.0));
 
     // 厂商：HID 厂商串 > peripheral_db 由 VID 推断。
-    // 注意：由 VID 推断出的英文品牌 key 要再过一遍 `brand_display` 翻译成中文，
-    // 否则键鼠只会输出英文（如 SEMICO / SiGma Micro）。HID 自身提供的厂商串
-    // 不走此路径，避免改动原始标识。
+    // 统一存英文品牌 key（如 "Logitech"/"HP"），中文译名由报告层 vendor_label 统一加括号，
+    // 与 GPU/CPU 等 structured 源一致（JSON 存英文，渲染层出「英文 (中文)」）。
+    // 不再过 brand_display 翻译成中文——否则键鼠/音频会与 GPU 的中文呈现口径不一致。
     let manufacturer = manufacturer_hid.or_else(|| {
-        vid.as_ref().and_then(|v| {
-            peripheral_db::brand_for_vid(v).map(|s| peripheral_db::brand_display(s).to_string())
-        })
+        vid.as_ref()
+            .and_then(|v| peripheral_db::brand_for_vid(v).map(|s| s.to_string()))
     });
 
     // 离线种子：VID+PID → 真实型号（来自 Drives 各厂商驱动 INF）。
@@ -695,6 +712,41 @@ mod tests {
             "无产品串时默认主类型=键盘"
         );
         assert_eq!(merged[0].name, "A4Tech (09DA:FA90)");
+    }
+
+    #[test]
+    fn gaming_mouse_aux_collection_same_name_is_mouse() {
+        // 真机 bug：游戏鼠标（如罗技 G402 046D:C07E）被 Windows 枚举成鼠标集合 +
+        // 辅助 consumer 集合（RIM_TYPEKEYBOARD），两端共用同一具体型号名
+        // "G402 Gaming Mouse"。旧逻辑同名默认主类型=键盘 → 鼠标被误判成键盘。
+        // 修复：同名且产品名含 mouse 关键词 → 主类型=鼠标。
+        let devices = vec![
+            InputDevice {
+                name: "G402 Gaming Mouse".into(),
+                kind: InputKind::Mouse,
+                vid: Some("046D".into()),
+                pid: Some("C07E".into()),
+                manufacturer: Some("Logitech".into()),
+                is_bluetooth: false,
+                location: None,
+            },
+            InputDevice {
+                name: "G402 Gaming Mouse".into(),
+                kind: InputKind::Keyboard,
+                vid: Some("046D".into()),
+                pid: Some("C07E".into()),
+                manufacturer: Some("Logitech".into()),
+                is_bluetooth: false,
+                location: None,
+            },
+        ];
+        let merged = merge_input_devices(devices);
+        assert_eq!(merged.len(), 1, "应合并为一台");
+        assert_eq!(
+            merged[0].kind,
+            InputKind::Mouse,
+            "游戏鼠标兼带辅助集合应判为鼠标，不应误判键盘"
+        );
     }
 
     #[test]

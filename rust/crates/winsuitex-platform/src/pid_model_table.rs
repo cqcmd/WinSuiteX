@@ -441,6 +441,84 @@ pub(crate) static PID_MODEL: &[(&str, &str, &str)] = &[
     ("35BB", "B009", "HECATE Audio Device"),
     ("35BB", "B00A", "HECATE Audio Device"),
     ("3837", "60C6", "K20 Turbo"),
+    // ---------------------------------------------------------------------------
+    // Internet-café brands added 2026-09-21.
+    // Every (VID, PID) below was verified against the USB ID database
+    // (devicehunt.com / the-sz.com USB ID DB) and, for the two user-reported
+    // devices, cross-checked with WebSearch. Exact-match only (see
+    // lookup_pid_model); do NOT duplicate an existing (VID, PID).
+    // ---------------------------------------------------------------------------
+
+    // Logitech (046D)
+    ("046D", "C07E", "G402 Gaming Mouse"),
+    ("046D", "C07D", "G502 Mouse"),
+    ("046D", "C332", "G502 Proteus Spectrum Optical Mouse"),
+    ("046D", "C08B", "G502 SE HERO Gaming Mouse"),
+    ("046D", "C084", "G203 Gaming Mouse"),
+    ("046D", "C068", "G500 Laser Mouse"),
+    ("046D", "C24E", "G500s Laser Gaming Mouse"),
+    ("046D", "C24A", "G600 Gaming Mouse"),
+    ("046D", "C06B", "G700 Wireless Gaming Mouse"),
+    ("046D", "C246", "Gaming Mouse G300"),
+    ("046D", "C22D", "G510 Gaming Keyboard"),
+    ("046D", "C32B", "G910 Orion Spark Mechanical Keyboard"),
+    ("046D", "C335", "G910 Orion Spectrum Mechanical Keyboard"),
+    ("046D", "C33E", "G915 Mechanical Keyboard"),
+    ("046D", "C33F", "G815 Mechanical Keyboard"),
+    ("046D", "0A4D", "G430 Surround Sound Gaming Headset"),
+    // A4Tech / 双飞燕 (09DA)
+    (
+        "09DA",
+        "FA44",
+        "B930 Light Strike RGB Mechanical Gaming Keyboard",
+    ),
+    ("09DA", "F6CC", "B314 Light Strike Gaming Keyboard"),
+    ("09DA", "1068", "Bloody A90 Mouse"),
+    ("09DA", "112C", "Bloody V5 Mouse"),
+    ("09DA", "F613", "Bloody V7M Mouse"),
+    ("09DA", "09DA", "Bloody V8 Mouse"),
+    ("09DA", "3A60", "Bloody V8M Core 2 Mouse"),
+    ("09DA", "9066", "F3 V-Track Gaming Mouse"),
+    ("09DA", "000A", "Optical Mouse Opto 510D / OP-620D"),
+    ("09DA", "0103", "Oscar X-710BK Gaming Mouse"),
+    // Razer (1532)
+    ("1532", "0007", "DeathAdder Mouse"),
+    ("1532", "0043", "DeathAdder Chroma"),
+    ("1532", "005C", "DeathAdder Elite"),
+    ("1532", "006E", "DeathAdder Essential"),
+    ("1532", "0084", "DeathAdder V2"),
+    ("1532", "0078", "Viper (Wired)"),
+    ("1532", "007A", "Viper Ultimate (Wired)"),
+    ("1532", "0064", "Basilisk"),
+    ("1532", "008A", "Viper Mini"),
+    ("1532", "0050", "Naga Hex V2"),
+    ("1532", "0044", "Mamba Chroma (Wired)"),
+    ("1532", "0053", "Naga Chroma"),
+    ("1532", "0203", "BlackWidow Chroma"),
+    ("1532", "0226", "Huntsman Elite"),
+    ("1532", "0227", "Huntsman"),
+    ("1532", "0221", "BlackWidow Chroma V2"),
+    ("1532", "0501", "Kraken 7.1"),
+    ("1532", "0520", "Kraken Tournament Edition"),
+    // Corsair (1B1C)
+    ("1B1C", "1B2E", "M65 Pro RGB Mouse"),
+    ("1B1C", "1B5E", "Harpoon Wireless Mouse"),
+    ("1B1C", "1B2F", "Sabre RGB Gaming Mouse"),
+    ("1B1C", "1B3D", "Corsair Gaming K55 RGB Keyboard"),
+    ("1B1C", "1B11", "K95 RGB Mechanical Gaming Keyboard"),
+    ("1B1C", "1B2D", "K95 RGB Platinum Keyboard"),
+    ("1B1C", "1B20", "STRAFE RGB Gaming Keyboard"),
+    ("1B1C", "1B07", "Vengeance K65 Gaming Keyboard"),
+    ("1B1C", "1B09", "Vengeance K70 Gaming Keyboard"),
+    ("1B1C", "1B13", "Vengeance K70 RGB Gaming Keyboard"),
+    ("1B1C", "1B08", "Vengeance K95 Keyboard"),
+    ("1B1C", "0A2B", "Corsair VOID Wireless Gaming Dongle"),
+    // ASUS / ROG (0B05)
+    ("0B05", "17AC", "ROG Laser Gaming Mouse"),
+    ("0B05", "17C4", "ROG Laser Gaming Mouse GX1000"),
+    ("0B05", "1846", "ROG Pugio Gaming Mouse"),
+    ("0B05", "18E3", "ROG Chakram Gaming Mouse"),
+    ("0B05", "1A9B", "TUF GAMING M3 GEN II"),
 ];
 
 /// Offline fallback: real product model for a (VID, PID) pair.
@@ -452,4 +530,46 @@ pub(crate) fn lookup_pid_model(vid: &str, pid: &str) -> Option<&'static str> {
         .iter()
         .find(|entry| entry.0 == vid.as_str() && entry.1 == pid.as_str())
         .map(|(_, _, m)| *m)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lookup_user_reported_devices() {
+        // The two devices the Internet-café engineer actually has
+        // (verified via devicehunt.com / WebSearch on 2026-09-21).
+        assert_eq!(lookup_pid_model("046D", "C07E"), Some("G402 Gaming Mouse"));
+        assert_eq!(
+            lookup_pid_model("09DA", "FA44"),
+            Some("B930 Light Strike RGB Mechanical Gaming Keyboard")
+        );
+    }
+
+    #[test]
+    fn lookup_common_brands() {
+        assert_eq!(lookup_pid_model("046D", "C084"), Some("G203 Gaming Mouse"));
+        assert_eq!(
+            lookup_pid_model("046D", "C332"),
+            Some("G502 Proteus Spectrum Optical Mouse")
+        );
+        assert_eq!(lookup_pid_model("1532", "005C"), Some("DeathAdder Elite"));
+        assert_eq!(lookup_pid_model("1532", "0203"), Some("BlackWidow Chroma"));
+        assert_eq!(lookup_pid_model("1B1C", "1B2E"), Some("M65 Pro RGB Mouse"));
+        assert_eq!(
+            lookup_pid_model("0B05", "1846"),
+            Some("ROG Pugio Gaming Mouse")
+        );
+    }
+
+    #[test]
+    fn lookup_is_case_insensitive_and_exact() {
+        // VID/PID are normalized to upper-case, so lower-case input still matches.
+        assert_eq!(lookup_pid_model("046d", "c07e"), Some("G402 Gaming Mouse"));
+        // Unknown PID for a known VID -> None.
+        assert_eq!(lookup_pid_model("046D", "FFFF"), None);
+        // Known PID under the wrong VID -> None (exact VID+PID match).
+        assert_eq!(lookup_pid_model("1234", "C07E"), None);
+    }
 }
