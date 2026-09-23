@@ -6,6 +6,11 @@
 //! 数据来源：优先读 `inventory.json` 快照（与 CLI 同结构）；可选「重新采集」走
 //! `winsuitex-platform` 实时采集（需 Windows + 提权才完整）。
 
+// GUI 程序：用 Windows 子系统，双击运行不再弹黑色控制台窗口。
+// 这是 crate 级内部属性（注意是 `#![...]` 而非 `#[...]`），编译器据此生成
+// /SUBSYSTEM:WINDOWS 与正确的 wWinMain 入口，避免出现 "unresolved WinMain" 链接错误。
+#![windows_subsystem = "windows"]
+
 use std::path::PathBuf;
 
 use egui_extras::image::load_svg_bytes;
@@ -133,19 +138,54 @@ fn with_color(ui: &mut egui::Ui, text: &str, color: egui::Color32) {
 // 入口
 // ============================================================
 
-fn main() -> eframe::Result {
+fn main() {
     let native = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([440.0, 700.0]),
+        // 强制 wgpu 后端（D3D12）。真机有显卡时直接走硬件后端正常显示；
+        // 无可用图形加速的环境（虚拟机 / RDP 远程桌面 / 基础显示驱动）会初始化
+        // 失败——下面用 match 接住 Err，弹中文 MessageBox 说明原因，绝不静默退出。
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    eframe::run_native(
+    match eframe::run_native(
         "WinSuiteX — 硬件概览",
         native,
         Box::new(|cc| {
             setup_fonts(&cc.egui_ctx);
             Ok(Box::new(App::new(cc)))
         }),
-    )
+    ) {
+        Ok(()) => {}
+        Err(e) => show_fatal(&format!(
+            "无法启动硬件概览面板。\n\n技术原因：{e}\n\n本环境缺少可用的图形加速（OpenGL / Direct3D）。\n\
+             请在有独立或集成显卡的真实机器上运行；若通过远程桌面(RDP)连接，\n\
+             请确认主机有显卡且未处于纯软件显示模式。"
+        )),
+    }
+}
+
+/// 渲染后端初始化失败等致命错误：写一份日志（便于无桌面/远程环境排查），
+/// 再弹 Win32 MessageBox 明确告知用户原因——取代原先"控制台一闪即灭、无界面"的沉默崩溃。
+fn show_fatal(msg: &str) {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let _ = std::fs::write(dir.join("winsuitex-gui.error.log"), msg);
+        }
+    }
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let wmsg: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+    let wtitle: Vec<u16> = "WinSuiteX 硬件概览"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let _ = MessageBoxW(
+            None,
+            windows::core::PCWSTR(wmsg.as_ptr()),
+            windows::core::PCWSTR(wtitle.as_ptr()),
+            MB_OK | MB_ICONERROR,
+        );
+    }
 }
 
 /// 运行时加载系统中文字体（Windows 自带微软雅黑），否则中文会显示成方块。
