@@ -5,6 +5,7 @@ members = [
   "crates/winsuitex-platform",
   "crates/winsuitex-report",
   "crates/winsuitex-cli",
+  "crates/winsuitex-gui",
 ]
 
 [workspace.package]

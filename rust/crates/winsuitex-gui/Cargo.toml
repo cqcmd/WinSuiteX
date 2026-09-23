@@ -1,0 +1,17 @@
+[package]
+name = "winsuitex-gui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winsuitex-core = { path = "../winsuitex-core" }
+winsuitex-platform = { path = "../winsuitex-platform" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+egui = "0.28"
+eframe = "0.28"
+egui_extras = { version = "0.28", features = ["svg"] }
+
+[[bin]]
+name = "winsuitex-gui"
+path = "src/main.rs"

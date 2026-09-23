@@ -1,0 +1,47 @@
+// 不 include <windows.h>：rc.exe（MSVC SDK）默认找不到头文件路径。
+// 版本信息字段直接用数值常量（注意：不能用与字段同名的 #define，会被宏展开成乱码）。
+#pragma code_page(65001)
+
+// VS_VERSION_INFO 在 winver.h 里定义为 MAKEINTRESOURCE(1)（整数 id 1）。rc.exe 找不到
+// winver.h 时，会把字面量 "VS_VERSION_INFO" 当成字符串资源名，导致 GetFileVersionInfo 等
+// API（按整数 id 1 查找）找不到版本资源。这里手动 #define 成整数 1 修正。
+#define VS_VERSION_INFO 1
+
+IDI_APP_ICON ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+// 注意：Windows FILEVERSION 四个字段各为 16 位字（≤65535）。四段式版本号第四段是
+// YYYYMMDD 日期戳（>65535，放不进 16 位字），故数值字段用 0,1,0,0 占位保证结构合法、
+// 可被 GetFileVersionInfo 正确解析；完整「主.次.修订.日期戳」只在下方字符串表里给人看
+// （Explorer 属性→详细信息 显示的就是字符串，非数值字段）。
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEFLAGSMASK 0x0000003F
+FILEFLAGS 0x00000000
+FILEOS 0x00040004
+FILETYPE 0x00000001
+FILESUBTYPE 0x00000000
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "CompanyName", "重庆持玛多网络科技有限公司"
+            VALUE "FileDescription", "WinSuiteX 硬件概览面板"
+            VALUE "FileVersion", "0.1.0.20260923"
+            VALUE "InternalName", "WinSuiteXGui"
+            VALUE "LegalCopyright", "持玛多网络 / Z.W."
+            VALUE "OriginalFilename", "winsuitex-gui.exe"
+            VALUE "ProductName", "WinSuiteX"
+            VALUE "ProductVersion", "0.1.0.20260923"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END
+
+// 应用清单（ID 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID，类型 24 = RT_MANIFEST）。
+// 查看器以 asInvoker 启动，不弹 UAC。
+1 24 "app.manifest"
