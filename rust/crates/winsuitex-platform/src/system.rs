@@ -27,6 +27,36 @@ fn arch_label() -> String {
     }
 }
 
+/// 修正 Win11 被注册表 `ProductName` 误报为 Win10 的怪癖。
+///
+/// 已知行为：Win11（含 24H2 / build 26100）注册表
+/// `SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProductName` 仍返回
+/// "Windows 10 Pro"，导致资产盘点把 Win11 错标成 Win10。
+/// 可靠的判定依据是 build 号：`CurrentBuild >= 22000` 即 Win11。
+///
+/// 这里不信任 ProductName，而是用 build 号把 "Windows 10 Xxx" 改写成
+/// "Windows 11 Xxx"，既修正误报又保留原始 Edition（Pro/Home/Enterprise…）。
+/// 若 ProductName 已为 "Windows 11 ..." 则原样保留；若为空则用 build 兜底填 "Windows 11"。
+fn normalize_os_product(product: Option<String>, build: &Option<String>) -> Option<String> {
+    let is_win11_build = match build.as_deref().and_then(|b| b.trim().parse::<u32>().ok()) {
+        Some(b) => b >= 22000,
+        None => false,
+    };
+    if !is_win11_build {
+        return product;
+    }
+    match product {
+        Some(p) => {
+            if p.contains("Windows 10") {
+                Some(p.replacen("Windows 10", "Windows 11", 1))
+            } else {
+                Some(p) // 已为 Win11 / 其它写法，原样保留，避免引入错误 Edition
+            }
+        }
+        None => Some("Windows 11".to_string()),
+    }
+}
+
 /// 逻辑处理器数。失败返回 `None` —— 拿不到就是拿不到，不编造。
 pub(crate) fn logical_processors() -> Option<u32> {
     let mut si = SYSTEM_INFO::default();
@@ -108,11 +138,16 @@ impl HardwareSource for SystemSource {
                     .unwrap_or(None)
             });
 
+        let product_raw = self
+            .reg
+            .read_string(lm, CUR_VER, Some("ProductName"))
+            .unwrap_or(None);
+        // 修正 Win11 被注册表误报为 Win10 的怪癖（Win11 24H2 / build 26100 的 ProductName
+        // 仍是 "Windows 10 Pro"）。用 build 号兜底重写 Edition 前缀，见 normalize_os_product。
+        let product = normalize_os_product(product_raw, &build);
+
         ctx.set_os(OsInfo {
-            product: self
-                .reg
-                .read_string(lm, CUR_VER, Some("ProductName"))
-                .unwrap_or(None),
+            product,
             version,
             build,
             arch: Some(arch_label()),
@@ -150,5 +185,73 @@ impl HardwareSource for SystemSource {
         ctx.set_memory_total(MebiBytes::from_bytes_floor(ms.ullTotalPhys));
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn win11_build_overrides_win10_productname() {
+        // Win11 24H2 build 26100 注册表 ProductName 仍是 "Windows 10 Pro"。
+        assert_eq!(
+            normalize_os_product(
+                Some("Windows 10 Pro".to_string()),
+                &Some("26100".to_string())
+            ),
+            Some("Windows 11 Pro".to_string())
+        );
+        assert_eq!(
+            normalize_os_product(
+                Some("Windows 10 Home".to_string()),
+                &Some("22000".to_string())
+            ),
+            Some("Windows 11 Home".to_string())
+        );
+        assert_eq!(
+            normalize_os_product(
+                Some("Windows 10 Enterprise".to_string()),
+                &Some("22631".to_string())
+            ),
+            Some("Windows 11 Enterprise".to_string())
+        );
+    }
+
+    #[test]
+    fn win11_productname_preserved() {
+        // 已正确报告 Win11 的不改写。
+        assert_eq!(
+            normalize_os_product(
+                Some("Windows 11 Pro".to_string()),
+                &Some("26100".to_string())
+            ),
+            Some("Windows 11 Pro".to_string())
+        );
+    }
+
+    #[test]
+    fn win10_build_not_overridden() {
+        // Win10 build（< 22000）原样保留。
+        assert_eq!(
+            normalize_os_product(
+                Some("Windows 10 Pro".to_string()),
+                &Some("19045".to_string())
+            ),
+            Some("Windows 10 Pro".to_string())
+        );
+        // build 缺失也不改写。
+        assert_eq!(
+            normalize_os_product(Some("Windows 10 Pro".to_string()), &None),
+            Some("Windows 10 Pro".to_string())
+        );
+    }
+
+    #[test]
+    fn empty_product_falls_back_to_win11() {
+        assert_eq!(
+            normalize_os_product(None, &Some("26100".to_string())),
+            Some("Windows 11".to_string())
+        );
     }
 }

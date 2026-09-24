@@ -466,6 +466,7 @@ pub(crate) static PID_MODEL: &[(&str, &str, &str)] = &[
     ("046D", "C33E", "G915 Mechanical Keyboard"),
     ("046D", "C33F", "G815 Mechanical Keyboard"),
     ("046D", "0A4D", "G430 Surround Sound Gaming Headset"),
+    ("046D", "C547", "Logitech LIGHTSPEED 无线接收器"),
     // A4Tech / 双飞燕 (09DA)
     (
         "09DA",
@@ -481,6 +482,7 @@ pub(crate) static PID_MODEL: &[(&str, &str, &str)] = &[
     ("09DA", "9066", "F3 V-Track Gaming Mouse"),
     ("09DA", "000A", "Optical Mouse Opto 510D / OP-620D"),
     ("09DA", "0103", "Oscar X-710BK Gaming Mouse"),
+    ("09DA", "C10A", "A4Tech USB Mouse"),
     // Razer (1532)
     ("1532", "0007", "DeathAdder Mouse"),
     ("1532", "0043", "DeathAdder Chroma"),
@@ -571,5 +573,17 @@ mod tests {
         assert_eq!(lookup_pid_model("046D", "FFFF"), None);
         // Known PID under the wrong VID -> None (exact VID+PID match).
         assert_eq!(lookup_pid_model("1234", "C07E"), None);
+    }
+
+    #[test]
+    fn lookup_customer_machine_devices() {
+        // 客户机实采外设（2026-09-23 核验）：
+        // - 046D:C547 = Logitech LIGHTSPEED 无线接收器（用于 G502 X 等）。
+        // - 09DA:C10A = A4Tech USB Mouse（HID 产品串即 "USB Mouse"）。
+        assert_eq!(
+            lookup_pid_model("046D", "C547"),
+            Some("Logitech LIGHTSPEED 无线接收器")
+        );
+        assert_eq!(lookup_pid_model("09DA", "C10A"), Some("A4Tech USB Mouse"));
     }
 }
