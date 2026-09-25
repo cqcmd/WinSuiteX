@@ -26,6 +26,10 @@ struct Snapshot {
     app_version: String,
     #[serde(default)]
     build_time: String,
+    /// 真机采集时刻（CLI 落盘时写入的状态栏用时间）。
+    /// 老格式 JSON（9-23 前）无此字段 → 状态栏回退 build_time（exe 编译时间）。
+    #[serde(default)]
+    collected_at: String,
     info: HardwareInfo,
     #[serde(default)]
     volumes: Vec<Volume>,
@@ -284,7 +288,15 @@ impl App {
                 Ok(s) => {
                     let jp = json_arg.clone().or_else(|| Some("inventory.json".into()));
                     let rp = jp.as_ref().map(|p| PathBuf::from(p).with_extension("html"));
-                    let status = format!("采集版本 {} · 采集时间 {}", s.app_version, s.build_time);
+                    // 采集时间用 collected_at（真机采集时刻）；老 JSON 无此字段回退 build_time。
+                    // 曾错把 build_time（exe 编译时间）标成"采集时间"，导致真机验收时
+                    // 状态栏显示的是编译日期而非采集日期（2026-09-25 真机截图发现）。
+                    let collected = if s.collected_at.is_empty() {
+                        s.build_time.clone()
+                    } else {
+                        s.collected_at.clone()
+                    };
+                    let status = format!("采集版本 {} · 采集时间 {}", s.app_version, collected);
                     (
                         s.info,
                         s.volumes,

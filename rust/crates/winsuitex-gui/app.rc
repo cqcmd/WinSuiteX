@@ -14,8 +14,8 @@ VS_VERSION_INFO VERSIONINFO
 // YYYYMMDD 日期戳（>65535，放不进 16 位字），故数值字段用 0,1,0,0 占位保证结构合法、
 // 可被 GetFileVersionInfo 正确解析；完整「主.次.修订.日期戳」只在下方字符串表里给人看
 // （Explorer 属性→详细信息 显示的就是字符串，非数值字段）。
-FILEVERSION 1,0,1,923
-PRODUCTVERSION 1,0,1,923
+FILEVERSION 1,0,2,925
+PRODUCTVERSION 1,0,2,925
 FILEFLAGSMASK 0x0000003F
 FILEFLAGS 0x00000000
 FILEOS 0x00040004
@@ -28,12 +28,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "重庆持玛多网络科技有限公司"
             VALUE "FileDescription", "WinSuiteX 硬件概览面板"
-            VALUE "FileVersion", "1.0.1.20260923"
+            VALUE "FileVersion", "1.0.2.20260925"
             VALUE "InternalName", "WinSuiteXGui"
             VALUE "LegalCopyright", "持玛多网络 / Z.W."
             VALUE "OriginalFilename", "winsuitex-gui.exe"
             VALUE "ProductName", "WinSuiteX"
-            VALUE "ProductVersion", "1.0.1.20260923"
+            VALUE "ProductVersion", "1.0.2.20260925"
         END
     END
     BLOCK "VarFileInfo"
