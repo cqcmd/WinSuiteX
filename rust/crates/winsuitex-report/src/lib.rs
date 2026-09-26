@@ -11,8 +11,6 @@
 //! - `HardwareInfo.is_server` 为 `true` 时隐藏「音频设备」与「USB 外设」两段；
 //! - 设备名等可能含 `<>&"` 的字符串必须 HTML 转义，防止破坏结构。
 
-use std::fmt::Write as _;
-
 use winsuitex_core::feature::FEATURES;
 use winsuitex_core::model::{
     format_uptime, FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic,
@@ -342,19 +340,8 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                 s.push_str(&format!(" · {}", g.kind.label()));
             }
             if let Some(t) = &g.telemetry {
-                s.push_str(&format!(
-                    " | 温度 {}°C · 风扇 {}% · {}W · 利用 {}% · 显存 {}/{} MB · {} MHz",
-                    disp_i32(&t.temp_c),
-                    disp_u32(&t.fan_pct),
-                    disp_u32(&t.power_w),
-                    disp_u32(&t.util_pct),
-                    disp_mb(&t.mem_used_mb),
-                    match g.vram_mb.or(t.mem_used_mb) {
-                        Some(v) => v.get().to_string(),
-                        None => UNKNOWN.to_string(),
-                    },
-                    disp_u32(&t.clock_mhz),
-                ));
+                let seg = telemetry_segments(t, g.vram_mb);
+                s.push_str(&format!(" | {}", seg.join(" · ")));
             }
             push_kv(&mut out, &format!("  显卡 #{}", i + 1), s);
         }
@@ -917,23 +904,35 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
     out.push_str("</table></section>\n");
 }
 
-fn telemetry_line(t: &GpuTelemetry, vram: Option<MebiBytes>, td: &mut String) {
-    let total = vram.or(t.mem_used_mb);
-    let tot = match total {
+/// 显卡遥测项 → 一段人读文案（不含分隔符）。
+///
+/// 拆项而非拼死格式串的理由：功耗是**可选项**（多数 A 卡走 ADL、部分 N 卡老驱动
+/// 取不到 → `None`）。旧写法把它塞进「… · {}W · …」，取不到时渲染成「… · 未知W · …」，
+/// 读起来像一个以 W 结尾的怪单位；现在单独成「功耗未知」，一眼能看出"这项没有"。
+fn telemetry_segments(t: &GpuTelemetry, vram: Option<MebiBytes>) -> Vec<String> {
+    let total = match vram.or(t.mem_used_mb) {
         Some(v) => v.get().to_string(),
         None => UNKNOWN.to_string(),
     };
-    let _ = write!(
-        td,
-        "<br>状态: 温度 {}°C &middot; 风扇 {}% &middot; {}W &middot; 利用 {}% &middot; 显存 {}/{} MB &middot; {} MHz",
-        disp_i32(&t.temp_c),
-        disp_u32(&t.fan_pct),
-        disp_u32(&t.power_w),
-        disp_u32(&t.util_pct),
-        disp_mb(&t.mem_used_mb),
-        tot,
-        disp_u32(&t.clock_mhz),
-    );
+    let seg = vec![
+        format!("温度 {}°C", disp_i32(&t.temp_c)),
+        format!("风扇 {}%", disp_u32(&t.fan_pct)),
+        match t.power_w {
+            Some(w) => format!("功耗 {w}W"),
+            None => format!("功耗 {UNKNOWN}"),
+        },
+        format!("利用 {}%", disp_u32(&t.util_pct)),
+        format!("显存 {}/{} MB", disp_mb(&t.mem_used_mb), total),
+        format!("{} MHz", disp_u32(&t.clock_mhz)),
+    ];
+    // 各项之间的分隔符号由调用方决定（文本用「·」，HTML 用「&middot;」）。
+    seg
+}
+
+fn telemetry_line(t: &GpuTelemetry, vram: Option<MebiBytes>, td: &mut String) {
+    let seg = telemetry_segments(t, vram);
+    td.push_str("<br>状态: ");
+    td.push_str(&seg.join(" &middot; "));
 }
 
 /// 把单盘 SMART 快照渲染成一行人读文案；没有任何可用数据（且无法说明原因）时返回 `None`。
@@ -2353,6 +2352,39 @@ mod tests {
             txt.contains("键盘 / 鼠标"),
             "服务器文本报告应仍显示键盘/鼠标段，实际:\n{txt}"
         );
+    }
+
+    #[test]
+    fn gpu_missing_power_reads_as_power_unknown_not_unknown_w() {
+        // 真机案例：047 那台 RTX 4060 的 NVML 没返回功耗（power_w=None），
+        // 旧写法把 `{}W` 硬拼在格式串里 → 报告里出现「风扇 0% · 未知W · 利用 1%」。
+        // 「未知W」读起来像"未知这个 W"，属于渲染层的假故障观感，必须消掉。
+        let mut hw = base_hw();
+        hw.gpus.push(Gpu {
+            name: "NVIDIA GeForce RTX 4060".into(),
+            vram_mb: Some(MebiBytes::new(8192)),
+            kind: GpuKind::Physical,
+            vendor: Some("ASUS".into()),
+            telemetry: Some(GpuTelemetry {
+                temp_c: Some(44),
+                fan_pct: Some(0),
+                power_w: None,
+                util_pct: Some(1),
+                mem_used_mb: Some(MebiBytes::new(6799)),
+                clock_mhz: Some(2505),
+            }),
+        });
+        let txt = build_text(&hw);
+        let html = build_html(&hw, &[]);
+        assert!(
+            !txt.contains("未知W") && !html.contains("未知W"),
+            "功耗缺失时不应渲染成「未知W」，实际:\n{txt}\n{html}"
+        );
+        assert!(
+            txt.contains("功耗 未知") && html.contains("功耗 未知"),
+            "功耗缺失时文本与 HTML 都应显示「功耗 未知」"
+        );
+        assert!(txt.contains("温度 44°C"), "其余遥测项应照常显示");
     }
 
     #[test]
