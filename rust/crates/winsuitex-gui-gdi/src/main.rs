@@ -38,6 +38,114 @@ use theme::*;
 
 use std::os::windows::ffi::OsStrExt;
 use std::sync::atomic::{AtomicI32, Ordering};
+#[cfg(feature = "crash-log")]
+use std::sync::{Mutex, OnceLock};
+
+// ───────────────────────────────────────────────────────────────────────────
+// 崩溃诊断日志（`crash-log` feature 专用，Z.W. 1024×768 真机无界面排查）
+//
+// release 默认 `panic = "abort"`，`panic_immediate_abort` 既不进 panic hook、
+// 也不捕获位置——双击崩溃时 process 直接消失，看不到任何信息。
+// 排查走 `--profile diag`（继承 release 体积优化、但 `panic = "unwind"`），
+// 再叠 `crash-log` feature：本模块在 exe 同目录写 `winsuitex-gui-gdi.log`，
+// ① 每个关键里程碑记一行（崩前最后一行告诉我们走到哪一步）；
+// ② panic hook 把 file:line + payload + 调用栈强制落盘。
+// 普通 `--release` 不加 feature，下面所有代码编译期消除（零开销、不写文件）。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 日志文件句柄（append 模式；打不开则 `None`，写入静默跳过，绝不反客为主崩主流程）。
+#[cfg(feature = "crash-log")]
+static CRASH_LOG: OnceLock<Mutex<Option<std::fs::File>>> = OnceLock::new();
+
+/// 日志文件名（`exe 同目录/winsuitex-gui-gdi.log`；目录不可写回退 `%TEMP%`）。
+#[cfg(feature = "crash-log")]
+fn crash_log_path() -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            return dir.join("winsuitex-gui-gdi.log");
+        }
+    }
+    std::env::temp_dir().join("winsuitex-gui-gdi.log")
+}
+
+/// 打开日志文件（exe 同目录优先，失败再试临时目录）。
+#[cfg(feature = "crash-log")]
+fn open_crash_log() -> Option<std::fs::File> {
+    if let Ok(f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crash_log_path())
+    {
+        return Some(f);
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("winsuitex-gui-gdi.log"))
+        .ok()
+}
+
+/// 取得（惰性初始化）日志句柄。
+#[cfg(feature = "crash-log")]
+fn crash_log_file() -> &'static Mutex<Option<std::fs::File>> {
+    CRASH_LOG.get_or_init(|| Mutex::new(open_crash_log()))
+}
+
+/// 写一行诊断日志（带 Unix 时间戳）。任何失败都静默吞掉。
+#[cfg(feature = "crash-log")]
+fn log_line(s: &str) {
+    use std::io::Write;
+    let m = crash_log_file();
+    if let Ok(mut g) = m.lock() {
+        if let Some(f) = g.as_mut() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let _ = writeln!(f, "[{now}] {s}");
+            let _ = f.flush();
+        }
+    }
+}
+
+/// 安装崩溃日志：开日志文件 + 装 panic hook（强制抓 file:line + 调用栈）。
+#[cfg(feature = "crash-log")]
+fn install_crash_logger() {
+    // 先开文件，保证即便 hook 没触发，里程碑也已落盘。
+    let _ = crash_log_file();
+    std::panic::set_hook(Box::new(|info| {
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "<non-string panic payload>".to_string()
+        };
+        log_line(&format!("PANIC at {loc}: {payload}"));
+        // `force_capture` 不受 RUST_BACKTRACE 影响，diag 双击崩溃也必有栈。
+        let bt = std::backtrace::Backtrace::force_capture();
+        log_line(&format!("BACKTRACE:\n{bt}"));
+    }));
+    log_line("crash logger installed");
+}
+
+/// 无 feature 时编译期彻底消失，连调用点都不产生代码。
+#[cfg(not(feature = "crash-log"))]
+macro_rules! wlog {
+    ($($arg:tt)*) => {{}};
+}
+
+/// 有 feature 时写一行格式化日志。
+#[cfg(feature = "crash-log")]
+macro_rules! wlog {
+    ($($arg:tt)*) => {{
+        $crate::log_line(&format!($($arg)*));
+    }};
+}
 
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{
@@ -80,6 +188,8 @@ static HOVER_SHOT: AtomicI32 = AtomicI32::new(0);
 static HOVER_TB: AtomicI32 = AtomicI32::new(-1);
 /// 右键增强页当前悬停的开关索引（-1=无）。
 static HOVER_SWITCH: AtomicI32 = AtomicI32::new(-1);
+/// 磁盘页当前悬停的分区行索引（-1=无，用于 hover 浅底反馈）。
+static HOVER_VOL_ROW: AtomicI32 = AtomicI32::new(-1);
 /// 窗口是否最大化（0/1）。由 `WM_SIZE` 同步，绘制层只读。
 static ZOOMED: AtomicI32 = AtomicI32::new(0);
 
@@ -93,6 +203,18 @@ pub fn hover_switch() -> i32 {
 #[inline]
 pub fn set_hover_switch(v: i32) {
     HOVER_SWITCH.store(v, Ordering::Relaxed);
+}
+
+/// 当前悬停的磁盘分区行索引（-1=无）。
+#[inline]
+pub fn hover_vol_row() -> i32 {
+    HOVER_VOL_ROW.load(Ordering::Relaxed)
+}
+
+/// 设置悬停的磁盘分区行索引。
+#[inline]
+pub fn set_hover_vol_row(v: i32) {
+    HOVER_VOL_ROW.store(v, Ordering::Relaxed);
 }
 /// 内容区垂直滚动偏移（像素，>=0）。内容超出窗口高度时滚轮/拖动改这个。
 static SCROLL_Y: AtomicI32 = AtomicI32::new(0);
@@ -293,11 +415,20 @@ fn main() {
     // SAFETY: 全部是对 Win32 API 的正确调用；字符串均为 NUL 结尾的静态常量，
     // 句柄在同一函数内有效（窗口创建后由消息循环持有）。
     unsafe {
+        // 崩溃诊断日志最先装：哪怕后面单实例判重 / DPI / 采集任何一步崩，
+        // 日志文件也已打开、hook 已就位，双击崩溃也能拿到 file:line + 栈。
+        // 无 `crash-log` feature 时函数/宏都不编译（这里是空操作）。
+        #[cfg(feature = "crash-log")]
+        install_crash_logger();
+        wlog!("main entered; cwd={:?}", std::env::current_dir().ok());
+
         // 单实例：第二次运行时把已跑的实例切到前台，本进程直接退出。
         // 放在最前面——抢在 WMI 采集之前返回，用户感知是"立刻切过去"，不是"卡两秒"。
         if single_instance_or_activate() {
+            wlog!("single-instance: another instance activated, exiting");
             return;
         }
+        wlog!("single-instance: first instance, continuing");
         // DPI 感知：声明 per-monitor v2，否则 Windows 把本进程当成 96-DPI，
         // 用 DPI 虚拟化把整窗位图拉伸到物理像素 —— 这是"窗口边缘/文字/开关发虚"
         // 的根因（非 DPI 感知进程画在 96 逻辑像素，系统再位图放大到真实分辨率）。
@@ -306,11 +437,14 @@ fn main() {
         // 到 per-monitor v1（网吧/电竞酒店多为 Win10+，v2 普遍可用）。
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
             .or_else(|_| SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE));
+        wlog!("dpi awareness set; system dpi={}", GetDpiForSystem());
 
         // 初始 DPI 用主屏 DPI：让 CreateWindowExW 一开始就按真实物理尺寸建窗口，
         // 而不是等 WM_DPICHANGED（后者在创建后才可能触发；窗口宽度不会被 OnPaint
         // 校正，缺少这一步会导致高分屏下窗口过窄、右侧内容被裁）。
         set_dpi(GetDpiForSystem().max(96) as u32);
+        // scale(96) 反推当前 DPI（96*原DPI/96 取整），用于日志确认缩放基准。
+        wlog!("set_dpi -> dpi≈{}", theme::scale(96));
 
         let Ok(hinst) = GetModuleHandleW(None) else {
             return;
@@ -331,12 +465,19 @@ fn main() {
         }
 
         // 采集：复用平台引擎（与 CLI / egui GUI 同一条链路）。
+        wlog!("collect start");
         let _ = SNAPSHOT.set(collect());
+        wlog!("collect done");
 
         // 初始 DPI：虚拟机/高分屏下让布局一开始就是对的，而不是等 WM_DPICHANGED。
         // 窗口尺寸先按工作区钳制：小屏（如 1024×768 工作区 ≈ 738 高）下窗口高不会
         // 超过工作区，标题栏/底栏留在屏内、内容靠滚动；大屏仍取设计尺寸（零回归）。
         let (init_w, init_h) = (max_win_w(), max_win_h());
+        wlog!(
+            "CreateWindowExW: init_w={init_w} init_h={init_h} win_w={} win_h={}",
+            scale(WIN_W),
+            scale(WIN_H)
+        );
         if let Ok(hwnd) = CreateWindowExW(
             WS_EX_APPWINDOW,
             PCWSTR(WND_CLASS.as_ptr()),
@@ -360,6 +501,10 @@ fn main() {
             center_window(hwnd);
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = UpdateWindow(hwnd);
+            wlog!(
+                "window created + shown; hwnd={hwnd:?} dpi={}",
+                theme::scale(96)
+            );
 
             // 消息循环
             let mut msg: MSG = std::mem::zeroed();
@@ -385,6 +530,7 @@ fn apply_rounded_region(hwnd: HWND) {
         if w <= 0 || h <= 0 {
             return;
         }
+        wlog!("apply_rounded_region: w={w} h={h}");
         let r = scale(WIN_RADIUS + SHADOW_PAD);
         // windows 0.62：`CreateRoundRectRgn` 直接返回 HRGN（不是 Result）。
         let hrgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, r * 2, r * 2);
@@ -402,6 +548,26 @@ fn apply_rounded_region(hwnd: HWND) {
 /// 所以可以直接拿来比较、钳制窗口尺寸。
 /// 拿不到就返回 `None`——调用方各自回退到设计尺寸，只是不做钳制、位置略偏。
 fn work_area() -> Option<RECT> {
+    // 诊断：用 `WSX_FAKE_WORKAREA=WxH` 强制模拟小屏（复现 1024×768 真机
+    // `work_area < WIN_H` 几何崩溃用）。仅 `crash-log` feature 编译，普通
+    // release 不受影响；不设该环境变量时走真实工作区（真机路径不变）。
+    #[cfg(feature = "crash-log")]
+    {
+        if let Ok(s) = std::env::var("WSX_FAKE_WORKAREA") {
+            if let Some((w, h)) = s.split_once('x') {
+                if let (Ok(w), Ok(h)) = (w.trim().parse::<i32>(), h.trim().parse::<i32>()) {
+                    if w > 0 && h > 0 {
+                        return Some(RECT {
+                            left: 0,
+                            top: 0,
+                            right: w,
+                            bottom: h,
+                        });
+                    }
+                }
+            }
+        }
+    }
     // SAFETY: `pvparam` 传 `&mut work` 指针，回调不涉及 COM，是该 API 的标准用法。
     unsafe {
         let mut work = RECT::default();
@@ -449,21 +615,29 @@ fn center_window(hwnd: HWND) {
         if SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(ptr.cast()), flags).is_err() {
             return;
         }
+        // 诊断：用 `WSX_FAKE_WORKAREA` 覆盖 SPI 拿到的工作区，复现窄工作区
+        // （Z.W. 1024×768 竖任务栏，工作区宽≈窗口宽→`clamp(0,-2)`）。
+        #[cfg(feature = "crash-log")]
+        if let Some(fake) = work_area() {
+            work = fake;
+        }
         let mut rc = RECT::default();
         let _ = GetWindowRect(hwnd, &mut rc);
         let (w, h) = (rc.right - rc.left, rc.bottom - rc.top);
+        wlog!("center_window: w={w} h={h}");
         // 工作区正中。但 `w`/`h` 已被 `max_win_*` 钳到工作区，正常情况 `y >= work.top`；
         // 仍做 clamp 兜底，保证窗口任何情况下都留在工作区内（标题栏不出屏顶、底栏不出屏底），
         // 否则小屏上居中会把顶部栏推出屏外、既看不见也拖不动（Z.W. 报的 1024×768 现象）。
         // `saturating_sub` 防极端小屏（w/h 反过来大于工作区）时 `clamp(min>max)` 在 debug panic。
-        let x = (work.left + ((work.right - work.left) - w) / 2).clamp(
-            work.left,
-            work.left + (work.right - work.left).saturating_sub(w),
-        );
-        let y = (work.top + ((work.bottom - work.top) - h) / 2).clamp(
-            work.top,
-            work.top + (work.bottom - work.top).saturating_sub(h),
-        );
+        // 上界用「右/下边缘坐标」`work.right - w` 再 `.max(work.left)` 兜底：
+        // 窗口比工作区宽时 `work.right - w < work.left`，`.max` 把上界拉回 `work.left`，
+        // 退化为「贴左/贴上」；绝不会出现 `clamp(min > max)`。
+        // ⚠️ 不能用 `saturating_sub`：它只防止下溢到 i32::MIN，不会把 `-2` 变成 `0`，
+        // 旧版因此仍会 panic（"min > max. min=0 max=-2"，Z.W. 1024×768 竖任务栏真机）。
+        let x = (work.left + ((work.right - work.left) - w) / 2)
+            .clamp(work.left, (work.right - w).max(work.left));
+        let y = (work.top + ((work.bottom - work.top) - h) / 2)
+            .clamp(work.top, (work.bottom - h).max(work.top));
         let _ = SetWindowPos(hwnd, None, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     }
 }
@@ -489,6 +663,7 @@ fn nc_hit_test(hwnd: HWND, sx: i32, sy: i32) -> i32 {
         let y = sy - rc.top;
         let w = rc.right - rc.left;
         let h = rc.bottom - rc.top;
+        wlog!("nc_hit_test: x={x} y={y} w={w} h={h}");
         if w <= 0 || h <= 0 || x < 0 || y < 0 || x >= w || y >= h {
             return HTCLIENT as i32;
         }
@@ -533,8 +708,41 @@ fn collect() -> winsuitex_core::CollectResult {
     let sources = winsuitex_platform::default_sources();
     let mut r = winsuitex_core::traits::collect_all(&sources);
     winsuitex_platform::link_volumes_to_disks(&mut r.volumes);
+    // 诊断：用 `WSX_FAKE_AUDIO=N` 注入 N 个假声卡，复现真机 audio=4 的硬件页崩溃路径。
+    // 仅 `crash-log` feature 生效，普通 release 不受影响。
+    #[cfg(feature = "crash-log")]
+    {
+        if let Ok(s) = std::env::var("WSX_FAKE_AUDIO") {
+            if let Ok(n) = s.trim().parse::<usize>() {
+                use winsuitex_core::model::{AudioDevice, AudioKind};
+                for i in 0..n {
+                    r.info.audio.push(AudioDevice {
+                        name: format!("Fake Audio Device #{i}"),
+                        role: 0,
+                        kind: AudioKind::Unknown,
+                        is_bluetooth: false,
+                        vid: None,
+                        pid: None,
+                        manufacturer: Some("FakeVendor".into()),
+                    });
+                }
+            }
+        }
+    }
     r.info.enrich_power_on_durations();
     r.info.collected_at = Some(winsuitex_core::model::local_timestamp_string());
+    wlog!(
+        "collect result: cpus={} boards={} gpus={} mem_sticks={} nics={} audio={} disks={} volumes={} diagnostics={}",
+        r.info.cpus.len(),
+        r.info.board.as_ref().map(|_| 1).unwrap_or(0),
+        r.info.gpus.len(),
+        r.info.memory.sticks.len(),
+        r.info.nics.len(),
+        r.info.audio.len(),
+        r.info.disks.len(),
+        r.volumes.len(),
+        r.diagnostics.len(),
+    );
     r
 }
 
@@ -553,6 +761,8 @@ unsafe extern "system" fn wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // 诊断：每个消息都记一行，崩溃日志最后一行就是崩前处理的消息（定位用）。
+    wlog!("wnd_proc msg={msg}");
     match msg {
         WM_PAINT => {
             let mut ps = PAINTSTRUCT::default();
@@ -588,6 +798,11 @@ unsafe extern "system" fn wnd_proc(
             // WM_DPICHANGED 的 wparam 高 16 位是新 DPI（低 16 位是旧 DPI）
             let dpi = ((wparam.0 >> 16) & 0xFFFF) as u32;
             set_dpi(dpi.max(96));
+            wlog!(
+                "WM_DPICHANGED: new dpi={} (scale(96)={})",
+                dpi,
+                theme::scale(96)
+            );
             if lparam.0 != 0 {
                 let prc = &*(lparam.0 as *const RECT);
                 // 系统建议的窗口尺寸先按工作区钳制：把窗口从大屏拖到小屏（DPI 随之变小）
@@ -631,6 +846,7 @@ unsafe extern "system" fn wnd_proc(
                     mmi.ptMinTrackSize.y = mmi.ptMinTrackSize.y.min(wh);
                     mmi.ptMaxTrackSize.x = ww;
                     mmi.ptMaxTrackSize.y = wh;
+                    wlog!("WM_GETMINMAXINFO: work_area={ww}x{wh}");
                 }
             }
             LRESULT(0)
@@ -687,6 +903,7 @@ unsafe extern "system" fn wnd_proc(
             set_hover_shot(false);
             set_hover_tb(-1);
             set_hover_switch(-1);
+            set_hover_vol_row(-1);
             let _ = InvalidateRect(Some(hwnd), None, false);
             LRESULT(0)
         }
@@ -708,19 +925,27 @@ unsafe extern "system" fn wnd_proc(
 
 /// 整窗绘制：双缓冲 → 背景 → 顶栏 → 页签 → 内容页 → 底部栏。
 unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
+    wlog!("on_paint enter (top)");
     let mut rc = RECT::default();
     let _ = GetClientRect(hwnd, &mut rc);
     let w = rc.right - rc.left;
     let h = rc.bottom - rc.top;
     if w <= 0 || h <= 0 {
+        wlog!("on_paint early-return: w={w} h={h}");
         return;
     }
 
     let Some(bb) = Backbuffer::new(w, h) else {
+        wlog!("on_paint: Backbuffer::new failed (w={w} h={h})");
         return;
     };
     let mdc = bb.mem;
-
+    wlog!(
+        "on_paint enter: w={w} h={h} cur_tab={} scroll={} dpi={}",
+        cur_tab(),
+        scroll_y(),
+        theme::scale(96)
+    );
     // 底色先铺满（阴影区外沿也是这个色，不铺会露出未初始化的 DIB 内存）
     fill(
         mdc,
@@ -749,10 +974,12 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     // 恒为 593：窗口一 resize / DPI 一缩放，hover 高亮就画到与鼠标错位的位置
     // （真机截图里按钮区域那块浅灰底就是错位的 hover fill 残留）。
     pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
+    pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
 
     // 顶栏（坐在整窗渐变上）+ 窗口按钮 + 页签条
     pages::draw_titlebar(mdc, w, h, f_title, f_sub);
     pages::draw_tabbar(mdc, f_sub);
+    wlog!("on_paint: titlebar+tabbar drawn");
 
     // 内容区可视高度（页签条下沿到底部栏上沿）。
     LAST_CLIENT_H.store(h, Ordering::Relaxed);
@@ -844,6 +1071,7 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
         2 => pages::draw_disk_page(&ctx(mdc)),
         _ => pages::draw_hw_page(&ctx(mdc)),
     };
+    wlog!("on_paint: content page drawn (tab={})", cur_tab());
     let _ = RestoreDC(mdc, _saved);
 
     // 固定头部（不随滚动）：硬件页标题+导出按钮、磁盘页说明文字。
@@ -854,6 +1082,7 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
         2 => pages::draw_disk_header(mdc, w, h, f_body, snap.map_or(0, |r| r.volumes.len())),
         _ => {}
     }
+    wlog!("on_paint: fixed header drawn (tab={})", cur_tab());
 
     // 右侧滚动条（仅内容溢出时画）。
     if max_scroll > 0 {
@@ -862,6 +1091,7 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
 
     // 底部提示条 + 版权
     pages::draw_footer(mdc, w, h, f_sub, f_tiny);
+    wlog!("on_paint: footer drawn; about to present");
 
     // blit 到窗口
     bb.present(hdc);
@@ -937,6 +1167,7 @@ unsafe fn capture_hw_page() {
     );
     pages::draw_window_frame(mdc, w, img_h);
     pages::draw_titlebar(mdc, w, img_h, f_title, f_sub);
+    pages::WIN_CACHED_H.store(img_h, Ordering::Relaxed);
     pages::draw_tabbar(mdc, f_sub);
     // 3) 头部固定层 + 完整内容（scroll=0 → 从头画到尾，不再受可视区裁剪）
     pages::draw_hw_header(mdc, w, img_h, f_section, f_body);
@@ -1094,14 +1325,23 @@ unsafe fn on_mouse_move(hwnd: HWND, lparam: LPARAM) {
     } else {
         -1
     };
+    // 磁盘分区行悬停只在磁盘页算：用 VOL_ROWS 缓存做命中测试（与点击同款，
+    // 避免布局算法漂移）。选中行本身有实底，不需要 hover 反馈，故只记录非选中行。
+    let vr = if cur_tab() == 2 {
+        pages::vol_row_at(x, y).map_or(-1, |i| i as i32)
+    } else {
+        -1
+    };
     let changed = hover_export() != (btn == 0)
         || hover_shot() != (btn == 1)
         || hover_tb() != tb
-        || hover_switch() != sw;
+        || hover_switch() != sw
+        || hover_vol_row() != vr;
     set_hover_export(btn == 0);
     set_hover_shot(btn == 1);
     set_hover_tb(tb);
     set_hover_switch(sw);
+    set_hover_vol_row(vr);
     if changed {
         let _ = InvalidateRect(Some(hwnd), None, false);
     }

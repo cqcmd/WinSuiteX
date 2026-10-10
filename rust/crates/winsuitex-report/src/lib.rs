@@ -21,6 +21,21 @@ use winsuitex_core::{fmt_link_speed, real_link_speed};
 
 const UNKNOWN: &str = "未知";
 
+// 章节图标（简笔线性 SVG，呼应 GUI 硬件页风格；在 .wsx-idx 紫底方块内以 currentColor 渲染为白色）
+const ICON_OS: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>"#;
+const ICON_MACHINE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6"/><path d="M12 16v4"/></svg>"#;
+const ICON_BOARD: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><rect x="7" y="8" width="7" height="7" rx="0.5"/><path d="M16.5 9h2M16.5 12h2M16.5 15h2"/><circle cx="14" cy="15" r="0.8"/></svg>"#;
+const ICON_CPU: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>"#;
+const ICON_MEMORY: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="9" rx="1"/><path d="M7 16v3M11 16v3M15 16v3M19 16v3"/><path d="M9 7v9"/></svg>"#;
+const ICON_GPU: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="11" rx="1.5"/><circle cx="9" cy="10.5" r="3"/><circle cx="16" cy="10.5" r="2"/><path d="M4 16v3M9 16v3"/></svg>"#;
+const ICON_DISK: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 11h18"/><circle cx="8" cy="14.5" r="0.9"/></svg>"#;
+const ICON_NIC: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="13" height="6" rx="1.5"/><path d="M16 11h4M16 13h4"/><path d="M6 9V7M9 9V7"/></svg>"#;
+const ICON_VOLUME: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 12V4M12 12h8"/></svg>"#;
+const ICON_AUDIO: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 7a7 7 0 0 1 0 10"/></svg>"#;
+const ICON_USB: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v5a3 3 0 0 1-6 0z"/><path d="M12 11v3"/><path d="M8 14h8l-2 6H10z"/></svg>"#;
+const ICON_INPUT: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/></svg>"#;
+const ICON_FEATURE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="16" cy="12" r="3"/></svg>"#;
+
 // ============================================================
 // 公共 API
 // ============================================================
@@ -52,17 +67,44 @@ pub fn build_html_with_features(
     ));
     out.push_str("<style>\n");
     out.push_str(CSS);
-    out.push_str("</style>\n</head>\n<body>\n<div class=\"wrap\">\n");
-    out.push_str("<h1>WinSuiteX 计算机硬件与系统报告</h1>\n");
+    out.push_str("</style>\n</head>\n<body>\n<div class=\"wsx-wrap\">\n");
+
+    // ---- 品牌渐变 header + 概览 chips ----
+    let os_chip = hw
+        .os
+        .as_ref()
+        .and_then(|o| o.product.clone())
+        .unwrap_or_else(|| UNKNOWN.to_string());
+    let cpu_chip = hw
+        .cpus
+        .first()
+        .and_then(|c| c.model.clone())
+        .unwrap_or_else(|| UNKNOWN.to_string());
+    let mem_chip = fmt_mb(&hw.memory.total_mb);
+    out.push_str("<header class=\"wsx-header\">\n");
+    out.push_str("<div class=\"wsx-wordmark\">WinSuiteX</div>\n");
+    out.push_str(&format!("<h1>{}</h1>\n", esc(&pc)));
+    out.push_str("<div class=\"wsx-sub\">计算机硬件与系统报告 &middot; Rust 版</div>\n");
+    out.push_str("<div class=\"wsx-chips\">\n");
     out.push_str(&format!(
-        "<div class=\"sub\">{} &middot; Rust 版</div>\n",
-        esc(&pc)
+        "<div class=\"wsx-chip\"><div class=\"c-label\">操作系统</div><div class=\"c-value\">{}</div></div>\n",
+        esc(&os_chip)
     ));
+    out.push_str(&format!(
+        "<div class=\"wsx-chip\"><div class=\"c-label\">处理器</div><div class=\"c-value\">{}</div></div>\n",
+        esc(&cpu_chip)
+    ));
+    out.push_str(&format!(
+        "<div class=\"wsx-chip\"><div class=\"c-label\">内存总量</div><div class=\"c-value c-mono\">{}</div></div>\n",
+        esc(&mem_chip)
+    ));
+    out.push_str("</div>\n");
+    out.push_str("</header>\n");
 
     // ---- 提权提示横幅 ----
     if hw.admin_elevated == Some(false) {
         out.push_str(
-            "<div class=\"warnbox\">⚠ 未以管理员身份运行：NVMe SMART 寿命百分比 / 通电时长可能不完整，请以管理员身份重新运行。</div>\n",
+            "<div class=\"wsx-warnbox\"><span class=\"wsx-warn-title\">⚠ 未以管理员身份运行</span>NVMe SMART 寿命百分比 / 通电时长可能不完整，请以管理员身份重新运行。</div>\n",
         );
     }
 
@@ -127,7 +169,7 @@ pub fn build_html_with_features(
         }
         if !omitted.is_empty() {
             out.push_str(&format!(
-                "<div class=\"foot\">服务器模式：以下段已省略（{}）</div>\n",
+                "<div class=\"wsx-foot\">服务器模式：以下段已省略（{}）</div>\n",
                 esc(&omitted.join("、"))
             ));
         }
@@ -135,7 +177,7 @@ pub fn build_html_with_features(
 
     // ---- 页脚 ----
     out.push_str(
-        "<div class=\"foot\">WinSuiteX &middot; 重庆持玛多网络科技有限公司 &middot; Z.W.</div>\n",
+        "<div class=\"wsx-foot\">WinSuiteX &middot; 重庆持玛多网络科技有限公司 &middot; Z.W.</div>\n",
     );
     out.push_str("</div>\n</body>\n</html>\n");
     out
@@ -410,8 +452,8 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                 fmt_bytes(&d.size_bytes)
             ));
             // SMART 通电/健康行。
-            if let Some(smart) = disk_smart_text(d) {
-                s.push_str(&format!(" | {smart}"));
+            if let Some((_status, health, rest)) = disk_smart_line(d) {
+                s.push_str(&format!(" | {health}{rest}"));
             }
             push_kv(&mut out, &format!("  PhysicalDrive{}", d.index), s);
         }
@@ -539,7 +581,7 @@ pub fn build_text(hw: &HardwareInfo) -> String {
 // ============================================================
 
 fn os_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>操作系统</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>操作系统 <span class=\"wsx-subtle\">OPERATING SYSTEM</span></div><table class=\"wsx-kv\">\n", ICON_OS));
     row(
         out,
         "产品",
@@ -573,7 +615,7 @@ fn os_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn machine_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>计算机</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>计算机 <span class=\"wsx-subtle\">COMPUTER</span></div><table class=\"wsx-kv\">\n", ICON_MACHINE));
     row(
         out,
         "名称",
@@ -597,7 +639,7 @@ fn machine_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn board_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>主板 / BIOS</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>主板 / BIOS <span class=\"wsx-subtle\">MOTHERBOARD</span></div><table class=\"wsx-kv\">\n", ICON_BOARD));
     row(
         out,
         "制造商",
@@ -657,13 +699,13 @@ fn board_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn cpu_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>处理器</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>处理器 <span class=\"wsx-subtle\">PROCESSOR</span></div><table class=\"wsx-kv\">\n", ICON_CPU));
     for (i, c) in hw.cpus.iter().enumerate() {
         let socket = c.socket.clone().unwrap_or_default();
         let th = format!("#{} {}", i + 1, socket);
         let mut td = String::new();
         td.push_str(&esc(&c.model.clone().unwrap_or_default()));
-        td.push_str("<br><span class=\"mono\">");
+        td.push_str("<br><span class=\"wsx-mono\">");
         td.push_str(&format!(
             "{} 核 / {} 线程",
             disp_u32(&c.cores),
@@ -672,7 +714,7 @@ fn cpu_section(hw: &HardwareInfo, out: &mut String) {
         if let Some(sp) = c.speed_mhz {
             td.push_str(&format!(" &middot; {sp} MHz"));
         }
-        td.push_str("</span><br><span class=\"mono\">");
+        td.push_str("</span><br><span class=\"wsx-mono\">");
         td.push_str(&esc(
             &vendor_label(&c.vendor).unwrap_or_else(|| UNKNOWN.to_string())
         ));
@@ -719,7 +761,7 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
     if total.is_none() && sticks.is_empty() {
         return;
     }
-    out.push_str("<section><h2>内存</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>内存 <span class=\"wsx-subtle\">MEMORY</span></div><table class=\"wsx-kv\">\n", ICON_MEMORY));
     row(out, "总计", &fmt_mb(total));
     // 槽位占用汇总：SMBIOS 只枚举到部分槽时（如 24 槽机器只报出 8 根），
     // 这一行让"各槽合计与总计对不上"一眼可见，不必读者自己数行数。
@@ -782,7 +824,7 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
                 // 附真实时钟频率（= 传输率 / 2）防误解。
                 td.push_str(&format!(" &middot; {sp} MT/s (时钟 {} MHz)", sp / 2));
             }
-            td.push_str("<br><span class=\"mono\">");
+            td.push_str("<br><span class=\"wsx-mono\">");
             td.push_str(&esc(
                 &vendor_label(&m.vendor).unwrap_or_else(|| UNKNOWN.to_string())
             ));
@@ -791,7 +833,7 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             td.push_str("</span>");
             if let Some(sn) = &m.serial {
                 if real_serial(sn) {
-                    td.push_str("<br>序列号：<span class=\"mono\">");
+                    td.push_str("<br>序列号：<span class=\"wsx-mono\">");
                     td.push_str(&esc(sn));
                     td.push_str("</span>");
                 }
@@ -820,7 +862,7 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             format!("空槽 {n} 个")
         };
         let list = empty_locators.join(" · ");
-        let td = format!("<span class=\"empty\">空槽：{}</span>", esc(&list));
+        let td = format!("<span class=\"wsx-muted\">空槽：{}</span>", esc(&list));
         out.push_str("<tr><th>");
         out.push_str(&esc(&th));
         out.push_str("</th><td>");
@@ -892,7 +934,7 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>显卡 / 显示器</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>显卡 / 显示器 <span class=\"wsx-subtle\">GPU / DISPLAY</span></div><table class=\"wsx-kv\">\n", ICON_GPU));
     for (i, g) in hw.gpus.iter().enumerate() {
         let mut td = String::new();
         td.push_str(&esc(&g.name));
@@ -907,7 +949,7 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
                 // 音频段同样处理，见 audio_section。
                 if !g.name.contains(&brand) {
                     td.push_str(&format!(
-                        " &middot; <span class=\"muted\">{}</span>",
+                        " &middot; <span class=\"wsx-muted\">{}</span>",
                         esc(&brand)
                     ));
                 }
@@ -916,7 +958,7 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
         // 虚拟/软件适配器不是真实显卡，显式标注，避免与独显混排误导硬件盘点。
         if g.kind != GpuKind::Physical {
             td.push_str(&format!(
-                " <span class=\"muted\">[{}]</span>",
+                " <span class=\"wsx-muted\">[{}]</span>",
                 esc(g.kind.label())
             ));
         }
@@ -943,7 +985,7 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
                 td.push_str(&format!(" &middot; {sz}"));
             }
         }
-        td.push_str("<br><span class=\"mono\">");
+        td.push_str("<br><span class=\"wsx-mono\">");
         // 显示器：厂商中文以括号跟在型号后，不单独成列
         let name = d.name.clone().unwrap_or_default();
         let mut label = name.clone();
@@ -1009,8 +1051,25 @@ fn telemetry_segments(t: &GpuTelemetry, vram: Option<MebiBytes>) -> Vec<String> 
 
 fn telemetry_line(t: &GpuTelemetry, vram: Option<MebiBytes>, td: &mut String) {
     let seg = telemetry_segments(t, vram);
+    // 温度高时上色：≥85°C 红（危险）/ ≥75°C 橙（注意），其余保持中性（仅 HTML 路径，不污染纯文本）。
+    let segs: Vec<String> = seg
+        .into_iter()
+        .map(|s| {
+            if s.starts_with("温度") {
+                let cls = match t.temp_c {
+                    Some(temp) if temp >= 85 => "wsx-t-crit",
+                    Some(temp) if temp >= 75 => "wsx-t-warn",
+                    _ => "",
+                };
+                if !cls.is_empty() {
+                    return format!("<span class=\"{cls}\">{s}</span>");
+                }
+            }
+            s
+        })
+        .collect();
     td.push_str("<br>状态: ");
-    td.push_str(&seg.join(" &middot; "));
+    td.push_str(&segs.join(" &middot; "));
 }
 
 /// 把单盘 SMART 快照渲染成一行人读文案；没有任何可用数据（且无法说明原因）时返回 `None`。
@@ -1018,7 +1077,10 @@ fn telemetry_line(t: &GpuTelemetry, vram: Option<MebiBytes>, td: &mut String) {
 /// 纪律：拿不到就明确显示原因（"健康状态：不可用（需管理员权限）"），绝不给 0 或"健康"。
 /// 通电小时数经 [`winsuitex_core::format_power_on_duration`] 换算为可读时长，
 /// 用于巡检报告（避免只显示裸小时数难以判断硬盘服役年限）。
-fn disk_smart_text(d: &PhysicalDisk) -> Option<String> {
+/// 把单盘 SMART 快照拆成「健康状态 + 健康令牌 + 其余文案」。
+/// 健康令牌在 HTML 里渲染成语义色胶囊（正常绿/注意橙/危险红/未知灰），其余文案原样显示；
+/// 纯文本报告把三者拼回原句（健康令牌 + 其余），保持向后兼容。
+fn disk_smart_line(d: &PhysicalDisk) -> Option<(HealthStatus, String, String)> {
     let s = d.smart.as_ref()?;
 
     // 是否有任何"实打实"的数据（健康态非 Unknown 也算，因为它来自真实判定）。
@@ -1034,52 +1096,56 @@ fn disk_smart_text(d: &PhysicalDisk) -> Option<String> {
 
     // 未尝试（source=None）或未拿到任何数据：有原因就显示原因，否则（真·未知接口）不显示。
     if s.source == SmartSource::None || !has_data {
-        return s
-            .unavailable_reason
-            .as_ref()
-            .map(|r| format!("健康状态：不可用（{r}）"));
+        return s.unavailable_reason.as_ref().map(|r| {
+            (
+                HealthStatus::Unknown,
+                format!("健康状态：不可用（{r}）"),
+                String::new(),
+            )
+        });
     }
 
-    let mut parts: Vec<String> = Vec::new();
-    // 健康（优先，且必须与"已用/剩余"同源）。
-    match s.health_status {
+    // 健康令牌（用于上色）+ 其余指标。
+    let status = s.health_status;
+    let health_token = match status {
         HealthStatus::Healthy => {
             if let Some(pct) = s.health_percent {
-                parts.push(format!("健康 良好（剩余 {pct}%）"));
+                format!("健康 良好（剩余 {pct}%）")
             } else {
-                parts.push("健康 良好".to_string());
+                "健康 良好".to_string()
             }
         }
-        HealthStatus::Warning => parts.push("健康 警告".to_string()),
-        HealthStatus::Critical => parts.push("健康 严重".to_string()),
-        HealthStatus::Unknown => parts.push("健康 未知".to_string()),
-    }
+        HealthStatus::Warning => "健康 警告".to_string(),
+        HealthStatus::Critical => "健康 严重".to_string(),
+        HealthStatus::Unknown => "健康 未知".to_string(),
+    };
+    let mut rest: Vec<String> = Vec::new();
     if let Some(h) = s.power_on_hours {
-        parts.push(format!(
+        rest.push(format!(
             "通电 {h} 小时（{}）",
             winsuitex_core::model::format_power_on_duration(h)
         ));
     }
     if let Some(c) = s.power_cycles {
-        parts.push(format!("通电 {c} 次"));
+        rest.push(format!("通电 {c} 次"));
     }
     if let Some(t) = s.temperature_c {
-        parts.push(format!("{t}°C"));
+        rest.push(format!("{t}°C"));
     }
     if let Some(w) = s.host_written_bytes {
-        parts.push(format!("已写入 {}", fmt_bytes(&Some(w))));
+        rest.push(format!("已写入 {}", fmt_bytes(&Some(w))));
     }
     if let Some(e) = s.media_errors {
-        parts.push(format!("介质错误 {e}"));
+        rest.push(format!("介质错误 {e}"));
     }
     if let Some(r) = s.reallocated_sectors {
         if r > 0 {
-            parts.push(format!("重映射 {r} 扇区"));
+            rest.push(format!("重映射 {r} 扇区"));
         }
     }
     if let Some(p) = s.pending_sectors {
         if p > 0 {
-            parts.push(format!("待映射 {p} 扇区"));
+            rest.push(format!("待映射 {p} 扇区"));
         }
     }
 
@@ -1090,27 +1156,26 @@ fn disk_smart_text(d: &PhysicalDisk) -> Option<String> {
             s.source,
             SmartSource::NvmeLogPage | SmartSource::StorageReliabilityCounter
         )
-        && !parts.is_empty()
+        && !rest.is_empty()
     {
-        parts.push("通电时长:该存储栈未透传".to_string());
+        rest.push("通电时长:该存储栈未透传".to_string());
     }
 
-    if parts.is_empty() {
-        return s
-            .unavailable_reason
-            .as_ref()
-            .map(|r| format!("健康状态：不可用（{r}）"));
-    }
-    Some(parts.join(" · "))
+    let rest_str = if rest.is_empty() {
+        String::new()
+    } else {
+        format!(" · {}", rest.join(" · "))
+    };
+    Some((status, health_token, rest_str))
 }
 
 fn disk_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>硬盘</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>硬盘 <span class=\"wsx-subtle\">STORAGE</span></div><table class=\"wsx-kv\">\n", ICON_DISK));
     for d in &hw.disks {
         let brand = d.model.as_deref().and_then(disk_vendor_from_model);
         let mut td = String::new();
         td.push_str(&esc(&d.model.clone().unwrap_or_default()));
-        td.push_str("<br><span class=\"mono\">");
+        td.push_str("<br><span class=\"wsx-mono\">");
         if let Some(b) = &brand {
             td.push_str(&esc(b));
             td.push_str(" &middot; ");
@@ -1126,7 +1191,7 @@ fn disk_section(hw: &HardwareInfo, out: &mut String) {
         // 而序列号是换盘时的唯一凭据，不能只在分区段间接带出。
         match d.serial.as_deref().filter(|s| real_serial(s)) {
             Some(s) => {
-                td.push_str("<br><span class=\"mono\">序列号：");
+                td.push_str("<br><span class=\"wsx-mono\">序列号：");
                 td.push_str(&esc(s));
                 td.push_str("</span>");
             }
@@ -1139,28 +1204,44 @@ fn disk_section(hw: &HardwareInfo, out: &mut String) {
                     Some(SmartSource::NvmeLogPage) | Some(SmartSource::StorageReliabilityCounter)
                 );
                 if masked {
-                    td.push_str("<br><span class=\"mono\">序列号：该存储栈未透传</span>");
+                    td.push_str("<br><span class=\"wsx-mono\">序列号：该存储栈未透传</span>");
                 }
             }
         }
         // 固件版本：资产盘点配合型号 + 序列号构成完整身份（RMA / 批次隐患比对）。
         if let Some(f) = d.firmware.as_deref().filter(|f| !f.trim().is_empty()) {
-            td.push_str("<br><span class=\"mono\">固件：");
+            td.push_str("<br><span class=\"wsx-mono\">固件：");
             td.push_str(&esc(f));
             td.push_str("</span>");
         }
         // 存储后端告警：盘位于 RAID / Storage Spaces / 虚拟磁盘后时，完整 SMART 需厂商工具。
         if let Some(be) = d.storage_backend.as_deref() {
             td.push_str(&format!(
-                "<br><span class=\"mono warn\">⚠ {}：完整 SMART 需 storcli/megacli</span>",
+                "<br><span class=\"wsx-mono wsx-warn\">⚠ {}：完整 SMART 需 storcli/megacli</span>",
                 esc(be)
             ));
         }
         // SMART 通电/健康行：有数据就显示，拿不到就明确显示原因（绝不显示 0 / "健康"）。
-        if let Some(smart) = disk_smart_text(d) {
-            td.push_str("<br><span class=\"mono\">");
-            td.push_str(&esc(&smart));
-            td.push_str("</span>");
+        // 健康令牌按状态上色：正常绿 / 注意橙 / 危险红 / 未知灰；其余指标保持等宽灰字。
+        if let Some((st, health, rest)) = disk_smart_line(d) {
+            let (cls, pill) = match st {
+                HealthStatus::Healthy => ("wsx-stat-ok", true),
+                HealthStatus::Warning => ("wsx-stat-warn", true),
+                HealthStatus::Critical => ("wsx-stat-crit", true),
+                HealthStatus::Unknown => ("wsx-t-unk", false),
+            };
+            td.push_str("<br>");
+            if pill {
+                td.push_str(&format!(
+                    "<span class=\"wsx-stat {cls}\">{}</span>",
+                    esc(&health)
+                ));
+            } else {
+                td.push_str(&format!("<span class=\"{cls}\">{}</span>", esc(&health)));
+            }
+            if !rest.is_empty() {
+                td.push_str(&format!("<span class=\"wsx-mono\">{}</span>", esc(&rest)));
+            }
         }
         out.push_str(&format!(
             "<tr><th>PhysicalDrive{}</th><td>{}</td></tr>\n",
@@ -1178,7 +1259,7 @@ fn disk_section(hw: &HardwareInfo, out: &mut String) {
 // `winsuitex_core::nic_should_show_auto_ip`（GUI 与报告共用单一数据源），本文件仅调用。
 
 fn nic_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>网卡</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>网卡 <span class=\"wsx-subtle\">NETWORK</span></div><table class=\"wsx-kv\">\n", ICON_NIC));
     for (i, n) in hw.nics.iter().enumerate() {
         let mut td = String::new();
         td.push_str(&opt_cell(&n.desc));
@@ -1210,7 +1291,7 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
             td.push_str(&format!("<br>速率: {}", esc(&fmt_link_speed(bps))));
         }
         // MAC / IPv4 / IPv6 各自成行，避免挤在一行难读（尤其多 IP / IPv6 较长时）。
-        td.push_str("<br><span class=\"mono\">MAC ");
+        td.push_str("<br><span class=\"wsx-mono\">MAC ");
         td.push_str(&opt_cell(&n.mac));
         td.push_str("</span>");
         // IP 显示规则：优先只显示真实地址；仅「已连接但没拿到任何真实地址」时才带自动地址。
@@ -1219,28 +1300,28 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
             let parts: Vec<String> = ipv4_show
                 .iter()
                 .map(|s| match winsuitex_core::auto_ip_tag(s) {
-                    Some(tag) => format!("{} <span class=\"tag\">{}</span>", esc(s), esc(tag)),
+                    Some(tag) => format!("{} <span class=\"wsx-tag\">{}</span>", esc(s), esc(tag)),
                     None => esc(s).to_string(),
                 })
                 .collect();
-            td.push_str("<br><span class=\"mono\">IPv4 ");
+            td.push_str("<br><span class=\"wsx-mono\">IPv4 ");
             td.push_str(&parts.join(", "));
             td.push_str("</span>");
         }
         if let Some(v6) = &n.ipv6 {
             let show_auto = winsuitex_core::nic_should_show_auto_ip(n);
             if !v6.is_empty() && (winsuitex_core::auto_ip_tag(v6).is_none() || show_auto) {
-                td.push_str("<br><span class=\"mono\">IPv6 ");
+                td.push_str("<br><span class=\"wsx-mono\">IPv6 ");
                 td.push_str(&esc(v6));
                 if let Some(tag) = winsuitex_core::auto_ip_tag(v6) {
-                    td.push_str(&format!(" <span class=\"tag\">{}</span>", esc(tag)));
+                    td.push_str(&format!(" <span class=\"wsx-tag\">{}</span>", esc(tag)));
                 }
                 td.push_str("</span>");
             }
         }
         if n.kind != NicKind::Physical {
             td.push_str(&format!(
-                "<br><span class=\"tag\">{}</span>",
+                "<br><span class=\"wsx-tag\">{}</span>",
                 esc(n.kind.label())
             ));
         }
@@ -1250,9 +1331,9 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn volume_section(volumes: &[Volume], hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>分区与簇大小</h2>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>分区与簇大小 <span class=\"wsx-subtle\">PARTITIONS</span></div>\n", ICON_VOLUME));
     out.push_str(
-        "<table><tr>\
+        "<div class=\"wsx-table-scroll\"><table class=\"wsx-dtable\"><tr>\
         <th style=\"width:auto\">盘符</th>\
         <th style=\"width:auto\">物理磁盘</th>\
         <th style=\"width:auto\">类型</th>\
@@ -1274,50 +1355,64 @@ fn volume_section(volumes: &[Volume], hw: &HardwareInfo, out: &mut String) {
         let fre = fmt_bytes(&v.free_bytes);
         // 已用与使用率：巡检时"这盘快满了没"比绝对容量更需要一眼看到。
         // 可用 > 总量（配额 / 挂载点等异常口径）时不硬算，直接给 "-"。
-        let used = match (v.total_bytes, v.free_bytes) {
+        // 使用率分级着色：≥90% 红（危险）/ ≥75% 橙（注意）/ 其余正常。
+        let (used_str, used_state) = match (v.total_bytes, v.free_bytes) {
             (Some(t), Some(f)) if t > 0 && f <= t => {
                 let u = t - f;
-                format!(
-                    "{}（{:.0}%）",
-                    fmt_bytes_val(u),
-                    (u as f64 / t as f64) * 100.0
-                )
+                let pct = (u as f64 / t as f64) * 100.0;
+                // 使用率分级着胶囊（与 SMART 健康胶囊同一套 .wsx-stat-*）：≥90% 红 / ≥75% 橙 / 其余正常。
+                let state = if pct >= 90.0 {
+                    "crit"
+                } else if pct >= 75.0 {
+                    "warn"
+                } else {
+                    ""
+                };
+                (format!("{}（{:.0}%）", fmt_bytes_val(u), pct), state)
             }
-            _ => "-".to_string(),
+            _ => ("-".to_string(), ""),
+        };
+        // 满盘/接近满盘时把"已用"包成状态胶囊，一眼可见；正常盘保持普通等宽文字。
+        let used_html = if used_state.is_empty() {
+            format!("<td class=\"wsx-mono\">{used_str}</td>")
+        } else {
+            format!(
+                "<td class=\"wsx-mono\"><span class=\"wsx-stat wsx-stat-{used_state}\">{used_str}</span></td>"
+            )
         };
         let ser = serial_cell(hw, v.disk_index);
         let vol = dash_cell(&v.vol_label);
         out.push_str(&format!(
-            "<tr><td class=\"mono\">{letter}</td>\
-             <td class=\"mono\">{pd}</td>\
+            "<tr><td class=\"wsx-mono\">{letter}</td>\
+             <td class=\"wsx-mono\">{pd}</td>\
              <td>{typ}</td>\
-             <td class=\"mono\">{fs}</td>\
-             <td class=\"mono\">{clu}</td>\
-             <td class=\"mono\">{tot}</td>\
-             <td class=\"mono\">{used}</td>\
-             <td class=\"mono\">{fre}</td>\
-             <td class=\"mono\">{ser}</td>\
-             <td class=\"mono\">{vol}</td></tr>\n"
+             <td class=\"wsx-mono\">{fs}</td>\
+             <td class=\"wsx-mono\">{clu}</td>\
+             <td class=\"wsx-mono\">{tot}</td>\
+             {used_html}\
+             <td class=\"wsx-mono\">{fre}</td>\
+             <td class=\"wsx-mono\">{ser}</td>\
+             <td class=\"wsx-mono\">{vol}</td></tr>\n"
         ));
     }
-    out.push_str("</table></section>\n");
+    out.push_str("</div></table></section>\n");
 }
 
 fn audio_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>音频设备</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>音频设备 <span class=\"wsx-subtle\">AUDIO</span></div><table class=\"wsx-kv\">\n", ICON_AUDIO));
     for (i, a) in hw.audio.iter().enumerate() {
         let mut td = String::new();
         td.push_str(&esc(&a.name));
         if a.is_bluetooth {
-            td.push_str(" <span class=\"tag\">蓝牙</span>");
+            td.push_str(" <span class=\"wsx-tag\">蓝牙</span>");
         }
         td.push_str(&format!(
-            " <span class=\"tag\">{}</span>",
+            " <span class=\"wsx-tag\">{}</span>",
             esc(a.kind.label())
         ));
         if let (Some(v), Some(p)) = (&a.vid, &a.pid) {
             td.push_str(&format!(
-                "<br><span class=\"mono\">{}:{}</span>",
+                "<br><span class=\"wsx-mono\">{}:{}</span>",
                 esc(v),
                 esc(p)
             ));
@@ -1342,7 +1437,7 @@ fn usb_class_label(class: &Option<String>) -> String {
 }
 
 fn usb_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>USB 外设</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>USB 外设 <span class=\"wsx-subtle\">USB</span></div><table class=\"wsx-kv\">\n", ICON_USB));
     for u in &hw.usb {
         let label = usb_class_label(&u.class);
         out.push_str("<tr><th>");
@@ -1355,16 +1450,16 @@ fn usb_section(hw: &HardwareInfo, out: &mut String) {
 }
 
 fn input_section(hw: &HardwareInfo, out: &mut String) {
-    out.push_str("<section><h2>键盘 / 鼠标</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>键盘 / 鼠标 <span class=\"wsx-subtle\">INPUT</span></div><table class=\"wsx-kv\">\n", ICON_INPUT));
     for d in &hw.input_devices {
         let mut td = String::new();
         td.push_str(&esc(&d.name));
         if d.is_bluetooth {
-            td.push_str(" <span class=\"tag\">蓝牙</span>");
+            td.push_str(" <span class=\"wsx-tag\">蓝牙</span>");
         }
         if let (Some(v), Some(p)) = (&d.vid, &d.pid) {
             td.push_str(&format!(
-                "<br><span class=\"mono\">{}:{}</span>",
+                "<br><span class=\"wsx-mono\">{}:{}</span>",
                 esc(v),
                 esc(p)
             ));
@@ -1398,15 +1493,15 @@ fn serial_cell(hw: &HardwareInfo, disk_index: Option<u32>) -> String {
 /// 右键功能启用状态。名称与说明从 `core::feature::FEATURES` 查表，
 /// 调用方只需传 `(FeatureId, 是否启用)`，避免在报告层重复维护一份文案。
 fn feature_section(features: &[(FeatureId, bool)], out: &mut String) {
-    out.push_str("<section><h2>WinSuiteX 功能状态</h2><table>\n");
+    out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>WinSuiteX 功能状态 <span class=\"wsx-subtle\">FEATURES</span></div><table class=\"wsx-kv\">\n", ICON_FEATURE));
     for (id, on) in features {
         let f = FEATURES.iter().find(|f| f.id == *id);
         let name = f.map_or(id.0, |f| f.display_name);
         let desc = f.map_or("", |f| f.description);
         let badge = if *on {
-            "<span class=\"badge on\">已启用</span>"
+            "<span class=\"wsx-badge wsx-badge-ok\">已启用</span>"
         } else {
-            "<span class=\"badge off\">未启用</span>"
+            "<span class=\"wsx-badge wsx-badge-off\">未启用</span>"
         };
         out.push_str(&format!(
             "<tr><th>{}</th><td>{} {}</td></tr>\n",
@@ -1804,33 +1899,59 @@ fn push_kv(out: &mut String, key: &str, value: impl Into<String>) {
 }
 
 // C++ 版内联 CSS（与 Report_BuildHtml 一致，保证视觉可比）。
-const CSS: &str = "\
-*{box-sizing:border-box}\n\
-body{margin:0;padding:24px;background:#f5f5f5;color:#1f1f1f;\n\
-font-family:\"Microsoft YaHei\",\"Segoe UI\",system-ui,sans-serif;line-height:1.6}\n\
-.wrap{max-width:980px;margin:0 auto}\n\
-h1{font-size:22px;margin:0 0 4px}\n\
-.sub{color:#595959;font-size:13px;margin-bottom:22px}\n\
-section{background:#fff;border:1px solid #d9d9d9;border-radius:8px;\n\
-padding:16px 18px;margin-bottom:16px}\n\
-h2{font-size:15px;margin:0 0 12px;padding-left:10px;border-left:3px solid #0958d9}\n\
-table{width:100%;border-collapse:collapse;font-size:13px}\n\
-td,th{padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:left;vertical-align:top}\n\
-th{width:150px;color:#595959;font-weight:400;white-space:nowrap}\n\
-tr:last-child td,tr:last-child th{border-bottom:none}\n\
-/* 序列号/分区 UUID 这类长串不可断词，不加会在窄表格里把列撑爆 */
-.mono{font-family:Consolas,Menlo,monospace;overflow-wrap:anywhere}\n\
-.muted{color:#8c8c8c}\n\
-.tag{display:inline-block;padding:0 6px;border-radius:3px;font-size:12px;\n\
-background:#f0f0f0;color:#595959}\n\
-.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px}\n\
-.on{background:#dff2e6;color:#15803d}\n\
-.off{background:#f0f0f0;color:#595959}\n\
-.empty{color:#8c8c8c;font-size:13px}\n\
-.foot{color:#9aa1ad;font-size:12px;text-align:center;margin-top:18px}\n\
-.warnbox{background:#fff7e6;border:1px solid #ffd591;color:#874d00;\n\
-border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px}\n\
-.warn{color:#d46b08}\n";
+const CSS: &str = r#":root{--brand-a:#8751EE;--brand-b:#2662EB;--ink:#1f2937;--muted:#6b7280;--line:#e6e8ee;--card-bg:#fff;--page-bg:#f4f5f8;--accent:#8751EE;--ok-bg:#e7f6ed;--ok-fg:#15803d;--off-bg:#f1f3f5;--off-fg:#6b7280;--warn-bg:#fdecea;--warn-fg:#c0392b;--tag-bg:#eef1f6;--tag-fg:#4b5563;--foot:#9aa1ad}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding:28px 16px 40px;background:var(--page-bg);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;line-height:1.65;font-size:14px}
+.wsx-wrap{max-width:940px;margin:0 auto}
+.wsx-header{background:linear-gradient(110deg,var(--brand-a),var(--brand-b));border-radius:16px;padding:26px 28px;color:#fff;box-shadow:0 8px 24px rgba(38,98,235,.18)}
+.wsx-wordmark{font-size:13px;letter-spacing:2.5px;text-transform:uppercase;opacity:.85;margin-bottom:6px;font-weight:600}
+.wsx-header h1{margin:0;font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1.2}
+.wsx-sub{margin-top:6px;font-size:13px;opacity:.92}
+.wsx-chips{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
+.wsx-chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:12px;padding:10px 14px;backdrop-filter:blur(2px);min-width:160px;flex:1 1 160px}
+.wsx-chip .c-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85;margin-bottom:3px}
+.wsx-chip .c-value{font-size:14px;font-weight:700;line-height:1.35;word-break:break-word}
+.wsx-chip .c-mono{font-family:Consolas,Menlo,monospace;font-size:13px}
+.wsx-card{background:var(--card-bg);border:1px solid var(--line);border-radius:14px;padding:18px 20px 20px;margin-top:18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.wsx-card-title{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.3px}
+.wsx-card-title .wsx-idx{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;background:var(--accent);border-radius:7px;color:#fff;padding:0;line-height:0;box-shadow:0 1px 2px rgba(135,81,238,.25)}
+.wsx-card-title .wsx-idx svg{width:17px;height:17px;display:block}
+.wsx-card-title .wsx-subtle{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:.5px}
+.wsx-kv{width:100%;border-collapse:collapse;font-size:14px}
+.wsx-kv th{text-align:left;vertical-align:top;width:40%;max-width:240px;padding:9px 12px 9px 0;color:var(--muted);font-weight:400;border-bottom:1px solid #f1f3f6}
+.wsx-kv td{vertical-align:top;padding:9px 0;border-bottom:1px solid #f1f3f6;color:var(--ink)}
+.wsx-kv tr:last-child th,.wsx-kv tr:last-child td{border-bottom:none}
+.wsx-mono{font-family:Consolas,Menlo,monospace;font-size:13px;overflow-wrap:anywhere;word-break:break-word;color:#374151}
+.wsx-muted{color:var(--muted)}
+.wsx-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wsx-dtable{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+.wsx-dtable thead th{text-align:left;padding:8px 10px;background:#f7f8fb;color:#475569;font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px;letter-spacing:.3px}
+.wsx-dtable td{padding:8px 10px;border-bottom:1px solid #f1f3f6;vertical-align:top;white-space:nowrap}
+.wsx-dtable tbody tr:last-child td{border-bottom:none}
+.wsx-dtable .wsx-mono{font-size:12px}
+.wsx-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap}
+.wsx-badge-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.wsx-badge-off{background:var(--off-bg);color:var(--off-fg)}
+.wsx-badge-warn{background:var(--warn-bg);color:var(--warn-fg)}
+.wsx-tag{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;background:var(--tag-bg);color:var(--tag-fg);margin:0 3px 3px 0}
+/* 语义状态色：胶囊徽标 .wsx-stat-* 与纯文字 .wsx-t-* 两套；正常=绿/注意=橙/危险=红/缺失=灰 */
+.wsx-stat{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap;vertical-align:middle}
+.wsx-stat-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.wsx-stat-warn{background:#fff4e5;color:#b45309}
+.wsx-stat-crit{background:#fdecea;color:#c0392b}
+.wsx-stat-unk{background:#eef1f6;color:#6b7280}
+.wsx-t-ok{color:#15803d}
+.wsx-t-warn{color:#b45309}
+.wsx-t-crit{color:#c0392b}
+/* 预警横幅：左侧红色强调条，明显区别于普通卡片 */
+.wsx-warnbox{background:#fff5f4;border:1px solid #f3c6c0;border-left:4px solid #e23b2e;color:#9a2c20;border-radius:12px;padding:12px 16px;margin-top:14px;font-size:13px;line-height:1.6}
+.wsx-warnbox .wsx-warn-title{font-weight:700;display:block;margin-bottom:2px}
+.wsx-warn{color:var(--warn-fg)}
+.wsx-foot{color:var(--foot);font-size:12px;text-align:center;margin-top:26px;letter-spacing:.3px}
+@media (max-width:768px){body{padding:16px 12px 26px}.wsx-wrap{max-width:100%}}
+@media (max-width:560px){.wsx-header{padding:18px 16px;border-radius:12px}.wsx-wordmark{font-size:12px;letter-spacing:2px}.wsx-header h1{font-size:22px}.wsx-sub{font-size:12px}.wsx-chips{gap:8px;margin-top:14px}.wsx-chip{flex:1 1 100%;min-width:0;padding:9px 12px}.wsx-card{padding:14px 14px 16px;margin-top:14px;border-radius:12px}.wsx-card-title{font-size:14px;gap:8px}.wsx-card-title .wsx-idx{width:26px;height:26px;flex-basis:26px;border-radius:6px}.wsx-card-title .wsx-idx svg{width:15px;height:15px}.wsx-kv{font-size:13px}.wsx-kv th{width:38%;padding:8px 8px 8px 0;font-size:13px}.wsx-kv td{padding:8px 0;font-size:13px}.wsx-mono{font-size:12px}.wsx-foot{margin-top:20px;font-size:11px}}
+@media (max-width:380px){.wsx-header h1{font-size:20px}.wsx-kv th{width:42%}.wsx-chip .c-value{font-size:13px}}"#;
 
 // ============================================================
 // 测试
@@ -2669,7 +2790,7 @@ mod tests {
         let html = build_html(&hw, &[]);
         // 合并后只有一行空槽（值单元格出现一次「空槽：」），不再有逐行空槽
         assert_eq!(
-            html.matches("<span class=\"empty\">空槽").count(),
+            html.matches("<span class=\"wsx-muted\">空槽").count(),
             1,
             "单空槽应合并为一行空槽标记: {html}"
         );
@@ -2747,7 +2868,7 @@ mod tests {
         let html = build_html(&hw, &[]);
         // 8 个空槽只产生 1 个合并行（而非 8 行刷屏）
         assert_eq!(
-            html.matches("<span class=\"empty\">空槽").count(),
+            html.matches("<span class=\"wsx-muted\">空槽").count(),
             1,
             "8 个空槽应合并为一行: {html}"
         );
@@ -3027,8 +3148,8 @@ mod tests {
             "键鼠 VID:PID 应被转义: {html}"
         );
         // 确无未转义标签注入
-        assert!(!html.contains("<span class=\"mono\"><b>"));
-        assert!(!html.contains("<span class=\"mono\"><i>"));
+        assert!(!html.contains("<span class=\"wsx-mono\"><b>"));
+        assert!(!html.contains("<span class=\"wsx-mono\"><i>"));
     }
 
     #[test]
@@ -3168,6 +3289,74 @@ mod tests {
         assert!(
             txt.contains("健康 良好（剩余 87%）"),
             "文本应显示剩余寿命: {txt}"
+        );
+    }
+
+    #[test]
+    fn report_status_colors_for_degraded_hardware() {
+        // 语义状态色必须按真实状态渲染：危险盘→红胶囊、注意盘→橙胶囊、满盘/高温→红文字。
+        let mut hw = base_hw();
+        hw.disks.clear();
+        hw.disks.push(PhysicalDisk {
+            index: 0,
+            model: Some("Samsung SSD 980".into()),
+            iface: Some("NVMe".into()),
+            media: Some("SSD".into()),
+            serial: Some("SN123".into()),
+            size_bytes: Some(1_000_000_000_000),
+            smart: Some(DiskSmart {
+                source: SmartSource::NvmeLogPage,
+                health_status: HealthStatus::Critical,
+                health_percent: Some(8),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        hw.disks.push(PhysicalDisk {
+            index: 1,
+            model: Some("Seagate HDD".into()),
+            iface: Some("SATA".into()),
+            media: Some("HDD".into()),
+            serial: Some("SG456".into()),
+            size_bytes: Some(2_000_000_000_000),
+            smart: Some(DiskSmart {
+                source: SmartSource::NvmeLogPage,
+                health_status: HealthStatus::Warning,
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        // 95% 满盘
+        let vol = Volume {
+            letter: "C:".to_string(),
+            type_name: Some("GPT".into()),
+            fs_name: Some("NTFS".into()),
+            sectors_per_cluster: None,
+            bytes_per_sector: None,
+            cluster_bytes: Some(4096),
+            total_bytes: Some(1_000_000_000_000),
+            free_bytes: Some(50_000_000_000),
+            vol_label: Some("系统".into()),
+            disk_index: Some(0),
+        };
+        // 92°C 高温显卡
+        if let Some(t) = hw.gpus[0].telemetry.as_mut() {
+            t.temp_c = Some(92);
+        }
+        let html = build_html(&hw, &[vol]);
+        assert!(
+            html.contains("wsx-stat-crit"),
+            "危险盘应渲染红色状态胶囊: {html}"
+        );
+        assert!(
+            html.contains("wsx-stat-warn"),
+            "注意盘应渲染橙色状态胶囊: {html}"
+        );
+        assert!(html.contains("wsx-t-crit"), "高温应渲染红色文字: {html}");
+        // 满盘分区：95% 只来自分区“已用”（SMART 危险盘不输出百分比），wsx-stat-crit 验证红色胶囊已上。
+        assert!(
+            html.contains("95%") && html.contains("wsx-stat-crit"),
+            "满盘分区应渲染红色状态胶囊: {html}"
         );
     }
 
@@ -3478,11 +3667,11 @@ mod tests {
             true,
         );
         assert!(
-            html.contains("169.254.1.2 <span class=\"tag\">APIPA 自动地址</span>"),
+            html.contains("169.254.1.2 <span class=\"wsx-tag\">APIPA 自动地址</span>"),
             "已连接但无真实 IP 时应显示并标注 APIPA: {html}"
         );
         assert!(
-            html.contains("<span class=\"tag\">链路本地</span>"),
+            html.contains("<span class=\"wsx-tag\">链路本地</span>"),
             "应显示并标注链路本地 IPv6: {html}"
         );
     }
@@ -3718,7 +3907,7 @@ mod tests {
 
     #[test]
     fn nic_addresses_split_into_separate_lines() {
-        // 用户反馈：MAC/IPv4/IPv6 挤在一行不好看。修复后各自成行（独立 <span class="mono">）。
+        // 用户反馈：MAC/IPv4/IPv6 挤在一行不好看。修复后各自成行（独立 <span class="wsx-mono">）。
         let mut hw = base_hw();
         hw.nics.clear();
         hw.nics.push(Nic {
@@ -3740,17 +3929,17 @@ mod tests {
         let html = build_html(&hw, &[]);
         // 每行独立：MAC / IPv4 / IPv6 各自一个 mono span。
         assert_eq!(
-            html.matches("<span class=\"mono\">MAC ").count(),
+            html.matches("<span class=\"wsx-mono\">MAC ").count(),
             1,
             "MAC 应单独成行: {html}"
         );
         assert_eq!(
-            html.matches("<span class=\"mono\">IPv4 ").count(),
+            html.matches("<span class=\"wsx-mono\">IPv4 ").count(),
             1,
             "IPv4 应单独成行: {html}"
         );
         assert_eq!(
-            html.matches("<span class=\"mono\">IPv6 ").count(),
+            html.matches("<span class=\"wsx-mono\">IPv6 ").count(),
             1,
             "IPv6 应单独成行: {html}"
         );

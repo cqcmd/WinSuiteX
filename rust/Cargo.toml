@@ -23,6 +23,19 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+# 诊断构建（崩溃定位用，Z.W. 1024×768 真机无界面排查）：
+# 继承 release 的体积优化，但改 `panic = "unwind"` —— release 的 `abort` 下
+# `panic_immediate_abort` 不进 panic hook、也不捕获位置，双击崩溃时看不到任何信息。
+# `unwind` 下 panic hook 能写 file:line + 调用栈到 `winsuitex-gui-gdi.log`。
+# 仅用于排查，定位后回退到普通 `release`；不要把 diag 当产品发布。
+# `lto = false` + `strip = false`：让 panic 的 file:line 不被 LTO 重映射、
+# 调用栈能解出真实函数名（第一次 diag 构建是 strip+LTO，栈全 `<unknown>`）。
+[profile.diag]
+inherits = "release"
+panic = "unwind"
+lto = false
+strip = false
+
 [workspace.dependencies]
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }

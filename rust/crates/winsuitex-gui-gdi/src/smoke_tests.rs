@@ -153,14 +153,43 @@ fn stick(locator: &str, cap_mb: Option<u64>) -> MemStick {
     }
 }
 
+/// 一组真实声卡：板载 HDA 音箱（默认播放）+ 蓝牙耳麦（播放+录音）。
+///
+/// 重点覆盖**音频分组**渲染路径——VM 默认没有声卡，这条真机才有、
+/// 但恰好是 `HwIcon::Audio = 7`（下标最大值）的高危路径；历史上
+/// `col_x[7]` 越界就只在"特定数据组合"才爆。
+fn audio() -> Vec<AudioDevice> {
+    vec![
+        AudioDevice {
+            name: "Realtek High Definition Audio".into(),
+            role: 0b01,
+            kind: AudioKind::Speaker,
+            is_bluetooth: false,
+            vid: None,
+            pid: None,
+            manufacturer: Some("Realtek".into()),
+        },
+        AudioDevice {
+            name: "Jabra EVOLINK 耳麦".into(),
+            role: 0b11,
+            kind: AudioKind::Headset,
+            is_bluetooth: true,
+            vid: Some("0B0E".into()),
+            pid: Some("1234".into()),
+            manufacturer: Some("Jabra".into()),
+        },
+    ]
+}
+
 /// 待测数据组合。
 ///
 /// 每种都对应一类真机上会遇到、但手工点页面很难稳定复现的布局：
 /// - `empty`：无任何数据（采集失败 / 刚启动未完成）
-/// - `typical`：4 分区 + 4 插槽全插（网吧机常见形态）
+/// - `typical`：4 分区 + 4 插槽全插 + 声卡（网吧机常见形态）
 /// - `empty_slots`：4 插槽只插 2 根（真机截图暴露的空槽渲染 bug 就是这条路）
-/// - `many_volumes`：8 分区 + 超长字段（列宽分配 / 详情卡换行的极端压力）
+/// - `many_volumes`：8 分区 + 超长字段 + 声卡（列宽分配 / 详情卡换行的极端压力）
 /// - `zero_filled`：分区容量 / 内存条字段全为 `None`（`unwrap_or(0)` 分支）
+/// - `real_machine`：声卡 + 多插槽（含空槽），贴近同事报错那台真机的组合
 fn fixtures() -> Vec<CollectResult> {
     let empty = CollectResult::default();
 
@@ -174,6 +203,7 @@ fn fixtures() -> Vec<CollectResult> {
                     .map(|l| stick(l, Some(8192)))
                     .collect(),
             },
+            audio: audio(),
             ..Default::default()
         },
         ..Default::default()
@@ -207,6 +237,25 @@ fn fixtures() -> Vec<CollectResult> {
                     .map(|n| stick(&format!("DIMM_X{n}"), Some(16384)))
                     .collect(),
             },
+            audio: audio(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    // 声卡 + 多插槽（2 空槽）：贴近同事在 1024×768 真机报"无界面"那台的组合
+    // —— 音频分组是 `HwIcon::Audio = 7`（下标最大），VM 无声卡平时测不到。
+    let real_machine = CollectResult {
+        volumes: (0..3).map(|n| volume(n, false)).collect(),
+        info: HardwareInfo {
+            memory: MemoryInfo {
+                total_mb: Some(MebiBytes::new(32768)),
+                sticks: ["DIMM_A1", "DIMM_A2", "DIMM_B1", "DIMM_B2"]
+                    .iter()
+                    .map(|l| stick(l, if l.ends_with('1') { Some(8192) } else { None }))
+                    .collect(),
+            },
+            audio: audio(),
             ..Default::default()
         },
         ..Default::default()
@@ -246,7 +295,14 @@ fn fixtures() -> Vec<CollectResult> {
         ..Default::default()
     };
 
-    vec![empty, typical, empty_slots, many_volumes, zero_filled]
+    vec![
+        empty,
+        typical,
+        empty_slots,
+        many_volumes,
+        zero_filled,
+        real_machine,
+    ]
 }
 
 /// 三页签 × 三种窗口尺寸 × 五种数据组合渲染一遍，任何 panic 都让测试失败。
@@ -263,9 +319,13 @@ fn renders_all_three_pages_without_panicking() {
     // 注意 `pages::draw_*` 都是 safe fn（`unsafe` 封在各自函数内部，
     // 因为它们只碰传进来的 HDC），所以这里不需要 `unsafe` 壳。
     for w in [480i32, 593, 900] {
-        for h in [600i32, 948] {
+        for h in [600i32, 738, 948] {
             crate::pages::draw_titlebar(mem, w, h, fonts.0, fonts.3);
             crate::pages::draw_tabbar(mem, fonts.3);
+            // 首屏固定头部：第十八轮之前这里曾有越界 bug（gdi_err.txt 崩溃点
+            // 就在同区域），必须随窗口尺寸一起遍历，否则"头部在 1024×768 才崩"
+            // 这类回归测不出来。
+            crate::pages::draw_hw_header(mem, w, h, fonts.1, fonts.2);
             for snap in fixtures() {
                 // 三个页签全画一遍——切页才崩的 bug 就藏在这里。
                 let c = ctx(mem, w, h, Some(&snap), fonts);

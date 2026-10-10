@@ -170,16 +170,30 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
             bottom: top + th - scale(6),
         };
         let active = cur_tab() == i as i32;
+        if active {
+            // 选中页签：玻璃高亮底 + 文字提亮到纯白，比仅下划线更醒目。
+            // 浅玻璃（C_WHITE 0.12）叠在渐变上、不切断整体色调（页签条不铺实色条的铁律）。
+            // 页签条在固定层、不随滚动，故 scroll=0；win_h 用真实窗口高以对齐背景渐变。
+            fill_glass_round(
+                hdc,
+                &r,
+                scale(8),
+                C_WHITE,
+                0.12,
+                0,
+                WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
+            );
+        }
         text(
             hdc,
             &r,
             n,
             f_sub,
-            if active { C_ON_GRAD } else { C_ON_GRAD_FAINT },
+            if active { C_WHITE } else { C_ON_GRAD_FAINT },
             true,
         );
         if active {
-            // 选中下划线：白色圆角条（C++ 版是白色实心下划线）
+            // 选中下划线：白色圆角条（C++ 版是白色实心下划线），高亮底之上的强调线。
             fill_round(
                 hdc,
                 &RECT {
@@ -386,6 +400,9 @@ pub fn vol_row_at(x: i32, y: i32) -> Option<usize> {
 
 /// 缓存窗口宽度（命中测试用，避免每次传参）。
 pub static WIN_CACHED_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(WIN_W);
+/// 缓存窗口高度（玻璃混合 `grad_at(y, win_h)` 需要真实窗口高，否则页签高亮底的渐变
+/// 基准色与背景错位；与 `WIN_CACHED_W` 同源、由 `on_paint` 每帧同步）。
+pub static WIN_CACHED_H: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(WIN_H);
 
 // ============================================================
 // 硬件概览页
@@ -499,6 +516,9 @@ pub(crate) struct Section {
     /// 与磁盘页详情卡同款色（`smart_color`/`smart_label`），读不到 SMART 时为 `None`
     /// → 不画徽标（诚实留白，不误报"健康"）。
     pub(crate) health: Vec<Option<winsuitex_core::model::HealthStatus>>,
+    /// 每行值列（右侧）可选的状态色：用于给温度等数值上阈值色（≥85°红 / ≥75°橙）。
+    /// `None` = 用默认白字；与 HTML 报告 `telemetry_line` 的阈值色一致，保持两端观感统一。
+    pub(crate) value_colors: Vec<Option<Color>>,
 }
 
 /// 硬件页磁盘行健康徽标：实色圆角小条 + 反色状态词。
@@ -556,6 +576,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             ("计算机".into(), join_parts(&[mach, user])),
         ],
         health: Vec::new(),
+        value_colors: Vec::new(),
     });
 
     // —— 主板 / BIOS ——
@@ -593,6 +614,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             title: "主板 / BIOS",
             rows: board_rows,
             health: Vec::new(),
+            value_colors: Vec::new(),
         });
     }
 
@@ -620,6 +642,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             title: "处理器",
             rows,
             health: Vec::new(),
+            value_colors: Vec::new(),
         });
     }
 
@@ -692,44 +715,51 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             title: "内存",
             rows,
             health: Vec::new(),
+            value_colors: Vec::new(),
         });
     }
 
     // —— 显卡 ——
     if !info.gpus.is_empty() {
-        let rows = info
-            .gpus
-            .iter()
-            .enumerate()
-            .map(|(i, g)| {
-                let vram_gb = g.vram_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
-                let sub = if vram_gb > 0.05 {
-                    format!("{vram_gb:.0} GB 显存")
-                } else {
-                    "共享显存".to_string()
-                };
-                let mut parts = vec![g.name.clone(), sub];
-                // 板卡品牌（华硕/微星/七彩虹），仅物理显卡展示；
-                // 与报告口径一致：vendor 优先，ASPEED/MATROX 从 name 兜底，绝不错译。
-                if g.kind == GpuKind::Physical {
-                    if let Some(brand) = winsuitex_core::gpu_brand_for_display(&g.vendor, &g.name) {
-                        // 名称里已经带品牌时不要再挂一次（"Matrox G200e · Matrox" 很啰嗦）。
-                        if !g.name.contains(&brand) {
-                            parts.push(brand);
-                        }
+        let mut gpu_rows: Vec<(String, String)> = Vec::new();
+        let mut gpu_vc: Vec<Option<Color>> = Vec::new();
+        for (i, g) in info.gpus.iter().enumerate() {
+            let vram_gb = g.vram_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
+            let sub = if vram_gb > 0.05 {
+                format!("{vram_gb:.0} GB 显存")
+            } else {
+                "共享显存".to_string()
+            };
+            let mut parts = vec![g.name.clone(), sub];
+            // 板卡品牌（华硕/微星/七彩虹），仅物理显卡展示；
+            // 与报告口径一致：vendor 优先，ASPEED/MATROX 从 name 兜底，绝不错译。
+            if g.kind == GpuKind::Physical {
+                if let Some(brand) = winsuitex_core::gpu_brand_for_display(&g.vendor, &g.name) {
+                    // 名称里已经带品牌时不要再挂一次（"Matrox G200e · Matrox" 很啰嗦）。
+                    if !g.name.contains(&brand) {
+                        parts.push(brand);
                     }
-                } else {
-                    // 虚拟/软件适配器不是真实显卡，显式标注，避免与独显混排误导硬件盘点。
-                    parts.push(g.kind.label().to_string());
                 }
-                (format!("显卡 #{}", i + 1), join_parts(&parts))
-            })
-            .collect();
+            } else {
+                // 虚拟/软件适配器不是真实显卡，显式标注，避免与独显混排误导硬件盘点。
+                parts.push(g.kind.label().to_string());
+            }
+            gpu_rows.push((format!("显卡 #{}", i + 1), join_parts(&parts)));
+            gpu_vc.push(None);
+            // 温度：只有真正拿到遥测（NVML/ADL）才显示该行并按阈值上色
+            // （≥85°红 / ≥75°橙），与 HTML 报告一致；读不到的适配器不画“温度”行，
+            // 避免“未读取”噪音（Z.W. 反馈无意义）。
+            if let Some(t) = g.telemetry.as_ref().and_then(|t| t.temp_c) {
+                gpu_rows.push(("温度".into(), format!("{t} ℃")));
+                gpu_vc.push(Some(temp_color(t)));
+            }
+        }
         out.push(Section {
             icon: HwIcon::Gpu,
             title: "显卡",
-            rows,
+            rows: gpu_rows,
             health: Vec::new(),
+            value_colors: gpu_vc,
         });
     }
 
@@ -759,6 +789,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 .iter()
                 .map(|d| d.smart.as_ref().map(|s| s.health_status))
                 .collect(),
+            value_colors: Vec::new(),
         });
     }
 
@@ -799,6 +830,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             title: "网卡",
             rows,
             health: Vec::new(),
+            value_colors: Vec::new(),
         });
     }
 
@@ -846,6 +878,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             title: "音频设备",
             rows,
             health: Vec::new(),
+            value_colors: Vec::new(),
         });
     }
 
@@ -953,7 +986,14 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
                 font: lay.font,
             };
             let y0 = y;
-            y = kv(hdc, &lay_row, y, k, v);
+            y = kv(
+                hdc,
+                &lay_row,
+                y,
+                k,
+                v,
+                s.value_colors.get(i).copied().flatten(),
+            );
             if let Some(st) = s.health.get(i).copied().flatten() {
                 let bw = scale(DISK_BADGE_W);
                 let bh = scale(DISK_BADGE_H);
@@ -1113,7 +1153,7 @@ fn feature_icon_for(idx: usize) -> (icons::FeatureIcon, Color) {
 /// （Z.W. 截图：`…Connection #2 · 169.254.157.?`）。这里按 ` · ` 分隔符贪心折行，
 /// 一行放不下就断到下一行，行数多了 y 自然往下长——量高趟走同一 [`wrap_value`]，
 /// 不会出现"量出来的高度 ≠ 画出来的高度"。
-fn kv(hdc: HDC, lay: &KvLayout, y: i32, k: &str, v: &str) -> i32 {
+fn kv(hdc: HDC, lay: &KvLayout, y: i32, k: &str, v: &str, val_color: Option<Color>) -> i32 {
     let kh = scale(ROW_H);
     let kr = RECT {
         left: lay.x_key,
@@ -1122,6 +1162,7 @@ fn kv(hdc: HDC, lay: &KvLayout, y: i32, k: &str, v: &str) -> i32 {
         bottom: y + kh,
     };
     text(hdc, &kr, k, lay.font, C_ON_GRAD_DIM, false);
+    let vcol = val_color.unwrap_or(C_ON_GRAD);
     let lines = wrap_value(hdc, lay.font, v, lay.max_w());
     for (i, ln) in lines.iter().enumerate() {
         let vr = RECT {
@@ -1130,7 +1171,7 @@ fn kv(hdc: HDC, lay: &KvLayout, y: i32, k: &str, v: &str) -> i32 {
             right: lay.x_val_end,
             bottom: y + (i as i32 + 1) * kh,
         };
-        text(hdc, &vr, ln, lay.font, C_ON_GRAD, false);
+        text(hdc, &vr, ln, lay.font, vcol, false);
     }
     y + kh * lines.len().max(1) as i32
 }
@@ -1666,19 +1707,19 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         "类型",
         "总容量",
         "可用",
+        "已用%",
     ];
     // 列宽按可用宽度**按权重分配**，不能写死 78px：
-    // 7 列 × 78 = 546px 会超出窄窗口（593 - 2*(24+16) = 513），末列被右边框裁掉。
-    // 权重按内容长度给：盘符/磁盘/簇大小是短值，类型/容量是长值。
+    // 多列时 ×78 会超出窄窗口，末列被右边框裁掉。
+    // 权重按内容长度给：盘符/磁盘/簇大小/已用% 是短值，类型/容量是长值。
     // 盘符列权重从 6 提到 8：左端要给"分区类型图标(16) + 间距"让位（第九轮新增）。
     let table_w = (right - left - scale(20)).max(scale(200));
-    let weights = [8i32, 7, 10, 8, 12, 13, 12];
+    let weights = [8i32, 7, 10, 8, 12, 13, 12, 6];
     let total_w: i32 = weights.iter().sum();
     let rowh = scale(34);
-    // 列边界数组：**长度必须是列数 + 1**（8 而不是 7）——
-    // 每列要取 `col_x[i]` 与 `col_x[i + 1]`，末列 i=6 时会访问 `col_x[7]`。
-    // 之前声明成 `[0i32; 7]` 直接 panic（index out of bounds: len 7 but index 7）。
-    const NCOL: usize = 7;
+    // 列边界数组：**长度必须是列数 + 1**（9 而不是 8）——
+    // 每列要取 `col_x[i]` 与 `col_x[i + 1]`，末列 i=7 时会访问 `col_x[8]`。
+    const NCOL: usize = 8;
     let mut col_x = [0i32; NCOL + 1];
     {
         let mut acc = 0;
@@ -1740,6 +1781,10 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         // 深字是必须的——绿底上再放白字对比度不够。
         if selected {
             fill_round(hdc, &row, 6, C_SEL_ROW);
+        } else if i as i32 == crate::hover_vol_row() {
+            // 非选中行的 hover 浅玻璃底：鼠标悬停时给一点反馈，便于瞄准点击。
+            // 用 `C_WHITE` 低透明度（0.08）叠在渐变上，比实色更轻、不抢选中行的绿底。
+            fill_glass_round(hdc, &row, 6, C_WHITE, 0.08, scroll, h);
         }
 
         // 分区类型图标（盘符列左端）：本地盘 / 可移动 / 网络 / 光盘四类简笔。
@@ -1754,6 +1799,26 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         };
         icons::draw_volume_icon(hdc, &ir, vi, icon_color);
 
+        // 已用率：=(1 - 可用/总量)×100，总量为 0（未读到）按 0 处理并显示 "-"。
+        // 与 HTML 报告分区使用率口径一致；满盘（≥90%）红、偏满（≥75%）橙。
+        // ⚠️ `total_bytes`/`free_bytes` 是 `Option<u64>`，必须先 `unwrap_or(0)` 再运算。
+        let total = v.total_bytes.unwrap_or(0);
+        let free = v.free_bytes.unwrap_or(0).min(total);
+        let used_pct: i32 = if total > 0 {
+            ((1.0 - free as f64 / total as f64) * 100.0).round() as i32
+        } else {
+            0
+        };
+        let used_cell = if total > 0 {
+            format!("{used_pct}%")
+        } else {
+            "-".to_string()
+        };
+        let used_col = if total > 0 {
+            used_color(used_pct)
+        } else {
+            C_ON_GRAD_DIM
+        };
         let cells = [
             v.letter.clone(),
             // 网络盘 / 未关联到物理盘的分区**没有 PD 号**，不能填 `PD0`
@@ -1766,6 +1831,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             v.type_name.clone().unwrap_or_else(|| "-".into()),
             fmt_gb(v.total_bytes),
             fmt_gb(v.free_bytes),
+            used_cell,
         ];
         for (j, cell) in cells.iter().enumerate() {
             // 盘符列左端被图标占了，文字右移 20px（图标 16 + 间距 4）；其余列不动。
@@ -1780,9 +1846,16 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                 right: col_x[j + 1],
                 bottom: y + rowh,
             };
-            // 容量两列右对齐，扫数字比扫字段名快
+            // 容量三列（总容量/可用/已用%）右对齐，扫数字比扫字段名快。
+            // 已用% 非选中行按阈值上色（满盘红 / 偏满橙），一眼看出哪块盘快满了。
             let numeric = j >= 5;
-            let fg = if selected { C_SEL_ROW_TEXT } else { C_ON_GRAD };
+            let fg = if selected {
+                C_SEL_ROW_TEXT
+            } else if j == 7 {
+                used_col
+            } else {
+                C_ON_GRAD
+            };
             text(hdc, &cr, cell, f_sub, fg, numeric);
         }
         // 记录每行矩形，供点击命中测试用（命中测试不重算布局，避免两处算法漂移）
@@ -1806,40 +1879,55 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
     if let Some(v) = r.volumes.get(sel_idx) {
         // 通过 `disk_index` 关联物理盘，取 SMART 健康（渲染"硬件预警状态"）。
         // 拿不到（无盘索引 / 盘无 SMART / 受限）就如实提示，不假装健康。
-        let (smart_txt, smart_col) = match v
+        // 选中分区详情卡 SMART 行：每行独立上色——
+        // 健康状态按语义（绿/橙/红/灰），温度按阈值（≥85°红 / ≥75°橙），
+        // 与硬件页显卡段、HTML 报告 `telemetry_line` 口径一致。
+        // ⚠️ 读不到 SMART 时显示"未读取"，用 `C_ON_GRAD_DIM`（深底弱对比、实测 5.5:1），
+        // 绝不能用 `C_GRAY_DARK`(89,89,89)——那是浅底深灰，深 navy 详情卡上 ≈1:1 隐形。
+        let smart_lines: Vec<(String, Color)> = match v
             .disk_index
             .and_then(|di| r.info.disks.iter().find(|d| d.index == di))
             .and_then(|d| d.smart.as_ref())
         {
             Some(s) => {
-                let mut buf = format!("SMART 健康：{}", smart_label(&s.health_status));
+                let mut v: Vec<(String, Color)> = vec![(
+                    format!("SMART 健康：{}", smart_label(&s.health_status)),
+                    smart_color(&s.health_status),
+                )];
                 if let Some(t) = s.temperature_c {
-                    buf.push_str(&format!("　温度 {}℃", t));
+                    v.push((format!("温度 {}℃", t), temp_color(t as i32)));
                 }
                 if let Some(p) = s.health_percent {
-                    buf.push_str(&format!("　剩余寿命 {}%", p));
+                    v.push((format!("剩余寿命 {}%", p), C_ON_GRAD));
                 }
-                (buf, smart_color(&s.health_status))
+                v
             }
-            None => (
+            None => vec![(
                 "SMART 健康：未读取（可能需以管理员身份运行）".to_string(),
-                crate::theme::C_GRAY_DARK,
-            ),
+                crate::theme::C_ON_GRAD_DIM,
+            )],
+        };
+
+        // 「已用率」独立彩色行：与磁盘表格「已用%」列口径一致，
+        // 满盘（≥90%）红 / 偏满（≥75%）橙，让详情卡也能一眼看出哪块盘快满了。
+        let used_pct: Option<i32> = if v.total_bytes.unwrap_or(0) > 0 {
+            let free = v.free_bytes.unwrap_or(0).min(v.total_bytes.unwrap_or(0));
+            let pct =
+                ((1.0 - free as f64 / v.total_bytes.unwrap_or(0) as f64) * 100.0).round() as i32;
+            Some(pct)
+        } else {
+            None
+        };
+        let used_line: (String, Color) = match used_pct {
+            Some(p) => (format!("已用率 {p}%"), used_color(p)),
+            None => ("已用率 -".to_string(), C_ON_GRAD_DIM),
         };
 
         y += scale(12);
-        let dr = RECT {
-            left,
-            top: y,
-            right,
-            bottom: y + scale(116), // +20 给 SMART 一行留位
-        };
-        // 详情卡比表格卡更暗一档（叠深 navy 30%），表示"这是选中项的展开"。
-        card_bg(hdc, &dr, C_GLASS_TINT, 0.30, scroll, h);
         // 每行可带自己的颜色：SMART 状态行用绿/橙/红/灰，其余用白字。
         // 用 `Vec<(String, Color)>` 持有所有权——不能 `&format!`（`vec!` 内临时量
         // 在表达式结束即 drop，借它等于悬垂引用）。
-        let lines: Vec<(String, Color)> = vec![
+        let mut lines: Vec<(String, Color)> = vec![
             (
                 // ⚠️ `v.letter` 自带冒号（表格里就显示 "A:"），格式串不能再加 ": "，
                 // 否则真机详情卡渲染成 "A:: 本地磁盘" 双冒号（第二十七轮修）。
@@ -1868,6 +1956,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                 ),
                 C_ON_GRAD,
             ),
+            used_line,
             (
                 format!(
                     "NT 设备名 {}　卷标 {}",
@@ -1877,8 +1966,20 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                 ),
                 C_ON_GRAD,
             ),
-            (smart_txt, smart_col),
         ];
+        // SMART 健康 / 温度 / 剩余寿命：独立彩色行，跟随选中盘渲染。
+        lines.extend(smart_lines);
+        // 详情卡比表格卡更暗一档（叠深 navy 30%），表示"这是选中项的展开"。
+        // 高度按行数动态算：SMART 健康/温度/剩余寿命各自独立成行（最多 +2 行），
+        // 固定 scale(116) 在温度+寿命都读到时会把末行挤出卡片，故改为动态高度。
+        let card_bottom = y + scale(8) + lines.len() as i32 * scale(20) + scale(8);
+        let dr = RECT {
+            left,
+            top: y,
+            right,
+            bottom: card_bottom,
+        };
+        card_bg(hdc, &dr, C_GLASS_TINT, 0.30, scroll, h);
         let mut ly = y + scale(8);
         for (l, col) in &lines {
             let lr = RECT {
@@ -1920,6 +2021,31 @@ fn smart_color(h: &winsuitex_core::model::HealthStatus) -> Color {
         winsuitex_core::model::HealthStatus::Warning => C_WARNING,
         winsuitex_core::model::HealthStatus::Critical => C_ERROR,
         winsuitex_core::model::HealthStatus::Unknown => C_ON_GRAD_DIM,
+    }
+}
+
+/// 温度阈值色：与 HTML 报告 `telemetry_line` 完全一致——≥85° 红（过热）、
+/// ≥75° 橙（偏热）、其余白字。用于硬件页显卡段、磁盘详情卡的温度行，
+/// 让"哪块卡/盘在发烧"一眼可辨，两端观感统一。
+fn temp_color(t: i32) -> Color {
+    if t >= 85 {
+        C_ERROR
+    } else if t >= 75 {
+        C_WARNING
+    } else {
+        C_ON_GRAD
+    }
+}
+
+/// 磁盘已用率阈值色：与 HTML 报告分区使用率口径一致——≥90% 红（将满）、
+/// ≥75% 橙（偏满）、其余白字。用于磁盘页表格「已用%」列，满盘一眼可辨。
+fn used_color(pct: i32) -> Color {
+    if pct >= 90 {
+        C_ERROR
+    } else if pct >= 75 {
+        C_WARNING
+    } else {
+        C_ON_GRAD
     }
 }
 

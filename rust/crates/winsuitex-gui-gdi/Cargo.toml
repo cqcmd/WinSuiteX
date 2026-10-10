@@ -8,6 +8,13 @@ build = "build.rs"
 name = "winsuitex-gui-gdi"
 path = "src/main.rs"
 
+# 崩溃诊断日志（仅排查用，Z.W. 1024×768 真机无界面）：
+# - `cargo build --profile diag --features crash-log` 出的 exe 会在同目录写
+#   `winsuitex-gui-gdi.log`，panic 时把 file:line + 调用栈落盘，双击崩溃也能定位。
+# - 普通 `--release` 不加此 feature，所有日志代码编译期消除、不写文件、零开销。
+[features]
+crash-log = []
+
 [dependencies]
 winsuitex-core = { path = "../winsuitex-core" }
 winsuitex-platform = { path = "../winsuitex-platform" }
