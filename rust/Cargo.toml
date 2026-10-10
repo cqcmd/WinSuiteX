@@ -5,7 +5,7 @@ members = [
   "crates/winsuitex-platform",
   "crates/winsuitex-report",
   "crates/winsuitex-cli",
-  "crates/winsuitex-gui",
+  "crates/winsuitex-gui-gdi",
 ]
 
 [workspace.package]
@@ -28,10 +28,3 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# 本地补丁：egui-wgpu 0.28.1 默认 request_adapter 用 force_fallback_adapter:false，
-# 在无硬件 D3D12 适配器（虚拟机 / RDP 远程桌面 / 基础显示驱动）的环境会
-# NoSuitableAdapterFound 直接退出，GUI 一闪即灭。这里替换为带「硬件优先 →
-# WARP 软件回退」逻辑的本地副本：有 GPU 真机走硬件、无 GPU 环境走 WARP 仍能渲染。
-# 升级 eframe 时记得同步此补丁（对照上游 lib.rs 的 request_adapter 段）。
-[patch.crates-io]
-egui-wgpu = { path = "vendor/egui-wgpu-patched" }

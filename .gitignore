@@ -43,3 +43,21 @@ winsuitex.exe.bak_*
 
 # ---- 真机采集产物（含序列号/MAC/IP，禁止入库）----
 dist/*/
+
+# ---- 开发期 QA 截图（各轮视觉自测产物，如 r17_final_hw.png / _vm_font_*.png，不入库）----
+tools/*.png
+
+# ---- 开发期 QA 截图/调试产物（根目录各轮自测，不入库）----
+r15_*.png
+r16_*.png
+v2_*.png
+v3_*.png
+v4_*.png
+band_bottom.png
+gdi_err.txt
+controls.md
+artifacts/
+右键显示隐藏文件和后缀名/
+dist/WinSuiteX_硬件截图_*.png
+dist/WinSuiteX_硬件报告_*.html
+dist/winsuitex-gui-gdi.exe.bak_*

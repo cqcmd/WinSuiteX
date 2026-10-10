@@ -24,7 +24,7 @@ use windows::Win32::Graphics::Gdi::{
 
 use crate::edid::{parse_edid, read_edid_bytes};
 use crate::wide_to_string;
-use winsuitex_core::brand_zh_or;
+use winsuitex_core::brand_display_or;
 use winsuitex_core::error::Result;
 use winsuitex_core::model::Display;
 use winsuitex_core::traits::{CollectContext, HardwareSource};
@@ -84,15 +84,16 @@ const K_PNP_VENDOR: &[(&str, &str)] = &[
     ("AUI", "AOpen"),
 ];
 
-/// 把 3 字母 PnP 厂商码转大写后查表，命中返回可读厂商名（中文经 core 统一解析）。
+/// 把 3 字母 PnP 厂商码转大写后查表，命中返回规范显示名
+/// （`英文（中文）` 格式，经 core 统一解析；未收录中文的已知码回原文，如 `LG`）。
 ///
 /// 大小写不敏感；未知码返回 `None`。
-pub(crate) fn pnp_vendor(code3: &str) -> Option<&'static str> {
+pub(crate) fn pnp_vendor(code3: &str) -> Option<String> {
     let code = code3.to_ascii_uppercase();
     K_PNP_VENDOR
         .iter()
         .find_map(|(c, key)| (*c == code.as_str()).then_some(*key))
-        .map(brand_zh_or)
+        .map(brand_display_or)
 }
 
 /// 厂商展示名：已知码→可读名；未知码→原样回退为 3 字母码（避免"无厂商"或把原始码漏进型号）。
@@ -361,15 +362,15 @@ mod tests {
     #[test]
     fn pnp_vendor_lookup() {
         // 大小写不敏感
-        assert_eq!(pnp_vendor("gsm"), Some("LG"));
-        assert_eq!(pnp_vendor("GSM"), Some("LG"));
-        // 注：AOC 的中文（冠捷）已统一收敛到 winsuitex_core，故此处随单一数据源一并改为「冠捷」。
-        assert_eq!(pnp_vendor("AOC"), Some("冠捷"));
+        assert_eq!(pnp_vendor("gsm"), Some("LG".into()));
+        assert_eq!(pnp_vendor("GSM"), Some("LG".into()));
+        // 注：品牌显示已统一为 core 的 `英文（中文）` 规范格式（第二十轮）。
+        assert_eq!(pnp_vendor("AOC"), Some("AOC（冠捷）".into()));
         // 二次核对补全的国内/办公品牌
-        assert_eq!(pnp_vendor("LEN"), Some("联想"));
-        assert_eq!(pnp_vendor("HKC"), Some("惠科"));
-        assert_eq!(pnp_vendor("XMI"), Some("小米"));
-        assert_eq!(pnp_vendor("CMO"), Some("奇美"));
+        assert_eq!(pnp_vendor("LEN"), Some("Lenovo（联想）".into()));
+        assert_eq!(pnp_vendor("HKC"), Some("HKC（惠科）".into()));
+        assert_eq!(pnp_vendor("XMI"), Some("Xiaomi（小米）".into()));
+        assert_eq!(pnp_vendor("CMO"), Some("CMO（奇美）".into()));
         // 未知码
         assert_eq!(pnp_vendor("XYZ"), None);
     }
@@ -377,15 +378,15 @@ mod tests {
     #[test]
     fn monitor_model_from_device_id_ok() {
         // 真实用例：AOC 2769（MSI B75MA-P45 + AOC 2769）。
-        // 注：AOC 中文（冠捷）已随单一数据源收敛到 winsuitex_core，故此处一并改为「冠捷」。
+        // 注：厂商名已统一为 core 的 `英文（中文）` 规范格式（第二十轮）。
         assert_eq!(
             monitor_model_from_device_id(r"MONITOR\AOC2769\4&1a2b3c4&0&UID0"),
-            Some(("冠捷".to_string(), "2769".to_string()))
+            Some(("AOC（冠捷）".to_string(), "2769".to_string()))
         );
         // DISPLAY\ 前缀 + 型号以字母开头（C34J）
         assert_eq!(
             monitor_model_from_device_id(r"DISPLAY\SAMC34JWG\...\0000"),
-            Some(("三星".to_string(), "C34JWG".to_string()))
+            Some(("Samsung（三星）".to_string(), "C34JWG".to_string()))
         );
         // 未知厂商码应回退为原始 3 字母码，而非 None
         assert_eq!(

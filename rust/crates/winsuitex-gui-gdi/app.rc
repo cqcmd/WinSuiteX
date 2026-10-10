@@ -1,0 +1,41 @@
+#pragma code_page(65001)
+
+// 必须手动定义：MSVC rc.exe 找不到 winver.h，否则会把字面 VS_VERSION_INFO
+// 当成【字符串名】而非 MAKEINTRESOURCE(1)，导致 GetFileVersionInfo 返回 1813、
+// Explorer 属性→详细信息 读不出版本。
+#define VS_VERSION_INFO 1
+#define IDI_APP_ICON 101
+
+IDI_APP_ICON ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+// 第四段是 YYYYMMDD 日期戳，>65535 放不进 16 位字 → 数字段溢出成乱码。
+// 数字段用 0,1,0,0 占位保结构合法；完整「主.次.修订.日期戳」只放字符串（Explorer 显示字符串）。
+FILEVERSION 0,1,1,1009
+PRODUCTVERSION 0,1,1,1009
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "CompanyName", "重庆持玛多网络科技有限公司"
+            VALUE "FileDescription", "WinSuiteX 硬件概览面板"
+            VALUE "FileVersion", "0.1.1.20261009"
+            VALUE "InternalName", "WinSuiteX.GuiGdi"
+            VALUE "LegalCopyright", "持玛多网络 / Z.W."
+            VALUE "OriginalFilename", "winsuitex-gui-gdi.exe"
+            VALUE "ProductName", "WinSuiteX"
+            VALUE "ProductVersion", "0.1.1.20261009"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END
+
+// 应用清单：查看器用 asInvoker（不弹 UAC）；PerMonitorV2 DPI + supportedOS。
+// 资源 ID 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID，类型 24 = RT_MANIFEST。
+1 24 "app.manifest"

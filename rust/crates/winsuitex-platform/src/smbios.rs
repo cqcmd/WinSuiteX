@@ -55,7 +55,9 @@ impl HardwareSource for SmbiosSource {
                 vendor: board.vendor,
                 product: board.product,
                 serial: board.serial,
-                chipset: None, // 芯片组来自 SetupAPI，见 setupapi 模块（TODO）
+                // 芯片组不在 SMBIOS 表里：用 SetupAPI 枚举 PnP 设备按 "Chipset" 命中。
+                // 未命中/失败返回 None（诚实留白），绝不编造。
+                chipset: crate::chipset::detect_chipset(),
                 bios_vendor: bios.vendor,
                 bios_version: bios.version,
                 bios_date: bios.date,

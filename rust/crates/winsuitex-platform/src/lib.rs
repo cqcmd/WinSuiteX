@@ -4,6 +4,7 @@
 //! 每个 unsafe block 都写明 SAFETY 契约。
 
 pub mod audio;
+pub mod chipset;
 pub mod cpuid;
 pub mod disk;
 pub mod display;

@@ -464,6 +464,84 @@ pub fn nic_vendor_from_desc(desc: &str) -> Option<String> {
     None
 }
 
+/// 自动地址识别（GUI 与报告共用单一数据源）。
+///
+/// - IPv4 `169.254.0.0/16`：**APIPA** —— 网卡开了 DHCP 却拿不到地址时 Windows 自动分配的
+///   私有自动配置地址（典型："每张卡看起来都有 IP"，实则场地 DHCP 没通）。
+/// - IPv6 `fe80::/10`：**链路本地单播** —— 协议栈一启用即自动生成，无需配置。
+///
+/// 用途：资产巡检时把"拿不到 DHCP 的兜底地址"与配置好的业务 IP 区分开。
+pub fn auto_ip_tag(ip: &str) -> Option<&'static str> {
+    let t = ip.trim();
+    if t.starts_with("169.254.") {
+        return Some("APIPA 自动地址");
+    }
+    if t.to_ascii_lowercase().starts_with("fe80:") {
+        return Some("链路本地");
+    }
+    None
+}
+
+/// 网卡是否需要把「自动地址」也显示出来（GUI 与报告共用单一数据源，2026-09-16 Z.W. 定）。
+///
+/// - 有真实地址（非自动）→ `false`：只显示真实地址；
+/// - 一个真实地址都没有 **且已连接** → `true`：显示自动地址（带标注），
+///   因为"连上了却没拿到真实 IP"本身就是值得提示的异常；
+/// - 一个真实地址都没有 **且未连接** → `false`：未连接已由状态表达，无需自动地址刷屏。
+pub fn nic_should_show_auto_ip(n: &Nic) -> bool {
+    let has_real_v4 = n.ipv4.iter().any(|ip| auto_ip_tag(ip).is_none());
+    let has_real_v6 = match &n.ipv6 {
+        Some(v) => !v.is_empty() && auto_ip_tag(v).is_none(),
+        None => false,
+    };
+    !(has_real_v4 || has_real_v6) && n.up
+}
+
+/// 网卡 IPv4 展示列表（GUI 与报告共用单一数据源）。
+///
+/// 优先只显示真实地址；仅「已连接但没有任何真实地址」时才把 APIPA 自动地址也列入，
+/// 避免把"拿不到 DHCP 的兜底地址"误当成配置好的业务 IP（见 [`nic_should_show_auto_ip`]）。
+pub fn nic_ipv4_for_display(n: &Nic) -> Vec<String> {
+    let show_auto = nic_should_show_auto_ip(n);
+    n.ipv4
+        .iter()
+        .filter(|ip| auto_ip_tag(ip).is_none() || show_auto)
+        .cloned()
+        .collect()
+}
+
+/// 链路速率是否为有效可读值：0 / `u64::MAX` 都是哨兵（未连接或速率不可得），不渲染。
+pub fn real_link_speed(bps: u64) -> bool {
+    bps > 0 && bps != u64::MAX
+}
+
+/// 把链路速率（bits/s）格式化为人读串：`1 Gbps` / `2.5 Gbps` / `100 Mbps` 等。
+/// 十进制（Mbps/Gbps 行业惯例就是 10^6 / 10^9，非 2^20 / 2^30）。
+pub fn fmt_link_speed(bps: u64) -> String {
+    const G: f64 = 1_000_000_000.0;
+    const M: f64 = 1_000_000.0;
+    const K: f64 = 1_000.0;
+    let v = bps as f64;
+    if v >= G {
+        format!("{} Gbps", trim_decimal(v / G))
+    } else if v >= M {
+        format!("{} Mbps", trim_decimal(v / M))
+    } else if v >= K {
+        format!("{} Kbps", trim_decimal(v / K))
+    } else {
+        format!("{bps} bps")
+    }
+}
+
+/// 最多 1 位小数，去掉多余的 `.0`（如 `1.0` -> `1`、`2.5` -> `2.5`）。
+fn trim_decimal(f: f64) -> String {
+    let s = format!("{f:.1}");
+    match s.strip_suffix(".0") {
+        Some(stripped) => stripped.to_string(),
+        None => s,
+    }
+}
+
 #[cfg(test)]
 mod timestamp_tests {
     use super::*;
@@ -543,6 +621,61 @@ mod nic_vendor_tests {
         // 厂商词必须位于词首且后接空格/结尾，避免误命中（如 "Realtekx"）
         assert_eq!(nic_vendor_from_desc("SomeRealtekClone"), None);
         assert_eq!(nic_vendor_from_desc("Unknown Network Adapter"), None);
+    }
+}
+
+#[cfg(test)]
+mod nic_ip_tests {
+    use super::*;
+
+    fn nic(up: bool, ipv4: &[&str], ipv6: Option<&str>) -> Nic {
+        Nic {
+            desc: Some("Realtek PCIe GBE".into()),
+            ipv4: ipv4.iter().map(|s| s.to_string()).collect(),
+            ipv6: ipv6.map(|s| s.to_string()),
+            up,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn auto_ip_tag_detects_apipa_and_link_local() {
+        assert_eq!(auto_ip_tag("169.254.1.2"), Some("APIPA 自动地址"));
+        assert_eq!(auto_ip_tag("fe80::1"), Some("链路本地"));
+        assert_eq!(auto_ip_tag("FE80::ABCD"), Some("链路本地"));
+        assert_eq!(auto_ip_tag("192.168.1.10"), None);
+        assert_eq!(auto_ip_tag("10.0.0.5"), None);
+    }
+
+    #[test]
+    fn ipv4_for_display_shows_all_real_ips() {
+        // 多 IPv4 全部保留（面板/报告据此显示多 IP）。
+        let n = nic(true, &["192.168.1.10", "10.0.0.5"], None);
+        assert_eq!(
+            nic_ipv4_for_display(&n),
+            vec!["192.168.1.10".to_string(), "10.0.0.5".to_string()]
+        );
+    }
+
+    #[test]
+    fn ipv4_for_display_hides_apipa_when_real_present() {
+        // 有真实地址时，APIPA 兜底地址隐藏。
+        let n = nic(true, &["192.168.1.10", "169.254.1.2"], None);
+        assert_eq!(nic_ipv4_for_display(&n), vec!["192.168.1.10".to_string()]);
+    }
+
+    #[test]
+    fn ipv4_for_display_shows_apipa_when_only_auto_and_up() {
+        // 已连接但只拿到 APIPA → 显示（带标注由渲染层做），提示异常。
+        let n = nic(true, &["169.254.1.2"], None);
+        assert_eq!(nic_ipv4_for_display(&n), vec!["169.254.1.2".to_string()]);
+    }
+
+    #[test]
+    fn ipv4_for_display_hides_apipa_when_only_auto_and_down() {
+        // 未连接 → 不显示自动地址（状态已表达）。
+        let n = nic(false, &["169.254.1.2"], None);
+        assert!(nic_ipv4_for_display(&n).is_empty());
     }
 }
 

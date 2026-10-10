@@ -1,0 +1,41 @@
+[package]
+name = "winsuitex-gui-gdi"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "winsuitex-gui-gdi"
+path = "src/main.rs"
+
+[dependencies]
+winsuitex-core = { path = "../winsuitex-core" }
+winsuitex-platform = { path = "../winsuitex-platform" }
+winsuitex-report = { path = "../winsuitex-report" }
+serde_json.workspace = true
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+    # 窗口 / 消息 / 控件
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    # GetDpiForWindow / GetDpiForSystem：高 DPI 缩放基准
+    "Win32_UI_HiDpi",
+    "Win32_UI_Controls",
+    "Win32_UI_Input_KeyboardAndMouse",
+    # GDI 绘制（双缓冲 / 圆角 / 渐变 / 字体 / 位图）
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
+    # GDI+：只用它的 PNG 编码器保存"完整长图"截图（系统自带 gdiplus.dll，
+    # 比引入 png/flate2 crate 省 ~200KB，单 exe 分发的硬需求）。
+    "Win32_Graphics_GdiPlus",
+    # ExpandEnvironmentStringsW（展开 %SystemRoot% 写右键菜单）
+    "Win32_System_Environment",
+    # 颜色与资源
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+    # ShellExecuteW（导出报告后用默认程序打开）
+    "Win32_UI_Shell",
+]

@@ -11,12 +11,13 @@
 //! - `HardwareInfo.is_server` 为 `true` 时隐藏「音频设备」与「USB 外设」两段；
 //! - 设备名等可能含 `<>&"` 的字符串必须 HTML 转义，防止破坏结构。
 
+use winsuitex_core::brand_zh_or;
 use winsuitex_core::feature::FEATURES;
 use winsuitex_core::model::{
-    format_uptime, FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes, Nic,
+    format_uptime, FeatureId, GpuKind, GpuTelemetry, HardwareInfo, HealthStatus, MebiBytes,
     NicKind, PhysicalDisk, SmartSource, Volume,
 };
-use winsuitex_core::{brand_zh, brand_zh_or};
+use winsuitex_core::{fmt_link_speed, real_link_speed};
 
 const UNKNOWN: &str = "未知";
 
@@ -266,7 +267,7 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                     if zh == *v {
                         s.push_str(&format!(" | {}", v));
                     } else {
-                        s.push_str(&format!(" | {} ({})", v, zh));
+                        s.push_str(&format!(" | {}（{}）", v, zh));
                     }
                 }
             }
@@ -331,7 +332,7 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             }
             // 板卡品牌（华硕/微星/七彩虹），仅物理显卡展示；芯片厂/整机厂已在采集层过滤。
             if g.kind == GpuKind::Physical {
-                if let Some(brand) = gpu_brand_for_display(&g.vendor, &g.name) {
+                if let Some(brand) = winsuitex_core::gpu_brand_for_display(&g.vendor, &g.name) {
                     s.push_str(&format!(" · {}", brand));
                 }
             }
@@ -368,10 +369,10 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                     if name.is_empty() {
                         label = v.clone();
                         if zh != *v {
-                            label.push_str(&format!(" ({})", zh));
+                            label.push_str(&format!("（{}）", zh));
                         }
                     } else if zh != *v {
-                        label.push_str(&format!(" ({})", zh));
+                        label.push_str(&format!("（{}）", zh));
                     }
                 }
             }
@@ -435,9 +436,9 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             let mut s = disp_opt(&n.desc).to_string();
             if let Some(v) = vendor {
                 let zh = vendor_zh(&v);
-                // 英文厂商名（desc 已含）后跟 (中文)，不单独成列。
+                // 英文厂商名（desc 已含）后跟（中文），不单独成列。
                 if zh != v {
-                    s.push_str(&format!(" ({zh})"));
+                    s.push_str(&format!("（{zh}）"));
                 }
             }
             s.push_str(&format!(
@@ -449,16 +450,11 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             }
             s.push_str(&format!(" | MAC {}", disp_opt(&n.mac)));
             // 同 HTML：优先只显示真实地址，仅「已连接但无真实地址」时才带自动地址。
-            let show_auto = should_show_auto_ip(n);
-            let ipv4_show: Vec<&String> = n
-                .ipv4
-                .iter()
-                .filter(|ip| auto_ip_tag(ip).is_none() || show_auto)
-                .collect();
+            let ipv4_show = winsuitex_core::nic_ipv4_for_display(n);
             if !ipv4_show.is_empty() {
                 let parts: Vec<String> = ipv4_show
                     .iter()
-                    .map(|ip| match auto_ip_tag(ip) {
+                    .map(|ip| match winsuitex_core::auto_ip_tag(ip) {
                         Some(tag) => format!("{ip} ({tag})"),
                         None => ip.to_string(),
                     })
@@ -466,8 +462,9 @@ pub fn build_text(hw: &HardwareInfo) -> String {
                 s.push_str(&format!(" · IPv4 {}", parts.join(", ")));
             }
             if let Some(v6) = &n.ipv6 {
-                if !v6.is_empty() && (auto_ip_tag(v6).is_none() || show_auto) {
-                    match auto_ip_tag(v6) {
+                let show_auto = winsuitex_core::nic_should_show_auto_ip(n);
+                if !v6.is_empty() && (winsuitex_core::auto_ip_tag(v6).is_none() || show_auto) {
+                    match winsuitex_core::auto_ip_tag(v6) {
                         Some(tag) => s.push_str(&format!(" · IPv6 {v6} ({tag})")),
                         None => s.push_str(&format!(" · IPv6 {v6}")),
                     }
@@ -697,6 +694,25 @@ fn cpu_section(hw: &HardwareInfo, out: &mut String) {
     out.push_str("</table></section>\n");
 }
 
+/// 从 Bank Locator 提取通道标识（"P0 CHANNEL A" → "CHANNEL A"），用于槽位名重复时消歧。
+///
+/// 部分固件把不同物理槽的 locator 都写成一样（华硕 EX-B650M 两槽均 "DIMM 0"），
+/// 报告里两行同名分不清。有 "CHANNEL X" 取它；否则回退整段 bank（"NODE 1" / "BANK 0"）。
+fn channel_tag(bank: &Option<String>) -> Option<String> {
+    let b = bank.as_ref()?;
+    let toks: Vec<&str> = b.split_whitespace().collect();
+    if let Some(pos) = toks.iter().position(|t| t.eq_ignore_ascii_case("CHANNEL")) {
+        if let Some(ch) = toks.get(pos + 1) {
+            return Some(format!("CHANNEL {}", ch));
+        }
+    }
+    let trimmed = b.trim();
+    if !trimmed.is_empty() {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
 fn memory_section(hw: &HardwareInfo, out: &mut String) {
     let total = &hw.memory.total_mb;
     let sticks = &hw.memory.sticks;
@@ -715,16 +731,43 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             &format!("{populated} / {} 槽已插", sticks.len()),
         );
     }
+    // 槽位名重复检测：部分固件（如华硕 EX-B650M 把两槽都报 "DIMM 0"）会把不同槽的
+    // locator 写成一样，报告里两行同名分不清。先统计已插条里各 locator 出现次数，
+    // 重复的在表头追加通道消歧（Z.W. 2026-10-09 定案，修 052 类「两个 DIMM 0」）。
+    let mut loc_freq: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for m in sticks {
+        if m.is_populated() {
+            if let Some(l) = &m.locator {
+                if !l.is_empty() {
+                    *loc_freq.entry(l.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+    // 空插槽先收集、循环结束后再合并成一行：12 槽机器常 8 个空槽，逐行铺开「空槽」
+    // 会刷屏、对网吧资产盘点毫无价值。合并后仍能一眼看清哪些槽空着（值单元格列出各
+    // 空槽原始标识），「数槽位」意图不丢（Z.W. 2026-10-09 定案，改掉逐行空槽）。
+    let mut empty_locators: Vec<String> = Vec::new();
     for m in sticks {
         // 表头显示固件原始槽位标识：实插槽为真实槽名（CHA_0 等），空插槽为 NO DIMM 等占位串原样保留。
         // 不做占位串清洗——"是否为空"由值单元格的「空槽」表达，表头若也洗成「空槽」会变成
         // 「空槽 | 空槽」两重空槽语义，反而别扭（用户明确要求表头保留原始 NO DIMM）。
+        // locator 重复时追加通道消歧（"DIMM 0" → "DIMM 0（CHANNEL A）"）。
         let th = match &m.locator {
-            Some(l) if !l.is_empty() => l.clone(),
+            Some(l) if !l.is_empty() => {
+                if loc_freq.get(l).copied().unwrap_or(0) > 1 {
+                    match channel_tag(&m.bank) {
+                        Some(ch) => format!("{l}（{ch}）"),
+                        None => l.clone(),
+                    }
+                } else {
+                    l.clone()
+                }
+            }
             _ => UNKNOWN.to_string(),
         };
-        let mut td = String::new();
         if m.is_populated() {
+            let mut td = String::new();
             td.push_str(&fmt_mb(&m.capacity_mb));
             if let Some(t) = &m.mem_type {
                 if !t.is_empty() {
@@ -757,15 +800,50 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             // 否则同型号机器会因为"这行有没有"而整段 diff 掉。
             td.push_str("<br>");
             td.push_str(&opt_cell(&m.bank));
+            out.push_str("<tr><th>");
+            out.push_str(&esc(&th));
+            out.push_str("</th><td>");
+            out.push_str(&td);
+            out.push_str("</td></tr>\n");
         } else {
-            // 空插槽（SMBIOS Size == 0）：与 C++ 一样保留这一行，方便数槽位
-            td.push_str("<span class=\"empty\">空槽</span>");
+            // 空插槽（SMBIOS Size == 0）：只收集标识，循环后合并成一行。
+            empty_locators.push(th);
         }
+    }
+    // 所有空槽合并为一行：表头「空槽 N 个」，值单元格「空槽：<各空槽标识>」。
+    // 单空槽时表头简化为「空槽」，避免「空槽 1 个」的啰嗦。
+    if !empty_locators.is_empty() {
+        let n = empty_locators.len();
+        let th = if n == 1 {
+            "空槽".to_string()
+        } else {
+            format!("空槽 {n} 个")
+        };
+        let list = empty_locators.join(" · ");
+        let td = format!("<span class=\"empty\">空槽：{}</span>", esc(&list));
         out.push_str("<tr><th>");
         out.push_str(&esc(&th));
         out.push_str("</th><td>");
         out.push_str(&td);
         out.push_str("</td></tr>\n");
+    }
+    // 单通道提示（Z.W. 2026-10-09 定案，修 020 类只插 1 条）：
+    // 实插内存条为单数且仍有空槽 → 无法组满双通道（1 条=纯单通道；≥3 条奇数为非对称/flex
+    // 双通道），游戏内存带宽受限。单槽机器（sticks.len()==1）无双通道可组，不提示。
+    let populated_now = sticks.iter().filter(|m| m.is_populated()).count();
+    let has_empty = sticks.len() > populated_now;
+    if populated_now == 1 && has_empty {
+        row(
+            out,
+            "通道提示",
+            "仅插 1 条内存 → 单通道，带宽约为双通道一半，游戏性能受限；建议补同规格条到另一通道组双通道",
+        );
+    } else if populated_now >= 3 && populated_now % 2 == 1 && has_empty {
+        row(
+            out,
+            "通道提示",
+            "实插内存条为奇数（非对称双通道/flex）→ 部分通道单条运行，带宽未用满；建议补齐到偶数条、均匀分布到各通道",
+        );
     }
     // 口径交叉校验：OS 报告的 total_mb 与 SMBIOS 各实插槽容量之和通常应当一致；
     // 差异过大（>2%）说明某一口径不可靠（核显占用/预留内存/固件虚报容量），
@@ -824,7 +902,7 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
         }
         // 板卡品牌（华硕/微星/七彩虹），仅物理显卡展示；芯片厂/整机厂已在采集层过滤。
         if g.kind == GpuKind::Physical {
-            if let Some(brand) = gpu_brand_for_display(&g.vendor, &g.name) {
+            if let Some(brand) = winsuitex_core::gpu_brand_for_display(&g.vendor, &g.name) {
                 // 名称里已经带品牌时不要再挂一次（"Matrox G200e · Matrox" 很啰嗦）。
                 // 音频段同样处理，见 audio_section。
                 if !g.name.contains(&brand) {
@@ -875,10 +953,10 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
                 if name.is_empty() {
                     label = v.clone();
                     if zh != *v {
-                        label.push_str(&format!(" ({})", zh));
+                        label.push_str(&format!("（{}）", zh));
                     }
                 } else if zh != *v {
-                    label.push_str(&format!(" ({})", zh));
+                    label.push_str(&format!("（{}）", zh));
                 }
             }
         }
@@ -1096,75 +1174,8 @@ fn disk_section(hw: &HardwareInfo, out: &mut String) {
     out.push_str("</table></section>\n");
 }
 
-/// 链路速率是否为真实可用值（渲染层守门）。
-///
-/// Windows 用 `IF_MAX_LINK_SPEED`（= `u64::MAX`）表示「速率不可得」；历史上这个哨兵
-/// 被写进过 JSON，故渲染端也要拦一道——哨兵/0 一律按未知处理，**不显示速率行**，
-/// 避免报告里出现「18446744073.7 Gbps」这种鬼值。
-/// 与已有的 `real_serial`（序列号占位串清洗）同一思路：non-value 不当真实数据显示。
-fn real_link_speed(bps: u64) -> bool {
-    bps > 0 && bps != u64::MAX
-}
-
-/// 若该 IP 是**操作系统自动生成**（非人工配置），返回用于标注的短标签。
-///
-/// - IPv4 `169.254.0.0/16`：**APIPA** —— 网卡开了 DHCP 但拿不到地址时，Windows 自动
-///   分配的私有自动配置地址。典型场景就是"每张卡看起来都有 IP"，实则场地 DHCP 没通。
-/// - IPv6 `fe80::/10`：**链路本地单播地址** —— IPv6 协议栈一启用就自动生成，无需任何配置。
-///
-/// 标注目的：避免资产巡检把"拿不到 DHCP 的自动兜底地址"误当成配置好的业务 IP。
-fn auto_ip_tag(ip: &str) -> Option<&'static str> {
-    let t = ip.trim();
-    if t.starts_with("169.254.") {
-        return Some("APIPA 自动地址");
-    }
-    if t.to_ascii_lowercase().starts_with("fe80:") {
-        return Some("链路本地");
-    }
-    None
-}
-
-/// IP 显示策略：该网卡是否需要把「自动地址」也显示出来（2026-09-16 Z.W. 定的规则）。
-///
-/// - 网卡有**真实地址**（非自动）→ 只显示真实地址，返回 `false`；
-/// - 一个真实地址都没有 **且已连接** → 返回 `true`：**显示**自动地址（带标注），
-///   因为"连上了却没拿到真实 IP"本身就是值得提示的异常状态；
-/// - 一个真实地址都没有 **且未连接** → 返回 `false`：**不显示**，
-///   未连接已由「状态: 未连接」表达，无需再用 APIPA / 链路本地这种兜底地址刷屏。
-fn should_show_auto_ip(n: &Nic) -> bool {
-    let has_real_v4 = n.ipv4.iter().any(|ip| auto_ip_tag(ip).is_none());
-    let has_real_v6 = match &n.ipv6 {
-        Some(v) => !v.is_empty() && auto_ip_tag(v).is_none(),
-        None => false,
-    };
-    !(has_real_v4 || has_real_v6) && n.up
-}
-
-/// 把链路速率（bits/s）格式化为人读串：`1 Gbps` / `2.5 Gbps` / `100 Mbps` 等。
-fn fmt_link_speed(bps: u64) -> String {
-    const G: f64 = 1_000_000_000.0;
-    const M: f64 = 1_000_000.0;
-    const K: f64 = 1_000.0;
-    let v = bps as f64;
-    if v >= G {
-        format!("{} Gbps", trim_decimal(v / G))
-    } else if v >= M {
-        format!("{} Mbps", trim_decimal(v / M))
-    } else if v >= K {
-        format!("{} Kbps", trim_decimal(v / K))
-    } else {
-        format!("{bps} bps")
-    }
-}
-
-/// 最多 1 位小数，去掉多余的 `.0`（如 `1.0` -> `1`、`2.5` -> `2.5`）。
-fn trim_decimal(f: f64) -> String {
-    let s = format!("{f:.1}");
-    match s.strip_suffix(".0") {
-        Some(stripped) => stripped.to_string(),
-        None => s,
-    }
-}
+// 自动地址识别与「是否显示自动地址」策略已统一到 `winsuitex_core::auto_ip_tag` /
+// `winsuitex_core::nic_should_show_auto_ip`（GUI 与报告共用单一数据源），本文件仅调用。
 
 fn nic_section(hw: &HardwareInfo, out: &mut String) {
     out.push_str("<section><h2>网卡</h2><table>\n");
@@ -1185,9 +1196,9 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
             });
         if let Some(v) = vendor {
             let zh = vendor_zh(&v);
-            // 英文厂商名（desc 已含）后跟 (中文)，不单独成列。
+            // 英文厂商名（desc 已含）后跟（中文），不单独成列。
             if zh != v {
-                td.push_str(&format!(" ({})", esc(&zh)));
+                td.push_str(&format!("（{}）", esc(&zh)));
             }
         }
         // 状态与速率：up 表示已连接（OperStatus == IfOperStatusUp）；speed_bps 为链路速率。
@@ -1203,16 +1214,11 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
         td.push_str(&opt_cell(&n.mac));
         td.push_str("</span>");
         // IP 显示规则：优先只显示真实地址；仅「已连接但没拿到任何真实地址」时才带自动地址。
-        let show_auto = should_show_auto_ip(n);
-        let ipv4_show: Vec<&String> = n
-            .ipv4
-            .iter()
-            .filter(|ip| auto_ip_tag(ip).is_none() || show_auto)
-            .collect();
+        let ipv4_show = winsuitex_core::nic_ipv4_for_display(n);
         if !ipv4_show.is_empty() {
             let parts: Vec<String> = ipv4_show
                 .iter()
-                .map(|s| match auto_ip_tag(s) {
+                .map(|s| match winsuitex_core::auto_ip_tag(s) {
                     Some(tag) => format!("{} <span class=\"tag\">{}</span>", esc(s), esc(tag)),
                     None => esc(s).to_string(),
                 })
@@ -1222,10 +1228,11 @@ fn nic_section(hw: &HardwareInfo, out: &mut String) {
             td.push_str("</span>");
         }
         if let Some(v6) = &n.ipv6 {
-            if !v6.is_empty() && (auto_ip_tag(v6).is_none() || show_auto) {
+            let show_auto = winsuitex_core::nic_should_show_auto_ip(n);
+            if !v6.is_empty() && (winsuitex_core::auto_ip_tag(v6).is_none() || show_auto) {
                 td.push_str("<br><span class=\"mono\">IPv6 ");
                 td.push_str(&esc(v6));
-                if let Some(tag) = auto_ip_tag(v6) {
+                if let Some(tag) = winsuitex_core::auto_ip_tag(v6) {
                     td.push_str(&format!(" <span class=\"tag\">{}</span>", esc(tag)));
                 }
                 td.push_str("</span>");
@@ -1560,49 +1567,26 @@ pub fn vendor_zh(raw: &str) -> String {
     brand_zh_or(raw).to_string()
 }
 
-/// 渲染用厂商名：`英文原名 (中文名)` 括号形式，中文名跟在英文厂商名之后。
+/// 渲染用厂商名：`英文（中文）` 括号形式（全角，第二十轮 Z.W. 定案的统一格式）。
 /// 返回**未转义**串；HTML 调用方需自行 `esc`。
 ///
 /// - `None`/空/含损坏字符(U+FFFD) → `None`（调用方回退为 未知）
-/// - 收录中文映射 → `英文名 (中文名)`，例如 `MSI (微星)`、`Kingston (金士顿)`
-/// - 未收录中文 → 仅英文名（绝不错译）
+/// - 收录映射 → `英文名（中文名）`，例如 `MSI（微星）`、`Kingston（金士顿）`
+/// - 不翻译 / ODM 兜底条目（en==zh）只显示一段
+/// - 未收录 → 原文（绝不错译）
 ///
 /// 设计边界：JSON 数据保持原始英文厂商名（与 C++ 老版对拍靠 JSON 结构，不靠报告文字），
-/// 这里只改渲染层。用户要求中文名以括号跟在英文名后，而非单独成列 / 替换英文。
+/// 这里只改渲染层。格式统一委托 `winsuitex_core::brand_display_or`（单一数据源）。
 fn vendor_label(en: &Option<String>) -> Option<String> {
     let s = en.as_ref()?;
     if !usable(s) {
         return None;
     }
-    let zh = vendor_zh(s);
-    if zh == *s {
-        Some(s.clone())
-    } else {
-        Some(format!("{} ({})", s, zh))
-    }
+    Some(winsuitex_core::brand_display_or(s))
 }
 
-/// 物理显卡板卡品牌展示名。`g.vendor` 有值时直接走 `vendor_label`；
-/// 服务器 BMC 显示芯片（如 ASPEED）采集层常把 `vendor` 留空，此时从 `name`
-/// 兜底识别品牌，保证报告里也能看到中文（如 `ASPEED (信骅)`）。
-/// 未识别返回 `None`，绝不错译。
-fn gpu_brand_for_display(vendor: &Option<String>, name: &str) -> Option<String> {
-    if let Some(b) = vendor_label(vendor) {
-        return Some(b);
-    }
-    let up = name.to_ascii_uppercase();
-    for (kw, en) in [("ASPEED", "ASPEED"), ("MATROX", "Matrox")] {
-        if up.contains(kw) {
-            let zh = vendor_zh(en);
-            return Some(if zh == en {
-                en.to_string()
-            } else {
-                format!("{} ({})", en, zh)
-            });
-        }
-    }
-    None
-}
+// 物理显卡板卡品牌展示名已统一到 `winsuitex_core::gpu_brand_for_display`
+// （GUI 与报告共用单一数据源），本文件仅调用，不再维护副本。
 
 /// 从硬盘型号串推断厂商中文名（仅展示用，不动 JSON）。
 /// 仅匹配高置信度厂商标识：完整厂商名（任意位置）或 Seagate 的 `ST<数字>` 前缀；
@@ -1631,11 +1615,7 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
     ];
     for (kw, en) in FULL {
         if m.contains(kw) {
-            let zh = brand_zh(en);
-            return Some(match zh {
-                Some(zh) => format!("{} ({})", en, zh),
-                None => en.to_string(),
-            });
+            return Some(winsuitex_core::brand_display_or(en));
         }
     }
     // Seagate 型号以 ST<数字> 开头（如 ST8000NM000A-2KE101）；
@@ -1647,12 +1627,7 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
                 .and_then(|c| c.chars().next())
                 .is_some_and(|ch| ch.is_ascii_digit())
     }) {
-        let en = "Seagate";
-        let zh = brand_zh(en);
-        return Some(match zh {
-            Some(zh) => format!("{} ({})", en, zh),
-            None => en.to_string(),
-        });
+        return Some(winsuitex_core::brand_display_or("Seagate"));
     }
     // Kioxia（原东芝内存）型号以 VO<数字> 开头（如 VO001000KWJSE）；
     // 同 Seagate，按空白分词后判任一词元，避免误中 "NVMe" 里的 "VO"。
@@ -1663,12 +1638,7 @@ fn disk_vendor_from_model(model: &str) -> Option<String> {
                 .and_then(|c| c.chars().next())
                 .is_some_and(|ch| ch.is_ascii_digit())
     }) {
-        let en = "Kioxia";
-        let zh = brand_zh(en);
-        return Some(match zh {
-            Some(zh) => format!("{} ({})", en, zh),
-            None => en.to_string(),
-        });
+        return Some(winsuitex_core::brand_display_or("Kioxia"));
     }
     None
 }
@@ -2177,12 +2147,12 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("HP (惠普)"),
-            "音频厂商应渲染为「HP (惠普)」: {html}"
+            html.contains("HP（惠普）"),
+            "音频厂商应渲染为「HP（惠普）」: {html}"
         );
         assert!(
-            html.contains("Logitech (罗技)"),
-            "键鼠厂商应渲染为「Logitech (罗技)」: {html}"
+            html.contains("Logitech（罗技）"),
+            "键鼠厂商应渲染为「Logitech（罗技）」: {html}"
         );
         // 不应再出现纯中文厂商（旧口径）。
         assert!(
@@ -2433,9 +2403,9 @@ mod tests {
         });
         let txt = build_text(&hw);
         let html = build_html(&hw, &[]);
-        assert!(txt.contains("MSI (微星)"), "文本报告应内联显卡品牌: {txt}");
+        assert!(txt.contains("MSI（微星）"), "文本报告应内联显卡品牌: {txt}");
         assert!(
-            html.contains("MSI (微星)"),
+            html.contains("MSI（微星）"),
             "HTML 报告应内联显卡品牌: {html}"
         );
     }
@@ -2498,7 +2468,7 @@ mod tests {
         });
         let txt = build_text(&hw);
         assert!(
-            txt.contains("AOC 2769 (冠捷)"),
+            txt.contains("AOC 2769（冠捷）"),
             "显示器厂商中文应跟在型号后: {txt}"
         );
         assert!(!txt.contains("| 厂商"), "显示器厂商不应单独成列: {txt}");
@@ -2522,7 +2492,7 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("AOC 2769 (冠捷)"),
+            html.contains("AOC 2769（冠捷）"),
             "显示器厂商中文应内联在型号后: {html}"
         );
         assert!(!html.contains("厂商："), "显示器厂商不应单独成列: {html}");
@@ -2588,7 +2558,7 @@ mod tests {
         assert_eq!(vendor_label(&None), None);
         assert_eq!(
             vendor_label(&Some("Kingston".into())),
-            Some("Kingston (金士顿)".into())
+            Some("Kingston（金士顿）".into())
         );
         assert_eq!(
             vendor_label(&Some("SomeWeirdBrand".into())),
@@ -2646,7 +2616,7 @@ mod tests {
     fn disk_vendor_from_model_maps_avago() {
         // 硬盘型号里含 AVAGO 时应识别为博通（RAID 卡如 MegaRAID MR9361-8i 当年以 Avago 品牌出货）。
         let r = disk_vendor_from_model("AVAGO MR9361-8i");
-        assert_eq!(r.as_deref(), Some("Avago (博通)"));
+        assert_eq!(r.as_deref(), Some("Broadcom（博通）"));
         // 非 AVAGO 型号不受影响
         assert!(disk_vendor_from_model("INTEL SSDPE2KX020T8")
             .unwrap()
@@ -2657,7 +2627,7 @@ mod tests {
     fn disk_vendor_from_model_maps_dell() {
         // 硬盘型号里含 DELL 时应识别为戴尔（硬盘走型号推断路径，非 vendor 字段）。
         let r = disk_vendor_from_model("Dell Ent NVMe AGN RI U.2 7.68TB");
-        assert_eq!(r.as_deref(), Some("Dell (戴尔)"));
+        assert_eq!(r.as_deref(), Some("Dell（戴尔）"));
         // 非 Dell 型号不受影响
         assert!(disk_vendor_from_model("SAMSUNG MZQLB960HBJR-00W07")
             .unwrap()
@@ -2670,7 +2640,7 @@ mod tests {
         // 注意模型常带 "NVMe " 接口前缀，而 "NVMe" 里含 "VO"，故须按分词后词元判定，
         // 绝不能 contains("VO") 否则每块 NVMe 盘都会被误判成铠侠。
         let r = disk_vendor_from_model("NVMe VO001000KWJSE");
-        assert_eq!(r.as_deref(), Some("Kioxia (铠侠)"));
+        assert_eq!(r.as_deref(), Some("Kioxia（铠侠）"));
         // 普通 NVMe 盘（含 "NVMe" 前缀）不得被误判为 Kioxia。
         assert!(disk_vendor_from_model("NVMe INTEL SSDPE2KX02")
             .unwrap()
@@ -2681,9 +2651,9 @@ mod tests {
     }
 
     #[test]
-    fn empty_slot_header_shows_raw_locator() {
-        // 空插槽表头应原样显示固件槽位标识（NO DIMM 占位串不清洗），
-        // "是否为空"由值单元格的「空槽」表达；表头若也洗成「空槽」会变成「空槽 | 空槽」两重空槽。
+    fn empty_slot_collapsed_into_one_row() {
+        // 空插槽合并成一行：单空槽时表头「空槽」，值单元格列出空槽原始标识，
+        // 不再逐行铺开刷屏（Z.W. 2026-10-09 定案）。
         let mut hw = base_hw();
         hw.memory.sticks.clear();
         hw.memory.sticks.push(MemStick {
@@ -2697,21 +2667,25 @@ mod tests {
             speed_mhz: None,
         });
         let html = build_html(&hw, &[]);
-        assert!(
-            html.contains("<th>NO DIMM</th>"),
-            "空插槽表头应为原始 NO DIMM: {html}"
+        // 合并后只有一行空槽（值单元格出现一次「空槽：」），不再有逐行空槽
+        assert_eq!(
+            html.matches("<span class=\"empty\">空槽").count(),
+            1,
+            "单空槽应合并为一行空槽标记: {html}"
         );
         assert!(
-            !html.contains("<th>空槽</th>"),
-            "空插槽表头不应是空槽(避免与值单元格重复): {html}"
+            html.contains("<th>空槽</th>"),
+            "单空槽表头应简化作「空槽」: {html}"
         );
-        // 值单元格仍渲染空槽标记
-        assert!(html.contains("<span class=\"empty\">空槽</span>"));
+        assert!(
+            html.contains("空槽：NO DIMM"),
+            "空槽值单元格应列出空槽原始标识: {html}"
+        );
     }
 
     #[test]
-    fn empty_slot_with_real_locator_shows_locator() {
-        // 空插槽若固件给了真实槽位名（非占位串），表头应显示它，便于定位第几槽为空。
+    fn empty_slot_with_real_locator_listed() {
+        // 空插槽若固件给了真实槽位名（非占位串），合并行的标识里应显示它，便于定位第几槽为空。
         let mut hw = base_hw();
         hw.memory.sticks.clear();
         hw.memory.sticks.push(MemStick {
@@ -2726,11 +2700,180 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("<th>DIMM_1</th>"),
-            "空插槽有真实槽位名时表头应显示该名: {html}"
+            html.contains("空槽：DIMM_1"),
+            "空槽合并行应列出真实槽位名 DIMM_1: {html}"
         );
-        // 仍标记为空的（td 里）
-        assert!(html.contains("<span class=\"empty\">空槽</span>"));
+    }
+
+    #[test]
+    fn many_empty_slots_collapse_to_single_row() {
+        // 12 槽机器 8 个空槽的真实场景：合并成一行、列出全部空槽标识，
+        // 仍一眼看清哪些槽空着（数槽位意图不丢）。
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        let locs = [
+            "DIMM_A1", "DIMM_A2", "DIMM_B1", "DIMM_B2", "DIMM_C1", "DIMM_C2", "DIMM_D1", "DIMM_D2",
+            "DIMM_E1", "DIMM_E2", "DIMM_F1", "DIMM_F2",
+        ];
+        for (i, loc) in locs.iter().enumerate() {
+            let populated = i % 3 == 0; // 4 条已插（A1/B1/C1/D1），其余 8 个空槽
+            hw.memory.sticks.push(MemStick {
+                locator: Some((*loc).into()),
+                bank: Some("NODE 1".into()),
+                serial: Some(if populated {
+                    "ABCD1234".into()
+                } else {
+                    "NO DIMM".into()
+                }),
+                part_no: Some(if populated {
+                    "M393A4K40BB1-CRC".into()
+                } else {
+                    "NO DIMM".into()
+                }),
+                vendor: Some(if populated {
+                    "Samsung".into()
+                } else {
+                    "NO DIMM".into()
+                }),
+                mem_type: if populated { Some("DDR4".into()) } else { None },
+                capacity_mb: if populated {
+                    Some(MebiBytes::new(32768))
+                } else {
+                    None
+                },
+                speed_mhz: if populated { Some(2400) } else { None },
+            });
+        }
+        let html = build_html(&hw, &[]);
+        // 8 个空槽只产生 1 个合并行（而非 8 行刷屏）
+        assert_eq!(
+            html.matches("<span class=\"empty\">空槽").count(),
+            1,
+            "8 个空槽应合并为一行: {html}"
+        );
+        assert!(
+            html.contains("<th>空槽 8 个</th>"),
+            "多空槽表头应为「空槽 8 个」: {html}"
+        );
+        // 所有空槽标识都列在合并行里
+        for empty in [
+            "DIMM_A2", "DIMM_B2", "DIMM_C2", "DIMM_D2", "DIMM_E1", "DIMM_E2", "DIMM_F1", "DIMM_F2",
+        ] {
+            assert!(html.contains(empty), "合并行应列出空槽 {empty}: {html}");
+        }
+    }
+
+    #[test]
+    fn single_populated_stick_warns_single_channel() {
+        // 020 类：只插 1 条内存、仍有空槽 → 单通道，提示补齐双通道。
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        // 槽 1：已插
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM_A1".into()),
+            bank: Some("CHANNEL A".into()),
+            serial: Some("AB12CD34".into()),
+            part_no: Some("HMA81GS6DJR8N".into()),
+            vendor: Some("Hynix".into()),
+            mem_type: Some("DDR4".into()),
+            capacity_mb: Some(MebiBytes::new(8192)),
+            speed_mhz: Some(3200),
+        });
+        // 槽 2：空
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM_B1".into()),
+            bank: Some("CHANNEL B".into()),
+            serial: Some("NO DIMM".into()),
+            part_no: Some("NO DIMM".into()),
+            vendor: Some("NO DIMM".into()),
+            mem_type: None,
+            capacity_mb: None,
+            speed_mhz: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("通道提示"),
+            "只插 1 条应出现「通道提示」行: {html}"
+        );
+        assert!(html.contains("单通道"), "只插 1 条应提示单通道: {html}");
+    }
+
+    #[test]
+    fn duplicate_locator_disambiguated_by_channel() {
+        // 052 类：华硕 B650M 把两槽都报 "DIMM 0"，靠 bank 的 CHANNEL 消歧。
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM 0".into()),
+            bank: Some("P0 CHANNEL A".into()),
+            serial: Some("AB12CD34".into()),
+            part_no: Some("CMK16GX4M1".into()),
+            vendor: Some("Corsair".into()),
+            mem_type: Some("DDR5".into()),
+            capacity_mb: Some(MebiBytes::new(16384)),
+            speed_mhz: Some(4800),
+        });
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM 0".into()),
+            bank: Some("P0 CHANNEL B".into()),
+            serial: Some("EF56GH78".into()),
+            part_no: Some("CMK16GX4M1".into()),
+            vendor: Some("Corsair".into()),
+            mem_type: Some("DDR5".into()),
+            capacity_mb: Some(MebiBytes::new(16384)),
+            speed_mhz: Some(4800),
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("DIMM 0（CHANNEL A）"),
+            "重复 locator 应消歧为 CHANNEL A: {html}"
+        );
+        assert!(
+            html.contains("DIMM 0（CHANNEL B）"),
+            "重复 locator 应消歧为 CHANNEL B: {html}"
+        );
+        // 两行都应带消歧，不应残留无消歧的裸「DIMM 0」表头
+        assert_eq!(
+            html.matches("<th>DIMM 0</th>").count(),
+            0,
+            "不应残留无消歧的裸 DIMM 0 表头: {html}"
+        );
+    }
+
+    #[test]
+    fn three_populated_sticks_warns_flex_channel() {
+        // 3 条已插、仍有空槽 → 非对称双通道（flex），提示补齐到偶数条。
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        let banks = ["CHANNEL A", "CHANNEL B", "CHANNEL A"];
+        for (i, b) in banks.iter().enumerate() {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(format!("DIMM_{i}")),
+                bank: Some((*b).into()),
+                serial: Some(format!("SN{i}")),
+                part_no: Some("M393A4K40".into()),
+                vendor: Some("Samsung".into()),
+                mem_type: Some("DDR4".into()),
+                capacity_mb: Some(MebiBytes::new(16384)),
+                speed_mhz: Some(3200),
+            });
+        }
+        // 第 4 槽为空
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM_3".into()),
+            bank: Some("CHANNEL B".into()),
+            serial: Some("NO DIMM".into()),
+            part_no: Some("NO DIMM".into()),
+            vendor: Some("NO DIMM".into()),
+            mem_type: None,
+            capacity_mb: None,
+            speed_mhz: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("非对称双通道"),
+            "奇数条已插应提示非对称双通道: {html}"
+        );
     }
 
     #[test]
@@ -2927,7 +3070,7 @@ mod tests {
         let html = build_html(&hw, &[]);
         let txt = build_text(&hw);
         assert!(
-            html.contains("Intel (英特尔)"),
+            html.contains("Intel（英特尔）"),
             "HTML CPU 厂商应中文: {html}"
         );
         assert!(txt.contains("英特尔"), "文本 CPU 厂商应中文: {txt}");
@@ -3220,24 +3363,24 @@ mod tests {
         // 问题1修复：带接口前缀的希捷盘（真机 ATA ST16000NM002H-3K）
         assert_eq!(
             disk_vendor_from_model("ATA ST16000NM002H-3K"),
-            Some("Seagate (希捷)".to_string())
+            Some("Seagate（希捷）".to_string())
         );
         // 原行为不变：无前缀的希捷盘
         assert_eq!(
             disk_vendor_from_model("ST8000NM000A-2KE101"),
-            Some("Seagate (希捷)".to_string())
+            Some("Seagate（希捷）".to_string())
         );
         // 问题3：西部数据 Ultrastar He 氦气盘（WUH 前缀）
         assert_eq!(
             disk_vendor_from_model("WUH721816ALE6L4"),
-            Some("Western Digital (西部数据)".to_string())
+            Some("Western Digital（西部数据）".to_string())
         );
         // 纪律：未知品牌一律 None，绝不臆造
         assert_eq!(disk_vendor_from_model("X4020S173A15TNQF"), None);
         // 反例：含 "ST" 子串但非希捷的不误判（KINGSTON 含 ST，应识别为金士顿）
         let r = disk_vendor_from_model("KINGSTON SA400S37");
-        assert_eq!(r, Some("Kingston (金士顿)".to_string()));
-        assert_ne!(r, Some("Seagate (希捷)".to_string()));
+        assert_eq!(r, Some("Kingston（金士顿）".to_string()));
+        assert_ne!(r, Some("Seagate（希捷）".to_string()));
     }
 
     #[test]
@@ -3255,7 +3398,7 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("Realtek PCIe GBE Family Controller (瑞昱)"),
+            html.contains("Realtek PCIe GBE Family Controller（瑞昱）"),
             "网卡应在英文设备名后跟 (中文厂商名): {html}"
         );
     }
@@ -3276,12 +3419,12 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("Realtek 8188GU Wireless LAN 802.11n USB NIC (瑞昱)"),
+            html.contains("Realtek 8188GU Wireless LAN 802.11n USB NIC（瑞昱）"),
             "vendor 缺失时应从 desc 兜底出中文厂商名: {html}"
         );
         let text = build_text(&hw);
         assert!(
-            text.contains("(瑞昱)"),
+            text.contains("（瑞昱）"),
             "文本报告也应从 desc 兜底出中文厂商名: {text}"
         );
     }
@@ -3439,7 +3582,7 @@ mod tests {
         });
         let html = build_html(&hw, &[]);
         assert!(
-            html.contains("Mellanox ConnectX-3 Ethernet Adapter (迈络思)"),
+            html.contains("Mellanox ConnectX-3 Ethernet Adapter（迈络思）"),
             "Mellanox 应显示中文厂商名: {html}"
         );
         assert!(

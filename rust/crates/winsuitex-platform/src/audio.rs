@@ -14,7 +14,7 @@ use windows::Win32::Devices::DeviceAndDriverInstallation::{
     SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
     SetupDiGetDeviceRegistryPropertyW, DIGCF_ALLCLASSES, DIGCF_PRESENT, HDEVINFO,
     SETUP_DI_REGISTRY_PROPERTY, SPDRP_CLASS, SPDRP_DEVICEDESC, SPDRP_ENUMERATOR_NAME,
-    SPDRP_HARDWAREID, SP_DEVINFO_DATA,
+    SPDRP_FRIENDLYNAME, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
 };
 
 use crate::peripheral_db::{brand_for_vid, is_usb_audio_vid, model_for_pid};
@@ -127,7 +127,17 @@ fn collect_media_audio() -> Vec<AudioDevice> {
         if class.as_deref() != Some("MEDIA") {
             continue;
         }
-        if out.iter().any(|d: &AudioDevice| d.name == desc) {
+        // 真实声卡名：优先用 FRIENDLYNAME（常是 "Realtek High Definition Audio" 这类
+        // 真实声卡名），当它非空且非通用占位名时采用；否则回落 DEVICEDESC。
+        // 板载 HDA 装了厂商驱动时两者通常一致；仅在裸驱动下都是通用的
+        // "High Definition Audio 设备"——此时 Windows 音频 API 不提供更具体的型号，
+        // 面板只能显示该通用名（声卡芯片型号如 ALC897 不在音频 API 里，需另走 WMI）。
+        let friendly = get_dev_prop(dev_info, &did, SPDRP_FRIENDLYNAME);
+        let name = match &friendly {
+            Some(f) if !f.trim().is_empty() && !is_generic_audio_name(f) => f.clone(),
+            _ => desc.clone(),
+        };
+        if out.iter().any(|d: &AudioDevice| d.name == name) {
             continue;
         }
         // USB 音频方案在自身硬件 ID 里就带 VID_xxxx&PID_yyyy（无需回溯父节点）。
@@ -138,7 +148,7 @@ fn collect_media_audio() -> Vec<AudioDevice> {
             .unwrap_or((None, None));
         let is_bt = is_bluetooth_audio(&desc, enumer.as_deref());
         out.push(AudioDevice {
-            name: desc,
+            name,
             role: 0,
             kind: AudioKind::Unknown,
             is_bluetooth: is_bt,

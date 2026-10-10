@@ -17,14 +17,12 @@
 //!
 //! # 用途
 //! - `brand_for_vid`：把原始 `VID_xxxx` 还原成可识别品牌（如 `1038`→`SteelSeries`）。
-//! - `brand_display`：品牌 key → 中文显示名（报告更友好，统一查 `winsuitex_core::brand_zh_or`）。
+//! - 品牌 key → 中文显示名统一走 `winsuitex_core::brand_display_or`（单一数据源，报告更友好）。
 //! - `is_usb_audio_vid`：识别 USB 声卡类 VID，支撑"USB 声卡耳机"判定。
 //! - `model_for_pid`：由 `VID+PID` 查真实型号（离线种子表 `pid_model_table`，
 //!   来自 `Drives` 各厂商驱动 INF 的硬件 ID）。注意：共享鼠标 ODM VID
 //!   （`258A`/`248A`/`3554`/`1915`）在 INF 中**无**型号数据，只能靠运行时
 //!   `HidD_GetProductString`；本表仅覆盖干净品牌与音频方案，不作兜底误报。
-
-use winsuitex_core::brand_zh_or;
 
 /// 干净 VID → 品牌（英文规范名）。仅收录可唯一归属者。
 ///
@@ -91,12 +89,6 @@ pub fn brand_for_vid(vid: &str) -> Option<&'static str> {
         .map(|(_, b)| *b)
 }
 
-/// 品牌 key → 中文显示名；未知则原样返回（多为英文品牌名，已可读）。
-/// 统一委托 `winsuitex_core::brand_zh_or`，中文来源收敛为单一数据源。
-pub fn brand_display(brand: &str) -> &str {
-    brand_zh_or(brand)
-}
-
 /// 是否为 USB 声卡类 VID（C-Media / Realtek / HP 等）。
 ///
 /// 用于支撑"USB 声卡耳机"判定：音频端点回溯到 USB 父节点后，
@@ -125,6 +117,7 @@ pub fn model_for_pid(vid: &str, pid: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use winsuitex_core::brand_display_or;
 
     #[test]
     fn brand_for_vid_handles_prefixes() {
@@ -143,21 +136,22 @@ mod tests {
     }
 
     #[test]
-    fn brand_display_maps_known_and_passthrough_unknown() {
-        assert_eq!(brand_display("Razer"), "雷蛇");
-        assert_eq!(brand_display("SteelSeries"), "赛睿");
+    fn brand_display_or_maps_known_and_passthrough_unknown() {
+        // 单一数据源 winsuitex_core::brand_display_or 的 HID 链路覆盖。
+        assert_eq!(brand_display_or("Razer"), "Razer（雷蛇）");
+        assert_eq!(brand_display_or("SteelSeries"), "SteelSeries（赛睿）");
         // 未知品牌原样返回
-        assert_eq!(brand_display("Attack Shark"), "Attack Shark");
+        assert_eq!(brand_display_or("Attack Shark"), "Attack Shark");
     }
 
     #[test]
-    fn brand_display_maps_hid_odm_chinese() {
-        // 键鼠 ODM VID 推断出的英文品牌 key 必须能翻译成中文，
+    fn brand_display_or_maps_hid_odm_chinese() {
+        // 键鼠 ODM VID 推断出的英文品牌 key 必须能翻译出可读名，
         // 否则 hid/audio 链路只输出英文（真机实测 1A2C:6004 键盘、1C4F:0048 鼠标）。
-        assert_eq!(brand_display("SEMICO"), "华润上华(ODM)");
-        assert_eq!(brand_display("SiGma Micro"), "Sigma Micro(ODM)");
+        assert_eq!(brand_display_or("SEMICO"), "华润上华(ODM)");
+        assert_eq!(brand_display_or("SiGma Micro"), "Sigma Micro(ODM)");
         // 大小写不敏感
-        assert_eq!(brand_display("semico"), "华润上华(ODM)");
+        assert_eq!(brand_display_or("semico"), "华润上华(ODM)");
     }
 
     #[test]
