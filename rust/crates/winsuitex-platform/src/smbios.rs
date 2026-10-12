@@ -51,13 +51,25 @@ impl HardwareSource for SmbiosSource {
         let board = data.board.unwrap_or_default();
         let bios = data.bios.unwrap_or_default();
         if board.vendor.is_some() || board.product.is_some() || bios.vendor.is_some() {
+            // 芯片组不在 SMBIOS 表里，先算好再填 struct（board.product 之后要
+            // move 进 BoardInfo，不能同时在闭包里被 move）：
+            // 1) 先试 PnP 设备名（含 "Chipset" 词或家族 token，Intel 平台常见）；
+            // 2) 未命中再试主板型号反推（board product 编码了芯片组，如
+            //    EX-B650M-V7 PLUS → AMD B650；AMD 平台 PnP 设备名常不含家族号，
+            //    这条路径才是真机可靠来源）。两条都失败才返回 None（诚实留白）。
+            let chipset = crate::chipset::detect_chipset();
+            let chipset = match chipset {
+                Some(c) => Some(c),
+                None => board
+                    .product
+                    .as_deref()
+                    .and_then(crate::chipset::chipset_from_board_model),
+            };
             ctx.set_board(BoardInfo {
                 vendor: board.vendor,
                 product: board.product,
                 serial: board.serial,
-                // 芯片组不在 SMBIOS 表里：用 SetupAPI 枚举 PnP 设备按 "Chipset" 命中。
-                // 未命中/失败返回 None（诚实留白），绝不编造。
-                chipset: crate::chipset::detect_chipset(),
+                chipset,
                 bios_vendor: bios.vendor,
                 bios_version: bios.version,
                 bios_date: bios.date,
