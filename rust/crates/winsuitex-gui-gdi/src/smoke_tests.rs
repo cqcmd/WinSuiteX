@@ -420,15 +420,13 @@ fn menu_switch_hit_testing_covers_every_feature() {
         let win11 = crate::pages::is_win11();
         let classic = crate::pages::classic_menu_on();
         // 必须与 `draw_menu_page` 的过滤口径逐字一致：
-        // - 装了 StartAllBack 时经典菜单开关被渲染成禁用态（不注册命中矩形），
-        //   故 slot 0 仅 `win11 && !sab` 时出现在命中集合；
-        // - 扩展项仅在 `win11 && !classic && !sab` 时隐藏。
-        let sab = crate::pages::startallback_present();
-        let hide_extras = win11 && !classic && !sab;
+        // - slot 0（经典菜单）仅 `win11` 时出现在命中集合；
+        // - 扩展项仅在 `win11 && !classic` 时隐藏。
+        let hide_extras = win11 && !classic;
         let mut expected: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
         expected.insert(1);
         expected.insert(2);
-        if win11 && !sab {
+        if win11 {
             expected.insert(0);
         }
         if !hide_extras {

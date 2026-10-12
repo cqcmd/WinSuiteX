@@ -242,13 +242,8 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
     // 把整窗重心压住，也让"提示 + 版权"这一行有明确的归属。
     fill(hdc, &fr, C_FOOTER_BG);
 
-    // 右键页签的提示随 StartAllBack 状态自适应：接管态下经典菜单开关被禁用，
-    // "切换经典菜单会自动重启资源管理器"不会发生，照抄反而误导。
-    let menu_hint = if startallback_present() {
-        "右键项即时生效；经典菜单由 StartAllBack 接管，无需重启资源管理器"
-    } else {
-        "右键项即时生效，切换经典菜单会自动重启资源管理器"
-    };
+    // 右键页签提示（常规逻辑：切换经典菜单会自动重启资源管理器）。
+    let menu_hint = "右键项即时生效，切换经典菜单会自动重启资源管理器";
     let hints = [
         "页面仅展示常规信息，完整明细请点击右上角「导出详细报告」",
         menu_hint,
@@ -1362,7 +1357,6 @@ fn feature_row(
     f_sub: HFONT,
     scroll: i32,
     win_h: i32,
-    disabled: bool,
 ) -> i32 {
     // 卡高 78：名称行(~18px) + 说明两行(13pt 字体 ~2×17px) + 上下边距。
     // 之前 66 装不下两行说明，`text_multiline` 的矩形裁剪把第二行拦腰截断
@@ -1384,11 +1378,8 @@ fn feature_row(
         scroll,
         win_h,
     );
-    // 描边即状态：已启用=亮绿（一眼扫出哪几个是开的），未启用=叠白细边；
-    // 禁用态=同样用叠白细边（不画绿，明确表示"此开关当前不可用"）。
-    let edge = if disabled {
-        over(grad_at(y - scroll, win_h), C_WHITE, 0.28)
-    } else if on {
+    // 描边即状态：已启用=亮绿（一眼扫出哪几个是开的），未启用=叠白细边。
+    let edge = if on {
         C_CARD_EDGE_ON
     } else {
         over(grad_at(y - scroll, win_h), C_WHITE, 0.28)
@@ -1432,13 +1423,7 @@ fn feature_row(
         right: right - scale(PAD_IN),
         bottom: y + (row_h - sw_h) / 2 + sw_h,
     };
-    // 禁用态：开关画成"关"且无悬停高亮，明确表示不可点；同时**不写入**
-    // SWITCH_RECS，使命中测试天然点不到（避免无效点击还弹错误框）。
-    if disabled {
-        draw_switch(hdc, &sw, false, false, scroll, win_h);
-    } else {
-        draw_switch(hdc, &sw, on, hovered, scroll, win_h);
-    }
+    draw_switch(hdc, &sw, on, hovered, scroll, win_h);
     let st = RECT {
         left: sw.left - scale(64),
         top: sw.top,
@@ -1447,16 +1432,13 @@ fn feature_row(
     };
     text(hdc, &st, status, f_sub, status_color, true);
 
-    // 禁用态不注册命中矩形——整行纯展示，点击无任何副作用。
-    if !disabled {
-        SWITCH_RECS.with(|v| {
-            let mut r = v.borrow_mut();
-            if r.len() <= slot {
-                r.resize(slot + 1, RECT::default());
-            }
-            r[slot] = sw;
-        });
-    }
+    SWITCH_RECS.with(|v| {
+        let mut r = v.borrow_mut();
+        if r.len() <= slot {
+            r.resize(slot + 1, RECT::default());
+        }
+        r[slot] = sw;
+    });
     y + row_h + scale(10)
 }
 
@@ -1565,24 +1547,6 @@ pub fn is_win11() -> bool {
         .is_some_and(|b| b >= 22000)
 }
 
-/// 是否安装了 StartAllBack（第三方开始菜单 / 任务栏美化工具）。
-///
-/// StartAllBack 会注入 explorer 并**接管 Win11 经典右键菜单**：它自己实现的
-/// shell 扩展覆盖了我们 `{86ca1aa0}` 这套 COM 注册——所以本程序的"显示经典
-/// 菜单"开关在装了 StartAllBack 的机器上**永远不生效**，点下去只会白白重启
-/// 一次 explorer（还可能顺手弹出一个主文件夹窗口，见第十六轮修复）。
-///
-/// 检测信号：
-/// - `HKLM\SOFTWARE\Classes\CLSID\{117E3954-5034-453A-A18B-7B79493646E6}`
-///   存在（StartAllBack 的 shell 扩展，InProcServer32 = `StartAllBackLoaderX64.dll`）。
-///   这是"已安装"的最强信号——只要装了就注册，与当前是否在跑无关。
-pub fn startallback_present() -> bool {
-    use winsuitex_core::traits::Registry;
-    let reg = winsuitex_platform::WinRegistry;
-    let key = r"SOFTWARE\Classes\CLSID\{117E3954-5034-453A-A18B-7B79493646E6}";
-    reg.exists(winsuitex_core::model::RegRoot::LocalMachine, key)
-}
-
 /// 打开/关闭经典右键菜单（写空值 / 删整棵 CLSID 树）。
 ///
 /// 写的是**空值**而不是数据——Windows 11 只看这个键是否存在，不看值。
@@ -1634,15 +1598,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     };
     text(hdc, &head, "右键菜单增强工具", f_sec, C_ON_GRAD, false);
     y += scale(32);
-    // StartAllBack 一旦安装就接管经典右键菜单，本开关无效（且点了会白重启
-    // explorer、可能弹文件夹）——检测到就把它渲染成禁用态、并让扩展项照常显示。
-    // 提示行也随状态换文案：接管态不再提"重启资源管理器"（根本不会发生）。
-    let startallback = startallback_present();
-    let hint_text = if startallback {
-        "扩展项开关即时生效；经典菜单已由 StartAllBack 接管，无需重启资源管理器"
-    } else {
-        "开关即时生效；切换经典右键菜单会自动重启资源管理器（约 1~2 秒）"
-    };
+    let hint_text = "开关即时生效；切换经典右键菜单会自动重启资源管理器（约 1~2 秒）";
     let hint = RECT {
         left,
         top: y,
@@ -1674,26 +1630,15 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         );
         y += scale(30);
         let classic_on = classic_menu_on();
-        // 装了 StartAllBack：开关画成"已被接管"的禁用态，不响应点击（见 feature_row
-        // 的 disabled 分支）。说明文字改为解释为何本开关无意义，避免"点了没反应"的
-        // 困惑；没装时才是正常的启用/未启用开关。
-        let (desc_text, status_text, status_color) = if startallback {
-            (
-                "StartAllBack 已接管经典菜单，本开关无需使用、不会生效",
-                "已由接管",
-                C_ON_GRAD_FAINT,
-            )
-        } else {
-            (
-                "在“此电脑”上右键直接看到旧版完整菜单，不再需要点“显示更多选项”",
-                if classic_on { "已启用" } else { "未启用" },
-                if classic_on {
-                    C_CARD_EDGE_ON
-                } else {
-                    C_ON_GRAD_FAINT
-                },
-            )
-        };
+        let (desc_text, status_text, status_color) = (
+            "在“此电脑”上右键直接看到旧版完整菜单，不再需要点“显示更多选项”",
+            if classic_on { "已启用" } else { "未启用" },
+            if classic_on {
+                C_CARD_EDGE_ON
+            } else {
+                C_ON_GRAD_FAINT
+            },
+        );
         y = feature_row(
             hdc,
             left,
@@ -1712,7 +1657,6 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             f_sub,
             scroll,
             h,
-            startallback,
         );
     }
 
@@ -1722,7 +1666,6 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     // 菜单下、新版菜单看不到 → 开着也毫无意义，直接隐藏；只保留两种菜单都
     // 可见的计算机管理 / 设备管理器（slot 1、2）。Windows 10 及更早没有新版
     // 菜单，这 3 项本就在原生右键菜单里生效，照常显示。启用经典菜单后 3 项自动出现。
-    // 装了 StartAllBack 时它已提供完整经典菜单，这 3 项同样可见 → 不隐藏。
     y += scale(10);
     let feat_head = RECT {
         left: left + scale(PAD_IN),
@@ -1733,7 +1676,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     text(hdc, &feat_head, "功能增强", f_sec, C_ON_GRAD, false);
     y += scale(30);
     let classic_on = classic_menu_on();
-    let hide_extras = win11 && !classic_on && !startallback;
+    let hide_extras = win11 && !classic_on;
     if hide_extras {
         // 解释为什么只显示两项，避免"是不是漏了"的疑惑（纯提示，不改功能）。
         let tip = RECT {
@@ -1746,23 +1689,6 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             hdc,
             &tip,
             "启用上方“经典右键菜单”后，其余扩展项才会出现并生效",
-            f_sub,
-            C_ON_GRAD_FAINT,
-            false,
-        );
-        y += scale(22);
-    } else if startallback {
-        // 装了 StartAllBack：说明为何扩展项始终可见（它已接管经典菜单）。
-        let tip = RECT {
-            left,
-            top: y,
-            right,
-            bottom: y + scale(18),
-        };
-        text(
-            hdc,
-            &tip,
-            "检测到 StartAllBack：经典菜单由它接管，下方扩展项始终可用",
             f_sub,
             C_ON_GRAD_FAINT,
             false,
@@ -1799,7 +1725,6 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             f_sub,
             scroll,
             h,
-            false,
         );
     }
     y

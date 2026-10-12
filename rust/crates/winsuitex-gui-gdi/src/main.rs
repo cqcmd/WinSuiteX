@@ -1515,18 +1515,6 @@ fn toggle_feature(idx: usize) {
     // 注册表写完后**必须重启 explorer** 才生效（SHChangeNotify 对 shell 扩展
     // 注册覆盖无效）——这就是"启用经典菜单不生效"的根因（第十六轮）。
     if idx == 0 {
-        // 装了 StartAllBack 时经典菜单由它接管——本开关对它无效，写了
-        // `{86ca1aa0}` 也白写，只会白白重启一次 explorer（还可能弹出一个
-        // 主文件夹窗口，正是用户报告的"启用经典菜单里还是会打开一个主文件夹"）。
-        // 直接拦截并给出明确提示，不做任何写入/重启（与"不许假成功"一致）。
-        if pages::startallback_present() {
-            pages::show_error(
-                "已检测到 StartAllBack 接管了 Windows 11 经典右键菜单。\n\
-                 本开关对它无效，请在 StartAllBack 的设置里调整经典菜单样式。\n\
-                 （该开关已置灰，点击不会产生任何效果。）",
-            );
-            return;
-        }
         let now_on = pages::classic_menu_on();
         let want = !now_on;
         // 写入失败必须让人看见：之前用 `let _ =` 吞掉，注册表没写成功却状态翻转，
