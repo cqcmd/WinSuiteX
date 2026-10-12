@@ -46,6 +46,7 @@
 - **显卡**：每行「显卡 #N」，值=型号+显存+`gpu_brand_for_display` 品牌（虚拟/软件适配器改标类型、不渲染品牌）。
 - **SMART 健康徽标**（第二十九轮）：硬盘分组每行右侧彩色小条+状态词；读不到 SMART→None→不画（诚实留白不误报）；危险红底白字、绿/橙/淡紫底深字。
 - **空槽**：`MemStick::is_populated()` 判，合并成"N 条未安装+位置"一行；键值行值列 `kv()` 按 ` · ` 贪心折行（`wrap_value`，量高趟必须同函数）。
+- **⚠️ 量高/绘制双趟同宽（第三十一轮，勿回退）**：凡给某类行加**值列右侧预留**（如硬盘健康徽标收窄 `DISK_BADGE_RESERVE=64`），量高趟必须同步用同一收窄宽折行——否则长值行"量 1 行画 2 行"→总高量矮→滚动到底最后一组被裁、截图长图同步裁尾。回归：`hw_measure_height_accounts_badge_narrowed_wrapping`（有/无徽标两形态总高必须不同；口径助手 `#[cfg(test)] hw_value_widths`）。以后再给行加右侧预留（速率/温度色等）必须同步改量高趟。
 
 ## 磁盘页
 - 7 列（盘符/磁盘/文件系统/簇大小/类型/总容量/可用），列宽按权重，`col_x` 长度 NCOL+1。表头首列顶格 `col_x[0]+scale(2)`（与分区图标左缘齐平，第二十七轮"表头左边空档"定案）、`numeric=i>=5` 右对齐。
@@ -66,7 +67,7 @@
 
 ## dist 整洁 / 版本号
 - 只留 6 类文件；bak 只留最近 2；不打 zip。
-- **Rust GUI 资源已嵌入**（winsuitex-gui-gdi crate）：`build.rs` 调 MSVC `rc.exe`（`C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\rc.exe`）编译 `app.rc`→`app.res` 链入 exe，含 **图标(IDI_APP_ICON=101) + VERSIONINFO(公司名/版权/版本) + 应用清单(UAC=asInvoker、PerMonitorV2 DPI、supportedOS)**。`app.ico` 从根目录复制进 crate（单一真源=根 app.ico）；`version.ini` 在 crate 内独立跟踪（`0.1.x` 线，与冻结 C++ 管理器 `1.7.x` 分开）。验证用 `tools/verify_gui_resource.py`（GetFileVersionInfoSizeW>0 且 err≠1813 + FindResourceW 查图标组#101/清单#1）。
+- **Rust GUI 资源已嵌入**（winsuitex-gui-gdi crate）：`build.rs` 调 MSVC `rc.exe`（`C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\rc.exe`）编译 `app.rc`→`app.res` 链入 exe，含 **图标(IDI_APP_ICON=101) + VERSIONINFO(公司名/版权/版本) + 应用清单(UAC=asInvoker、PerMonitorV2 DPI、supportedOS)**。`app.ico` 从根目录复制进 crate（单一真源=根 app.ico）；`version.ini` 在 crate 内独立跟踪（现 `0.2.x` 线，0.1.9→0.2.0 是修订满 10 进 1，与冻结 C++ 管理器 `1.7.x` 分开）。验证用 `tools/verify_gui_resource.py`（GetFileVersionInfoSizeW>0 且 err≠1813 + FindResourceW 查图标组#101/清单#1）。
 - 版本号四段式 `主.次.修订.日期戳(YYYYMMDD)`；**GUI 版本号 bump 命令**
   `python ~/.workbuddy/scripts/version_stamp.py --root rust/crates/winsuitex-gui-gdi`
   （C++ 冻结，平时编译不再无参跑根 version_stamp）；发版才 `--set X.Y.Z`；禁用 `--bump patch`。

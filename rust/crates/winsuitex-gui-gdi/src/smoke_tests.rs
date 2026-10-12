@@ -411,14 +411,31 @@ fn menu_switch_hit_testing_covers_every_feature() {
     for w in [480i32, 593, 900] {
         let c = ctx(mem, w, 948, None, fonts);
         let _ = crate::pages::draw_menu_page(&c);
-        // FEATURES(5) 始终绘制；经典右键菜单仅在 Windows 11 绘制（slot 0）。
-        // 非 Win11 时不渲染经典菜单，命中集合为 {1..5}，不缺不重。
-        let n = winsuitex_core::feature::FEATURES.len() + 1;
-        let expected: std::collections::BTreeSet<usize> = if crate::pages::is_win11() {
-            (0..n).collect()
-        } else {
-            (1..n).collect()
-        };
+        // 命中集合随实际渲染走，必须和 `build_menu_page` 的过滤口径逐字一致：
+        // - slot 0（经典菜单）仅 Windows 11 渲染；
+        // - slot 1、2（计算机管理 / 设备管理器）两种菜单都可见，始终渲染；
+        // - slot 3、4、5（显示隐藏文件 / 命令提示符 / PowerShell 在此处打开）
+        //   仅"Win11 且经典菜单【关闭】"时不渲染（新版菜单看不到、无意义）；
+        //   Win10 及更早没有新版菜单，或 Win11 已开经典菜单，这 3 项都照常渲染。
+        let win11 = crate::pages::is_win11();
+        let classic = crate::pages::classic_menu_on();
+        // 必须与 `draw_menu_page` 的过滤口径逐字一致：
+        // - 装了 StartAllBack 时经典菜单开关被渲染成禁用态（不注册命中矩形），
+        //   故 slot 0 仅 `win11 && !sab` 时出现在命中集合；
+        // - 扩展项仅在 `win11 && !classic && !sab` 时隐藏。
+        let sab = crate::pages::startallback_present();
+        let hide_extras = win11 && !classic && !sab;
+        let mut expected: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+        expected.insert(1);
+        expected.insert(2);
+        if win11 && !sab {
+            expected.insert(0);
+        }
+        if !hide_extras {
+            expected.insert(3);
+            expected.insert(4);
+            expected.insert(5);
+        }
         // 开关在卡片右侧（`right - PAD_IN - 44`），x 随 pad / dpi 变，
         // 所以横向也全扫、不写死坐标—— 否则改一次 PAD_IN 测试就假失败。
         let mut seen = std::collections::BTreeSet::new();
@@ -597,6 +614,84 @@ fn hw_disk_rows_carry_smart_health_badge() {
             );
         }
     }
+}
+
+/// 单盘快照：`smart=false` 时 `smart=None`（无徽标形态，值列不收窄）。
+fn disk_snapshot(model: &str, smart: bool) -> CollectResult {
+    CollectResult {
+        info: HardwareInfo {
+            disks: vec![PhysicalDisk {
+                index: 0,
+                model: Some(model.to_string()),
+                size_bytes: Some(1_000_000_000_000),
+                smart: smart.then(|| DiskSmart {
+                    health_status: HealthStatus::Healthy,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// 第三十一轮回归：量高趟与绘制趟**同宽**——带健康徽标的行值列右界收窄
+/// `DISK_BADGE_RESERVE`，量高若仍按全宽折行，长值行「量 1 行、画 2 行」，
+/// 总高量矮 → `max_scroll` 偏小 → 滚动到底最后一组被裁，截图长图同步裁尾
+/// （Z.W. 2026-10-11 真机：硬盘 4 行全带徽标、3 行折两行，底部「网卡」组看不见）。
+///
+/// 手法：把盘型号名逐字符加长，直到**真实构建出的硬盘行值**满足
+/// 「全宽行数 < 收窄宽行数」（现场用 `wrap_value` 判定，不预设像素宽，
+/// 字体/DPI 变了也不脆）；然后比较同一份数据在有无 SMART 徽标两种形态下
+/// `draw_hw_page` 的返回总高——带徽标版必须严格更高。
+/// 旧 bug（量高一律全宽）下两个返回值相等，本测试即红。
+#[test]
+fn hw_measure_height_accounts_badge_narrowed_wrapping() {
+    let Some(mem) = tiny_dc() else {
+        eprintln!("[skip] 无法创建 1x1 内存 DC，跳过量高一致性回归");
+        return;
+    };
+    let fonts = fonts();
+    let w = 593i32;
+    let h = 948i32;
+    let (full_w, narrow_w) = crate::pages::hw_value_widths(w);
+
+    // 找到满足折行差的型号名（上限 64 次防意外死循环）。
+    let mut model = String::from("SAMSUNG MZQL1T9HAJR-0007");
+    let mut found = false;
+    for _ in 0..64 {
+        let r = disk_snapshot(&model, true);
+        let sec = crate::pages::build_hw_sections(&r)
+            .into_iter()
+            .find(|s| s.title == "硬盘")
+            .expect("硬件页应有「硬盘」分组");
+        let v = &sec.rows[0].1;
+        let lf = crate::pages::wrap_value(mem, fonts.2, v, full_w).len();
+        let ln = crate::pages::wrap_value(mem, fonts.2, v, narrow_w).len();
+        if lf < ln {
+            found = true;
+            break;
+        }
+        model.push('X');
+    }
+    assert!(
+        found,
+        "加长型号名后应能构造出「全宽行数 < 收窄行数」的硬盘值"
+    );
+
+    // 快照必须绑定局部变量：`ctx` 借用的是快照引用，临时值会在语句尾释放。
+    let r_plain = disk_snapshot(&model, false);
+    let r_badged = disk_snapshot(&model, true);
+    let plain = ctx(mem, w, h, Some(&r_plain), fonts);
+    let badged = ctx(mem, w, h, Some(&r_badged), fonts);
+    let t_plain = crate::pages::draw_hw_page(&plain);
+    let t_badged = crate::pages::draw_hw_page(&badged);
+    drop_dc(mem);
+    assert!(
+        t_badged > t_plain,
+        "带徽标版量高必须严格更高（收窄宽多折一行）：plain={t_plain} badged={t_badged}"
+    );
 }
 
 /// 第三十轮回归：硬件页「网卡」分组只显示已连接（up=true）的网卡。
@@ -826,5 +921,157 @@ fn hw_audio_section_lists_real_sound_card() {
     assert!(
         !all_vals.contains("未识别默认设备"),
         "音频分组不应再出现「未识别默认设备」占位: {all_vals}"
+    );
+}
+
+/// 第三十一轮回归：内存条类型名**原样显示**，不再被拼成「DDRLPDDR4」。
+///
+/// `mem_type` 来自 `mem_type_name`，合法值含 `LPDDR4` / `LPDDR5` / `FBD2` 等——
+/// 旧代码按 `starts_with("DDR")` 判断是否补前缀，LPDDR 系列不以 DDR 开头，
+/// 于是被拼成「DDRLPDDR4」（笔记本机型必踩）。只有纯数字才需要补 DDR 前缀。
+#[test]
+fn hw_mem_type_is_not_double_prefixed() {
+    let r = CollectResult {
+        info: HardwareInfo {
+            memory: MemoryInfo {
+                total_mb: Some(MebiBytes::new(16384)),
+                sticks: vec![
+                    MemStick {
+                        locator: Some("DIMM A".into()),
+                        bank: Some("BANK 0".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: Some("LPDDR4".into()),
+                        capacity_mb: Some(MebiBytes::new(16384)),
+                        speed_mhz: Some(3200),
+                    },
+                    MemStick {
+                        locator: Some("DIMM B".into()),
+                        bank: Some("BANK 1".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: Some("DDR4".into()),
+                        capacity_mb: Some(MebiBytes::new(16384)),
+                        speed_mhz: Some(3200),
+                    },
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let sections = crate::pages::build_hw_sections(&r);
+    let mem = sections
+        .iter()
+        .find(|s| s.title == "内存")
+        .expect("硬件页应有「内存」分组");
+    let all: String = mem
+        .rows
+        .iter()
+        .map(|(_, v)| v.clone())
+        .collect::<Vec<_>>()
+        .join(" | ");
+    assert!(all.contains("LPDDR4"), "LPDDR4 应原样显示: {all}");
+    assert!(
+        !all.contains("DDRLPDDR"),
+        "LPDDR 前缀不得重复拼接成 DDRLPDDR: {all}"
+    );
+    assert!(all.contains("DDR4"), "DDR4 应正常显示: {all}");
+}
+
+/// 第三十一轮回归：面板内存分组带「通道提示」行（与 HTML 报告同一判定函数）。
+///
+/// 双路各插 1 条、都在 Channel 0 → 条数是偶数 2，光看「已插 2 / 共 4 插槽」
+/// 看不出是单通道。现场维护要的就是面板上这一眼。
+#[test]
+fn hw_memory_section_shows_channel_warning_for_single_channel_per_node() {
+    let r = CollectResult {
+        info: HardwareInfo {
+            memory: MemoryInfo {
+                total_mb: Some(MebiBytes::new(65536)),
+                sticks: vec![
+                    MemStick {
+                        locator: Some("DIMM000".into()),
+                        bank: Some("_Node0_Channel0_Dimm0".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: None,
+                        capacity_mb: Some(MebiBytes::new(32768)),
+                        speed_mhz: Some(2400),
+                    },
+                    MemStick {
+                        locator: Some("DIMM100".into()),
+                        bank: Some("_Node1_Channel0_Dimm0".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: None,
+                        capacity_mb: Some(MebiBytes::new(32768)),
+                        speed_mhz: Some(2400),
+                    },
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let sections = crate::pages::build_hw_sections(&r);
+    let mem = sections
+        .iter()
+        .find(|s| s.title == "内存")
+        .expect("硬件页应有「内存」分组");
+    let hit = mem.rows.iter().find(|(k, _)| k == "通道提示");
+    assert!(hit.is_some(), "双路各 1 条同通道应出现「通道提示」行");
+    assert!(
+        hit.expect("上一步已断言存在").1.contains("单通道"),
+        "提示文案应含单通道"
+    );
+}
+
+/// 通道跑满（同一路两个通道各一条）→ 面板**不得**出现通道提示行，避免误报刷屏。
+#[test]
+fn hw_memory_section_omits_channel_warning_when_channels_are_full() {
+    let r = CollectResult {
+        info: HardwareInfo {
+            memory: MemoryInfo {
+                total_mb: Some(MebiBytes::new(32768)),
+                sticks: vec![
+                    MemStick {
+                        locator: Some("DIMM_A1".into()),
+                        bank: Some("P0 CHANNEL A".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: Some("DDR5".into()),
+                        capacity_mb: Some(MebiBytes::new(16384)),
+                        speed_mhz: Some(6000),
+                    },
+                    MemStick {
+                        locator: Some("DIMM_B1".into()),
+                        bank: Some("P0 CHANNEL B".into()),
+                        serial: None,
+                        part_no: None,
+                        vendor: None,
+                        mem_type: Some("DDR5".into()),
+                        capacity_mb: Some(MebiBytes::new(16384)),
+                        speed_mhz: Some(6000),
+                    },
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let sections = crate::pages::build_hw_sections(&r);
+    let mem = sections
+        .iter()
+        .find(|s| s.title == "内存")
+        .expect("硬件页应有「内存」分组");
+    assert!(
+        mem.rows.iter().all(|(k, _)| k != "通道提示"),
+        "通道跑满时不应出现通道提示行"
     );
 }

@@ -242,9 +242,16 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
     // 把整窗重心压住，也让"提示 + 版权"这一行有明确的归属。
     fill(hdc, &fr, C_FOOTER_BG);
 
+    // 右键页签的提示随 StartAllBack 状态自适应：接管态下经典菜单开关被禁用，
+    // "切换经典菜单会自动重启资源管理器"不会发生，照抄反而误导。
+    let menu_hint = if startallback_present() {
+        "右键项即时生效；经典菜单由 StartAllBack 接管，无需重启资源管理器"
+    } else {
+        "右键项即时生效，切换经典菜单会自动重启资源管理器"
+    };
     let hints = [
         "页面仅展示常规信息，完整明细请点击右上角「导出详细报告」",
-        "右键项即时生效，切换经典菜单会自动重启资源管理器",
+        menu_hint,
         "选中行查看详情，插入新盘后可点刷新",
     ];
     let hint = hints[cur_tab() as usize % hints.len()];
@@ -667,7 +674,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             .filter(|s| !s.is_populated())
             .collect();
         let mut rows = vec![
-            ("总计".into(), format!("{total_gb:.1} GB")),
+            ("总计".into(), format!("{total_gb:.1} GiB")),
             (
                 "插槽".into(),
                 format!("已插 {populated} / 共 {} 插槽", info.memory.sticks.len()),
@@ -677,7 +684,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             let cap = s.capacity_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
             let mut parts = vec![
                 s.locator.clone().unwrap_or_default(),
-                format!("{cap:.0} GB"),
+                format!("{cap:.0} GiB"),
             ];
             if let Some(t) = s
                 .mem_type
@@ -685,10 +692,14 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 .map(str::trim)
                 .filter(|t| !t.is_empty())
             {
-                parts.push(if t.starts_with("DDR") {
-                    t.to_string()
-                } else {
+                // ⚠️ 只有"纯数字"（部分固件/V 老工具只给代际数字）才补 DDR 前缀。
+                // 原写法是 `t.starts_with("DDR") ? t : "DDR"+t`，遇到 `mem_type_name`
+                // 合法返回的 **LPDDR4 / LPDDR5 / FBD2** 会拼成「DDRLPDDR4」这类错串
+                // （笔记本 LPDDR 机型必踩）。含字母即视为完整名称，原样显示。
+                parts.push(if t.chars().all(|c| c.is_ascii_digit()) {
                     format!("DDR{t}")
+                } else {
+                    t.to_string()
                 });
             }
             if let Some(mhz) = s.speed_mhz.filter(|m| *m > 0) {
@@ -710,6 +721,16 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             let n = empty_slots.len();
             rows.push(("空槽".into(), join_parts(&[format!("{n} 条未安装"), locs])));
         }
+        // 通道提示：与 HTML 报告**同一个判定函数**（`winsuitex_core::memory_channels`），
+        // 避免两端各写一套而漂移。现场维护时面板上看一眼就知道是不是单通道，
+        // 不必导出报告——双路各插 1 条（都在 Channel 0）这种"条数是偶数、实际单通道"
+        // 的情况，光看"已插 2 / 共 16 插槽"是看不出来的（Z.W. 华为真机）。
+        // 判定不出来返回 None → 不加行（诚实留白，不编造）。
+        if let Some(msg) =
+            winsuitex_core::memory_channels::memory_channel_warning(&info.memory.sticks)
+        {
+            rows.push(("通道提示".into(), msg));
+        }
         out.push(Section {
             icon: HwIcon::Mem,
             title: "内存",
@@ -726,7 +747,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         for (i, g) in info.gpus.iter().enumerate() {
             let vram_gb = g.vram_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
             let sub = if vram_gb > 0.05 {
-                format!("{vram_gb:.0} GB 显存")
+                format!("{vram_gb:.0} GiB 显存")
             } else {
                 "共享显存".to_string()
             };
@@ -775,7 +796,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 let sub = join_parts(&[
                     d.iface.clone().unwrap_or_default(),
                     d.media.clone().unwrap_or_default(),
-                    format!("{:.1} GB", d.size_bytes.unwrap_or(0) as f64 / 1073741824.0),
+                    format!("{:.1} GiB", d.size_bytes.unwrap_or(0) as f64 / 1073741824.0),
                 ]);
                 (format!("硬盘#{}", d.index), join_parts(&[model, sub]))
             })
@@ -930,8 +951,18 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
             bottom += scale(12);
         }
         bottom += scale(SEC_H);
-        for (_, v) in &s.rows {
-            let n = wrap_value(hdc, lay.font, v, lay.max_w()).len().max(1) as i32;
+        // ⚠️ 带健康徽标的行：绘制趟把值列右界收窄 `DISK_BADGE_RESERVE`（见第二趟
+        // 的 `lay_row`），量高必须用**同一个数**——否则硬盘这类长值行量高按全宽
+        // 算 1 行、绘制按收窄宽折 2 行，总高量矮 → `max_scroll` 偏小 → 滚动到底
+        // 最后一组被裁、截图长图同步裁尾（Z.W. 2026-10-11 真机：硬盘 4 行全带
+        // 徽标、3 行折两行，「网卡」组整组看不见）。
+        for (i, (_, v)) in s.rows.iter().enumerate() {
+            let max_w = if s.health.get(i).copied().flatten().is_some() {
+                lay.max_w() - scale(DISK_BADGE_RESERVE)
+            } else {
+                lay.max_w()
+            };
+            let n = wrap_value(hdc, lay.font, v, max_w).len().max(1) as i32;
             bottom += scale(ROW_H) * n;
         }
     }
@@ -1130,7 +1161,8 @@ fn hw_accent_idx(icon: HwIcon) -> usize {
 
 /// 右键增强页每一行左侧的功能图标 + 柔彩描边色。
 ///
-/// `idx` 与 `FEATURES` 下标对齐（0..4），`FEATURES.len()`（=5）是经典菜单。
+/// `idx` 与 `FEATURES` 下标对齐（0..4）；经典右键菜单行不走本映射，
+/// 绘制时直接传 `FeatureIcon::Menu`，所以 `_ =>` 分支只是兜底防越界。
 /// 颜色从 `C_ACCENT_SOFT` 取各自的粉彩色相，让菜单卡片也"有色彩"但不花眼。
 fn feature_icon_for(idx: usize) -> (icons::FeatureIcon, Color) {
     match idx {
@@ -1181,6 +1213,21 @@ impl KvLayout {
     fn max_w(&self) -> i32 {
         self.x_val_end - (self.x_key + scale(96))
     }
+}
+
+/// 值列宽度口径（回归测试与量高趟共用同一份几何）：
+/// 返回 `(全宽, 带健康徽标收窄宽)`。真源是 [`KvLayout::max_w`] 与
+/// `DISK_BADGE_RESERVE`——测试从这里取数，不在测试里重抄一份几何。
+#[cfg(test)]
+pub(crate) fn hw_value_widths(w: i32) -> (i32, i32) {
+    let (left, right) = hw_card_x(w);
+    let pad = scale(PAD_IN);
+    let lay = KvLayout {
+        x_key: left + pad,
+        x_val_end: right - pad,
+        font: HFONT::default(),
+    };
+    (lay.max_w(), lay.max_w() - scale(DISK_BADGE_RESERVE))
 }
 
 /// 值文本自动折行：按 ` · ` 分隔符贪心装箱到 `max_w` 宽内，返回行文本数组。
@@ -1315,6 +1362,7 @@ fn feature_row(
     f_sub: HFONT,
     scroll: i32,
     win_h: i32,
+    disabled: bool,
 ) -> i32 {
     // 卡高 78：名称行(~18px) + 说明两行(13pt 字体 ~2×17px) + 上下边距。
     // 之前 66 装不下两行说明，`text_multiline` 的矩形裁剪把第二行拦腰截断
@@ -1336,8 +1384,11 @@ fn feature_row(
         scroll,
         win_h,
     );
-    // 描边即状态：已启用=亮绿（一眼扫出哪几个是开的），未启用=叠白细边。
-    let edge = if on {
+    // 描边即状态：已启用=亮绿（一眼扫出哪几个是开的），未启用=叠白细边；
+    // 禁用态=同样用叠白细边（不画绿，明确表示"此开关当前不可用"）。
+    let edge = if disabled {
+        over(grad_at(y - scroll, win_h), C_WHITE, 0.28)
+    } else if on {
         C_CARD_EDGE_ON
     } else {
         over(grad_at(y - scroll, win_h), C_WHITE, 0.28)
@@ -1381,7 +1432,13 @@ fn feature_row(
         right: right - scale(PAD_IN),
         bottom: y + (row_h - sw_h) / 2 + sw_h,
     };
-    draw_switch(hdc, &sw, on, hovered, scroll, win_h);
+    // 禁用态：开关画成"关"且无悬停高亮，明确表示不可点；同时**不写入**
+    // SWITCH_RECS，使命中测试天然点不到（避免无效点击还弹错误框）。
+    if disabled {
+        draw_switch(hdc, &sw, false, false, scroll, win_h);
+    } else {
+        draw_switch(hdc, &sw, on, hovered, scroll, win_h);
+    }
     let st = RECT {
         left: sw.left - scale(64),
         top: sw.top,
@@ -1390,13 +1447,16 @@ fn feature_row(
     };
     text(hdc, &st, status, f_sub, status_color, true);
 
-    SWITCH_RECS.with(|v| {
-        let mut r = v.borrow_mut();
-        if r.len() <= slot {
-            r.resize(slot + 1, RECT::default());
-        }
-        r[slot] = sw;
-    });
+    // 禁用态不注册命中矩形——整行纯展示，点击无任何副作用。
+    if !disabled {
+        SWITCH_RECS.with(|v| {
+            let mut r = v.borrow_mut();
+            if r.len() <= slot {
+                r.resize(slot + 1, RECT::default());
+            }
+            r[slot] = sw;
+        });
+    }
     y + row_h + scale(10)
 }
 
@@ -1505,6 +1565,24 @@ pub fn is_win11() -> bool {
         .is_some_and(|b| b >= 22000)
 }
 
+/// 是否安装了 StartAllBack（第三方开始菜单 / 任务栏美化工具）。
+///
+/// StartAllBack 会注入 explorer 并**接管 Win11 经典右键菜单**：它自己实现的
+/// shell 扩展覆盖了我们 `{86ca1aa0}` 这套 COM 注册——所以本程序的"显示经典
+/// 菜单"开关在装了 StartAllBack 的机器上**永远不生效**，点下去只会白白重启
+/// 一次 explorer（还可能顺手弹出一个主文件夹窗口，见第十六轮修复）。
+///
+/// 检测信号：
+/// - `HKLM\SOFTWARE\Classes\CLSID\{117E3954-5034-453A-A18B-7B79493646E6}`
+///   存在（StartAllBack 的 shell 扩展，InProcServer32 = `StartAllBackLoaderX64.dll`）。
+///   这是"已安装"的最强信号——只要装了就注册，与当前是否在跑无关。
+pub fn startallback_present() -> bool {
+    use winsuitex_core::traits::Registry;
+    let reg = winsuitex_platform::WinRegistry;
+    let key = r"SOFTWARE\Classes\CLSID\{117E3954-5034-453A-A18B-7B79493646E6}";
+    reg.exists(winsuitex_core::model::RegRoot::LocalMachine, key)
+}
+
 /// 打开/关闭经典右键菜单（写空值 / 删整棵 CLSID 树）。
 ///
 /// 写的是**空值**而不是数据——Windows 11 只看这个键是否存在，不看值。
@@ -1512,7 +1590,7 @@ pub fn is_win11() -> bool {
 /// 注意：**不在这里通知外壳**。`{86ca1aa0}` 是 shell 扩展注册覆盖，
 /// `SHChangeNotify(SHCNE_ASSOCCHANGED)` 对它无效——唯一生效途径是重启
 /// explorer，由调用方（`toggle_feature`）在写完注册表后调 `restart_explorer`。
-pub fn set_classic_menu(on: bool) {
+pub fn set_classic_menu(on: bool) -> winsuitex_core::error::Result<()> {
     use winsuitex_core::model::RegValueKind;
     use winsuitex_core::traits::Registry;
     let mut reg = winsuitex_platform::WinRegistry;
@@ -1520,11 +1598,12 @@ pub fn set_classic_menu(on: bool) {
     if on {
         let key = format!(r"Software\Classes\CLSID\{CLASSIC_MENU_CLSID}\InprocServer32");
         // 写空字符串 + Sz 类型：Windows 只看这个键是否存在，不看值。
-        let _ = reg.write_string(root, &key, None, "", RegValueKind::Sz);
+        reg.write_string(root, &key, None, "", RegValueKind::Sz)?;
     } else {
         let tree = format!(r"Software\Classes\CLSID\{CLASSIC_MENU_CLSID}");
-        let _ = reg.delete_tree(root, &tree);
+        reg.delete_tree(root, &tree)?;
     }
+    Ok(())
 }
 
 /// 右键增强页：经典右键菜单（置顶）+ 5 个功能真开关（其下）。
@@ -1555,21 +1634,22 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     };
     text(hdc, &head, "右键菜单增强工具", f_sec, C_ON_GRAD, false);
     y += scale(32);
+    // StartAllBack 一旦安装就接管经典右键菜单，本开关无效（且点了会白重启
+    // explorer、可能弹文件夹）——检测到就把它渲染成禁用态、并让扩展项照常显示。
+    // 提示行也随状态换文案：接管态不再提"重启资源管理器"（根本不会发生）。
+    let startallback = startallback_present();
+    let hint_text = if startallback {
+        "扩展项开关即时生效；经典菜单已由 StartAllBack 接管，无需重启资源管理器"
+    } else {
+        "开关即时生效；切换经典右键菜单会自动重启资源管理器（约 1~2 秒）"
+    };
     let hint = RECT {
         left,
         top: y,
         right,
         bottom: y + scale(20),
     };
-    text(
-        hdc,
-        &hint,
-        "开关即时生效；切换经典右键菜单会自动重启资源管理器（约 1~2 秒）",
-        f_sub,
-        // 提示行直接坐在渐变上，FAINT(≈2.7:1) 糊；提到 DIM(≈3.5:1) 才读得清。
-        C_ON_GRAD_DIM,
-        false,
-    );
+    text(hdc, &hint, hint_text, f_sub, C_ON_GRAD_DIM, false);
     y += scale(32);
 
     // 当前系统是否 Windows 11（经典菜单仅 Win11 需要；判断系统是否显示该菜单）。
@@ -1594,6 +1674,26 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         );
         y += scale(30);
         let classic_on = classic_menu_on();
+        // 装了 StartAllBack：开关画成"已被接管"的禁用态，不响应点击（见 feature_row
+        // 的 disabled 分支）。说明文字改为解释为何本开关无意义，避免"点了没反应"的
+        // 困惑；没装时才是正常的启用/未启用开关。
+        let (desc_text, status_text, status_color) = if startallback {
+            (
+                "StartAllBack 已接管经典菜单，本开关无需使用、不会生效",
+                "已由接管",
+                C_ON_GRAD_FAINT,
+            )
+        } else {
+            (
+                "在“此电脑”上右键直接看到旧版完整菜单，不再需要点“显示更多选项”",
+                if classic_on { "已启用" } else { "未启用" },
+                if classic_on {
+                    C_CARD_EDGE_ON
+                } else {
+                    C_ON_GRAD_FAINT
+                },
+            )
+        };
         y = feature_row(
             hdc,
             left,
@@ -1603,23 +1703,26 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             icons::FeatureIcon::Menu,
             C_ACCENT_SOFT[0],
             "显示经典菜单",
-            "在“此电脑”上右键直接看到旧版完整菜单，不再需要点“显示更多选项”",
+            desc_text,
             classic_on,
             hover_switch() == 0,
-            if classic_on { "已启用" } else { "未启用" },
-            if classic_on {
-                C_CARD_EDGE_ON
-            } else {
-                C_ON_GRAD_FAINT
-            },
+            status_text,
+            status_color,
             f_body,
             f_sub,
             scroll,
             h,
+            startallback,
         );
     }
 
-    // —— 5 个功能增强开关（slot 1..=5，绘制顺序在经典菜单之下）——
+    // —— 功能增强开关（slot 1..=5，绘制顺序在经典菜单之下）——
+    // 仅 Windows 11 **且经典右键菜单关闭**时，扩展右键项（显示/隐藏系统文件、
+    // 命令提示符在此处打开、PowerShell 在此处打开）注册在旧版"显示更多选项"
+    // 菜单下、新版菜单看不到 → 开着也毫无意义，直接隐藏；只保留两种菜单都
+    // 可见的计算机管理 / 设备管理器（slot 1、2）。Windows 10 及更早没有新版
+    // 菜单，这 3 项本就在原生右键菜单里生效，照常显示。启用经典菜单后 3 项自动出现。
+    // 装了 StartAllBack 时它已提供完整经典菜单，这 3 项同样可见 → 不隐藏。
     y += scale(10);
     let feat_head = RECT {
         left: left + scale(PAD_IN),
@@ -1629,9 +1732,51 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     };
     text(hdc, &feat_head, "功能增强", f_sec, C_ON_GRAD, false);
     y += scale(30);
+    let classic_on = classic_menu_on();
+    let hide_extras = win11 && !classic_on && !startallback;
+    if hide_extras {
+        // 解释为什么只显示两项，避免"是不是漏了"的疑惑（纯提示，不改功能）。
+        let tip = RECT {
+            left,
+            top: y,
+            right,
+            bottom: y + scale(18),
+        };
+        text(
+            hdc,
+            &tip,
+            "启用上方“经典右键菜单”后，其余扩展项才会出现并生效",
+            f_sub,
+            C_ON_GRAD_FAINT,
+            false,
+        );
+        y += scale(22);
+    } else if startallback {
+        // 装了 StartAllBack：说明为何扩展项始终可见（它已接管经典菜单）。
+        let tip = RECT {
+            left,
+            top: y,
+            right,
+            bottom: y + scale(18),
+        };
+        text(
+            hdc,
+            &tip,
+            "检测到 StartAllBack：经典菜单由它接管，下方扩展项始终可用",
+            f_sub,
+            C_ON_GRAD_FAINT,
+            false,
+        );
+        y += scale(22);
+    }
     let reg = winsuitex_platform::WinRegistry;
     let hovered = hover_switch();
     for (i, f) in FEATURES.iter().enumerate() {
+        // 经典菜单关闭的 Win11 下，扩展右键项没意义，跳过绘制（SWITCH_RECS
+        // 也不写对应 slot → 命中测试天然点不到，开关状态保持原样不受干扰）。
+        if hide_extras && i >= 2 {
+            continue;
+        }
         let on = is_installed(&reg, f);
         let (fi, fcol) = feature_icon_for(i);
         let status = if on { "已启用" } else { "未启用" };
@@ -1654,6 +1799,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             f_sub,
             scroll,
             h,
+            false,
         );
     }
     y
@@ -2145,10 +2291,10 @@ fn volume_icon(v: &winsuitex_core::model::Volume) -> (icons::VolumeIcon, Color) 
     (icon, color)
 }
 
-/// 字节 → GB 文本。
+/// 字节 → GiB 文本（按 1024 进制，与 HTML 报告口径一致）。
 fn fmt_gb(b: Option<u64>) -> String {
     match b {
-        Some(v) if v > 0 => format!("{:.1} GB", v as f64 / 1073741824.0),
+        Some(v) if v > 0 => format!("{:.1} GiB", v as f64 / 1073741824.0),
         _ => "-".into(),
     }
 }
@@ -2479,7 +2625,7 @@ mod hw_vendor_zh_tests {
         let v = &s.rows[0].1;
         assert!(v.contains("RTX 4070"), "型号应在: {v}");
         assert!(v.contains("MSI（微星）"), "厂商应渲染: {v}");
-        assert!(v.contains("8 GB 显存"), "显存应在: {v}");
+        assert!(v.contains("8 GiB 显存"), "显存应在: {v}");
     }
 
     #[test]

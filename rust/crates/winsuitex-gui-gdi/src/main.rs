@@ -168,6 +168,44 @@ const WND_CLASS: &[u16] = &[
 ]; // "WinSuiteXGDI"
 const WND_TITLE: &[u16] = &[0x57, 0x69, 0x6E, 0x53, 0x75, 0x69, 0x74, 0x65, 0x58, 0x00]; // "WinSuiteX"
 
+/// 应用图标资源 ID（与 `app.rc` 的 `#define IDI_APP_ICON 101` 同源）。
+///
+/// 值必须与 rc 里的一致，否则 `LoadImageW` 取不到 → 任务栏/Alt+Tab 无图标。
+const IDI_APP_ICON: PCWSTR = PCWSTR(101 as *const u16); // MAKEINTRESOURCE(101)
+
+/// 从本模块资源加载图标：大图（Alt+Tab / 窗口）与小图（任务栏 / 标题栏）。
+///
+/// 尺寸取**系统指标**而不是写死 32/16：高 DPI 下 `SM_CXICON` 会变大，
+/// 写死会让任务栏图标发虚。失败返回 `None`——图标缺失只是观感问题，
+/// 绝不能因此中断启动（与项目"诚实 None"纪律一致）。
+///
+/// ⚠️ 这两个句柄生命周期随进程，不需要也不应该 `DestroyIcon`（系统会在
+/// 进程退出时回收；`WNDCLASSEXW` / `WM_SETICON` 只是引用它）。
+fn load_app_icons() -> Option<(HICON, HICON)> {
+    // SAFETY: hinst 是本进程模块句柄；`IDI_APP_ICON` 是 rc 中已定义的图标资源。
+    unsafe {
+        let hinst = GetModuleHandleW(None).ok()?;
+        let big_w = GetSystemMetrics(SM_CXICON);
+        let big_h = GetSystemMetrics(SM_CYICON);
+        let sm_w = GetSystemMetrics(SM_CXSMICON);
+        let sm_h = GetSystemMetrics(SM_CYSMICON);
+        let load = |w: i32, h: i32| -> Option<HICON> {
+            let h = LoadImageW(
+                Some(hinst.into()),
+                IDI_APP_ICON,
+                IMAGE_ICON,
+                w,
+                h,
+                LR_DEFAULTCOLOR,
+            );
+            h.ok().map(|handle| HICON(handle.0))
+        };
+        let big = load(big_w, big_h)?;
+        let small = load(sm_w, sm_h).unwrap_or(big);
+        Some((big, small))
+    }
+}
+
 /// 版权行（底部栏展示；与 C++ 版一致的公司署名口径）。
 pub const FOOTER_COPYRIGHT: &str = "\u{a9} \u{91cd}\u{5e86}\u{6301}\u{739b}\u{591a}\u{7f51}\u{7edc}\u{6280}\u{672f}\u{6709}\u{9650}\u{516c}\u{53f8} \u{b7} Z.W.";
 
@@ -451,6 +489,13 @@ fn main() {
         };
         // WNDCLASSEXW 用结构体字面量一次成型：逐字段赋值 `Default::default()`
         // 之后改会被 clippy 的 field_reassign_with_default 拦下，且容易漏字段。
+        // ⚠️ 图标必须显式加载并挂到窗口类上：`..Default::default()` 会让
+        // `hIcon` / `hIconSm` 都是 0，于是**任务栏与 Alt+Tab 没有图标**（Z.W. 真机反馈）。
+        // 大图走 `hIcon`（Alt+Tab），小图走 `hIconSm`（任务栏按钮）——两者都要给，
+        // 只给大图时任务栏会拿 32×32 缩到 16×16，边缘发虚。
+        let (icon_big, icon_small) = load_app_icons()
+            .map(|(b, s)| (HICON(b.0), HICON(s.0)))
+            .unwrap_or((HICON::default(), HICON::default()));
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
             style: CS_HREDRAW | CS_VREDRAW,
@@ -458,6 +503,8 @@ fn main() {
             hInstance: hinst.into(),
             lpszClassName: PCWSTR(WND_CLASS.as_ptr()),
             hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
+            hIcon: icon_big,
+            hIconSm: icon_small,
             ..Default::default()
         };
         if RegisterClassExW(&wc) == 0 {
@@ -486,7 +533,15 @@ fn main() {
             // 会和自绘的紫色顶栏叠成"双标题栏"（第一版就栽在这，截图里一眼可见）。
             // 代价是拖动窗口 / 边缘缩放 / Aero 摇 Maximize 全要自己实现，
             // 见 `WM_NCHITTEST` + `WM_NCLBUTTONDOWN` 两个分支。
-            WS_POPUP,
+            //
+            // ⚠️ 但必须补 `WS_MINIMIZEBOX | WS_MAXIMIZEBOX`（Z.W. 2026-10-11 真机反馈
+            // "任务栏单击不最小化/恢复"）：`DefWindowProc` 处理 `WM_SYSCOMMAND` 前会
+            // **先查样式位**——`SC_MINIMIZE` 要求 `WS_MINIMIZEBOX`、`SC_MAXIMIZE` 要求
+            // `WS_MAXIMIZEBOX`，缺了就**静默忽略**。任务栏单击正是发这两条系统命令，
+            // 于是点了没反应；双击标题栏最大化（下面 `WM_NCLBUTTONDBLCLK` 转发
+            // SC_MAXIMIZE/SC_RESTORE）也一直因此失效。
+            // 视觉上零回归：`WS_POPUP` 不绘制系统标题栏，这两个样式位不会画出系统按钮。
+            WS_POPUP | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             init_w + scale(SHADOW_PAD) * 2,
@@ -497,6 +552,25 @@ fn main() {
             None,
         ) {
             set_dpi(GetDpiForWindow(hwnd).max(96) as u32);
+            // 双保险：窗口类图标之外再显式 `WM_SETICON`。
+            // 类图标只影响"注册之后"新建的窗口，而本窗口是本进程唯一一个；
+            // 显式设置可以让任务栏/Alt+Tab 立刻拿到，不依赖类的传播时机。
+            if !icon_big.is_invalid() {
+                let _ = SendMessageW(
+                    hwnd,
+                    WM_SETICON,
+                    Some(WPARAM(ICON_BIG as usize)),
+                    Some(LPARAM(icon_big.0 as isize)),
+                );
+            }
+            if !icon_small.is_invalid() {
+                let _ = SendMessageW(
+                    hwnd,
+                    WM_SETICON,
+                    Some(WPARAM(ICON_SMALL as usize)),
+                    Some(LPARAM(icon_small.0 as isize)),
+                );
+            }
             apply_rounded_region(hwnd);
             center_window(hwnd);
             let _ = ShowWindow(hwnd, SW_SHOW);
@@ -846,6 +920,15 @@ unsafe extern "system" fn wnd_proc(
                     mmi.ptMinTrackSize.y = mmi.ptMinTrackSize.y.min(wh);
                     mmi.ptMaxTrackSize.x = ww;
                     mmi.ptMaxTrackSize.y = wh;
+                    // ⚠️ `ptMaxSize` / `ptMaxPosition` 管的是**最大化几何**，与上面的
+                    // `ptMaxTrackSize`（拖拽缩放上限）是两回事，必须一起给。
+                    // 补上 `WS_MAXIMIZEBOX` 后 `SC_MAXIMIZE` 才真正生效，而 frameless
+                    // 窗口没有系统边框去避让任务栏——不指定就会**铺满整个屏幕**
+                    // （盖住任务栏、底栏被切）。这里钉到工作区，最大化=工作区大小。
+                    mmi.ptMaxSize.x = ww;
+                    mmi.ptMaxSize.y = wh;
+                    mmi.ptMaxPosition.x = work.left;
+                    mmi.ptMaxPosition.y = work.top;
                     wlog!("WM_GETMINMAXINFO: work_area={ww}x{wh}");
                 }
             }
@@ -1432,8 +1515,36 @@ fn toggle_feature(idx: usize) {
     // 注册表写完后**必须重启 explorer** 才生效（SHChangeNotify 对 shell 扩展
     // 注册覆盖无效）——这就是"启用经典菜单不生效"的根因（第十六轮）。
     if idx == 0 {
+        // 装了 StartAllBack 时经典菜单由它接管——本开关对它无效，写了
+        // `{86ca1aa0}` 也白写，只会白白重启一次 explorer（还可能弹出一个
+        // 主文件夹窗口，正是用户报告的"启用经典菜单里还是会打开一个主文件夹"）。
+        // 直接拦截并给出明确提示，不做任何写入/重启（与"不许假成功"一致）。
+        if pages::startallback_present() {
+            pages::show_error(
+                "已检测到 StartAllBack 接管了 Windows 11 经典右键菜单。\n\
+                 本开关对它无效，请在 StartAllBack 的设置里调整经典菜单样式。\n\
+                 （该开关已置灰，点击不会产生任何效果。）",
+            );
+            return;
+        }
         let now_on = pages::classic_menu_on();
-        pages::set_classic_menu(!now_on);
+        let want = !now_on;
+        // 写入失败必须让人看见：之前用 `let _ =` 吞掉，注册表没写成功却状态翻转，
+        // 用户会以为"切换不生效"却找不到原因（与"不许假成功"原则相悖）。
+        if let Err(e) = pages::set_classic_menu(want) {
+            pages::show_error(&format!("写入经典菜单注册表失败：{e}"));
+            return;
+        }
+        // 写后读回：捕获"写入 API 返回成功、但 reg query 在同一台机器却找不到"
+        // 这类静默失效——典型是程序运行账户与 reg query 所用账户不同、HKCU 被
+        // 重定向到其他用户/会话（网吧批量部署常见）。不校验就会"假成功"。
+        if pages::classic_menu_on() != want {
+            pages::show_error(
+                "经典菜单注册表写入后读回不一致：可能被重定向到其他用户/会话的 HKCU。\n\
+                 请确认本程序运行账户与你在 cmd 里执行 reg query 的账户一致（同为当前登录用户）。",
+            );
+            return;
+        }
         restart_explorer();
         return;
     }
@@ -1473,41 +1584,57 @@ fn toggle_feature(idx: usize) {
     // 整体重刷一下（Z.W. 报告"点一下就刷新"），纯属有害的行为偏离。
 }
 
-/// 重启资源管理器（explorer.exe）。
+/// 重启资源管理器（explorer.exe），**不打开任何文件夹窗口**。
 ///
-/// `{86ca1aa0}` 经典菜单覆盖**只有 explorer 重新启动才会读取**——这是
+/// `{86ca1aa0}` 经典菜单覆盖**只有 explorer 重新读取注册表才生效**——这是
 /// "启用经典菜单不生效"的唯一根因，没有任何轻量通知能替代。
-/// 实现：`GetShellWindow` 找到 shell 进程 → 终止；winlogon 的
-/// `AutoRestartShell=1`（系统默认）会自动拉起新 explorer；稍等后若 shell
-/// 仍缺位（自动重启失败），再显式启动一次双保险——幂等，不会开出重复 shell。
+///
+/// 做法（修掉"重启后弹出一个文件夹"这个常见坑）：
+/// 1. 结束当前 shell 进程（取 `GetShellWindow` 的 pid，`TerminateProcess`）。
+/// 2. 轮询等待 winlogon 的 `AutoRestartShell` 自动拉起新 shell（shell 模式，
+///    只负责桌面/任务栏，**不开文件夹**）。最多等 ~2s，每 200ms 探一次。
+/// 3. 仅在 shell 一直没恢复（极端：AutoRestartShell 被关）时，才显式拉起
+///    `explorer.exe`。此时没有任何 shell 在跑，它接管 shell 角色，同样不开文件夹。
+///
+/// ⚠️ 绝不能用 `ShellExecuteW("open", "explorer.exe")` 兜底：那会在已有 shell 的
+/// 情况下额外开一个"快速访问"窗口——正是用户看到的"打开一个文件夹"。
+/// 整个重启放进后台线程，避免 UI 主线程被轮询 sleep 冻住（点一下卡 2 秒）。
 pub fn restart_explorer() {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
-    use windows::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
-    // SAFETY: 全部为无副作用的 Win32 查询/句柄操作；句柄在本函数内闭合。
-    unsafe {
-        let shell = GetShellWindow();
-        if !shell.is_invalid() {
-            let mut pid = 0u32;
-            let _ = GetWindowThreadProcessId(shell, Some(&mut pid));
-            if pid != 0 {
-                if let Ok(h) = OpenProcess(PROCESS_TERMINATE, false, pid) {
-                    let _ = TerminateProcess(h, 0);
-                    let _ = CloseHandle(h);
+    std::thread::spawn(|| {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+        use windows::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
+
+        // 1. 结束 shell 进程。
+        // SAFETY: 无副作用的 Win32 查询/句柄操作；句柄在本闭包内闭合。
+        unsafe {
+            let shell = GetShellWindow();
+            if !shell.is_invalid() {
+                let mut pid = 0u32;
+                let _ = GetWindowThreadProcessId(shell, Some(&mut pid));
+                if pid != 0 {
+                    if let Ok(h) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+                        let _ = TerminateProcess(h, 0);
+                        let _ = CloseHandle(h);
+                    }
                 }
             }
         }
-    }
-    // 等 shell 退出 + winlogon 自动重启（通常 <1s）。
-    std::thread::sleep(std::time::Duration::from_millis(600));
-    // SAFETY: 常量串。
-    unsafe {
-        if GetShellWindow().is_invalid() {
-            // shell 仍未恢复 → 显式拉起（open_in_default 走 ShellExecuteW，
-            // explorer.exe 经 App Paths 注册解析，无需全路径）。
-            open_in_default(std::path::Path::new("explorer.exe"));
+
+        // 2. 轮询等待 winlogon 自动重启的 shell（不开窗口）。
+        for _ in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            // SAFETY: 纯查询。
+            let back = unsafe { GetShellWindow() };
+            if !back.is_invalid() {
+                return; // shell 已回归，新 shell 已读取经典菜单覆盖
+            }
         }
-    }
+
+        // 3. 兜底：shell 仍未恢复 → 显式拉起（此时无 shell，explorer 接管 shell 不开文件夹）。
+        //    `spawn` 不等待：explorer 是常驻进程，wait 会永久阻塞。
+        let _ = std::process::Command::new("explorer.exe").spawn();
+    });
 }
 
 /// 展开 `%SystemRoot%` 等环境变量（`feature::install` 写的注册表值里带 `%...%`）。

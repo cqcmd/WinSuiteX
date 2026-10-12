@@ -185,8 +185,10 @@ pub(crate) fn monitor_model_from_device_id(device_id: &str) -> Option<(String, S
     if model.is_empty() {
         return None;
     }
-    let vendor = vendor_display(code3);
-    Some((vendor, model.to_string()))
+    // 返回**原始 PnP 厂商码**（如 "DEL"），不在此处本地化：
+    // 本地化统一由渲染层 `brand_display_or` 完成（与 GPU 的 `gpu_brand_for_display` 同口径），
+    // JSON 也只存原始英文厂商名（见 report/lib.rs 顶部约定）。
+    Some((code3.to_string(), model.to_string()))
 }
 
 /// 根据监视器名与解析出的厂商/型号，决定如何写回显示器名。
@@ -293,10 +295,13 @@ impl HardwareSource for DisplaySource {
                 // 从 PnP 硬件 ID（DeviceID）补全真实型号与厂商，并尝试读 EDID 增强字段。
                 let device_id = wide_to_string(&mdd.DeviceID).unwrap_or_default();
                 let mut vendor: Option<String> = None;
-                if let Some((v, model)) = monitor_model_from_device_id(&device_id) {
+                if let Some((code3, model)) = monitor_model_from_device_id(&device_id) {
+                    // 显示器名嵌入「英文（中文）」品牌（展示用）；vendor 字段存原始 PnP 码，
+                    // 渲染层再统一本地化，避免报告里品牌重复出现。
+                    let zh = vendor_display(&code3);
                     let base = name.as_deref().unwrap_or("");
-                    name = Some(display_name_with_model(base, Some(v.as_str()), &model));
-                    vendor = Some(v);
+                    name = Some(display_name_with_model(base, Some(zh.as_str()), &model));
+                    vendor = Some(code3);
                 }
                 // EDID 增强：序列号 / 生产日期 / 物理尺寸（缺则 None，不影响主链路）。
                 let edid = if !device_id.is_empty() {
@@ -381,12 +386,12 @@ mod tests {
         // 注：厂商名已统一为 core 的 `英文（中文）` 规范格式（第二十轮）。
         assert_eq!(
             monitor_model_from_device_id(r"MONITOR\AOC2769\4&1a2b3c4&0&UID0"),
-            Some(("AOC（冠捷）".to_string(), "2769".to_string()))
+            Some(("AOC".to_string(), "2769".to_string()))
         );
         // DISPLAY\ 前缀 + 型号以字母开头（C34J）
         assert_eq!(
             monitor_model_from_device_id(r"DISPLAY\SAMC34JWG\...\0000"),
-            Some(("Samsung（三星）".to_string(), "C34JWG".to_string()))
+            Some(("SAM".to_string(), "C34JWG".to_string()))
         );
         // 未知厂商码应回退为原始 3 字母码，而非 None
         assert_eq!(

@@ -155,6 +155,24 @@ pub const VENDOR_ZH: &[(&str, &str, &str)] = &[
     ("Compaq", "Compaq", "康柏"),
     ("CMO", "CMO", "奇美"),
     ("HKC", "HKC", "惠科"),
+    // —— 显示器 PnP 三字母码（与上方英文列同一品牌）——
+    // `display.rs` 把原始 PnP 码（"DEL"/"SAM"/"GSM"…）写进 `Display.vendor`，
+    // 报告层要靠它出「（戴尔）」，故此处必须以码为 key 收敛（见模块顶部说明）。
+    // 缺这些码会导致 `brand_display_or("DEL")` 退回原始码、报告误出「（DEL）」而非「（戴尔）」。
+    ("DEL", "Dell", "戴尔"),
+    ("SAM", "Samsung", "三星"),
+    ("ACR", "Acer", "宏碁"),
+    ("HWP", "HP", "惠普"),
+    ("SNY", "Sony", "索尼"),
+    ("PHL", "Philips", "飞利浦"),
+    ("VSC", "ViewSonic", "优派"),
+    ("SHP", "Sharp", "夏普"),
+    ("LEN", "Lenovo", "联想"),
+    ("LG", "LG", "LG"),
+    ("GSM", "LG", "LG"),
+    ("iiyama", "iiyama", "iiyama"),
+    ("IVM", "iiyama", "iiyama"),
+    ("NEC", "NEC", "NEC"),
 ];
 
 /// 匹配顺序：
@@ -283,8 +301,6 @@ mod tests {
     fn unknown_passthrough() {
         assert_eq!(brand_zh("SomeWeirdBrand"), None);
         assert_eq!(brand_zh_or("SomeWeirdBrand"), "SomeWeirdBrand");
-        assert_eq!(brand_zh("LG"), None);
-        assert_eq!(brand_zh_or("LG"), "LG");
     }
 
     #[test]
@@ -292,6 +308,13 @@ mod tests {
         assert_eq!(brand_zh("HKC"), Some("惠科"));
         assert_eq!(brand_zh("CMO"), Some("奇美"));
         assert_eq!(brand_zh("AOC"), Some("冠捷"));
+        // 显示器采集层把原始 PnP 码写进 Display.vendor，报告层必须能解析出中文，
+        // 否则会误出「（DEL）」而非「（戴尔）」。
+        assert_eq!(brand_zh("DEL"), Some("戴尔"));
+        assert_eq!(brand_zh("SAM"), Some("三星"));
+        assert_eq!(brand_zh("LEN"), Some("联想"));
+        assert_eq!(brand_display_or("DEL"), "Dell（戴尔）");
+        assert_eq!(brand_display_or("SAM"), "Samsung（三星）");
     }
 
     // —— 第二十轮：`英文（中文）` 显示格式 + 中文输入反查 ——

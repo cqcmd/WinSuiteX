@@ -7,6 +7,7 @@
 
 pub mod error;
 pub mod feature;
+pub mod memory_channels;
 pub mod model;
 pub mod smbios;
 pub mod traits;

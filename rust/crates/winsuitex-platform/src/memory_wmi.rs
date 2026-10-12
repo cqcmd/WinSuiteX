@@ -82,6 +82,15 @@ pub(crate) struct WmiMem {
     manufacturer: Option<String>,
     part_number: Option<String>,
     serial_number: Option<String>,
+    /// SMBIOS 原始 Memory Type 字节（`SMBIOSMemoryType`，如 0x1A=DDR4）。
+    ///
+    /// 用于**回补** SMBIOS Type 17 直采没解析出可展示类型的情况：部分服务器固件
+    /// （华为 Insyde 等）在 Type 17 里填的是泛化值（Other/Unknown/DRAM），
+    /// 而 WMI 这条独立通路能拿到真实代际。取不到就 None，绝不猜。
+    ///
+    /// ⚠️ 只用 `SMBIOSMemoryType`（原始字节，与本项目的 `mem_type_name` 同表），
+    /// 不用 CIM 版 `MemoryType`（另一套枚举，20=DDR 而非 26=DDR4）。
+    smbios_memory_type: Option<u32>,
 }
 
 /// 归一化槽位键：小写、去前缀（`P0 `/`BANK `/`B`/`CHANNEL` 仅保留通道字母），去空白。
@@ -307,8 +316,10 @@ fn query_wmi_memory() -> Option<Vec<WmiMem>> {
     let (svc, _guard) = wmi_connect("ROOT\\CIMV2")?;
     let rows = wmi_query(
         &svc,
+        // `SMBIOSMemoryType`：Win8/Server2012+ 才有。老系统 Get 失败返回 None，
+        // 只影响「类型回补」这一项，其余字段照常工作（纪律：取不到就留 None，不猜）。
         "SELECT DeviceLocator, BankLabel, Speed, ConfiguredClockSpeed, Capacity, \
-         Manufacturer, PartNumber, SerialNumber FROM Win32_PhysicalMemory",
+         Manufacturer, PartNumber, SerialNumber, SMBIOSMemoryType FROM Win32_PhysicalMemory",
     );
     wmi_dbg(&format!("Win32_PhysicalMemory 命中 {} 条", rows.len()));
     if rows.is_empty() {
@@ -328,10 +339,18 @@ fn query_wmi_memory() -> Option<Vec<WmiMem>> {
             manufacturer: wmi_get_bstr(r, "Manufacturer"),
             part_number: wmi_get_bstr(r, "PartNumber"),
             serial_number: wmi_get_bstr(r, "SerialNumber"),
+            smbios_memory_type: wmi_get_u64(r, "SMBIOSMemoryType")
+                .and_then(|v| u32::try_from(v).ok()),
         };
         wmi_dbg(&format!(
-            "  WMI mem: loc={:?} bank={:?} cap={:?} ccs={:?} speed={:?} mfr={:?}",
-            m.locator, m.bank, m.capacity_bytes, m.configured_clock_speed, m.speed, m.manufacturer
+            "  WMI mem: loc={:?} bank={:?} cap={:?} ccs={:?} speed={:?} mfr={:?} smbios_type={:?}",
+            m.locator,
+            m.bank,
+            m.capacity_bytes,
+            m.configured_clock_speed,
+            m.speed,
+            m.manufacturer,
+            m.smbios_memory_type
         ));
         out.push(m);
     }
@@ -376,6 +395,27 @@ fn fill_meta(stick: &mut MemStick, w: &WmiMem) {
         {
             stick.serial = Some(sn.clone());
         }
+    }
+}
+
+/// 给「SMBIOS 没解析出可展示的内存类型」的插槽补类型（如 DDR4）。
+///
+/// 场景：服务器固件把 SMBIOS Type 17 的 Memory Type 填成泛化值（Other/Unknown/
+/// DRAM），按规范 `mem_type_name` 返回 None → 报告里内存条只剩"容量 · 频率"，
+/// 看不出是 DDR4 还是 DDR5，对资产盘点/加内存是直接缺失（Z.W. 华为服务器真机）。
+/// WMI `SMBIOSMemoryType` 回传的是同一套 SMBIOS 原始字节，可安全复用同一张表。
+fn fill_mem_type(stick: &mut MemStick, w: &WmiMem) {
+    if stick.mem_type.is_some() {
+        return; // SMBIOS 直采已给出类型，绝不覆盖
+    }
+    let Some(raw) = w.smbios_memory_type else {
+        return;
+    };
+    let Ok(byte) = u8::try_from(raw) else {
+        return; // 越界（>255）不是合法 SMBIOS 字节，丢弃
+    };
+    if let Some(name) = winsuitex_core::smbios::mem_type_name(byte) {
+        stick.mem_type = Some(name.to_string());
     }
 }
 
@@ -466,6 +506,7 @@ pub(crate) fn enrich_from_wmi(sticks: &mut [MemStick], wmi: &[WmiMem]) {
         for (s, w) in sticks.iter_mut().zip(wmi.iter()) {
             fill_speed(s, w);
             fill_meta(s, w);
+            fill_mem_type(s, w);
             fill_capacity_if_keyed(s, w);
         }
         fill_capacity_by_locator_secondary(sticks, wmi);
@@ -494,6 +535,7 @@ pub(crate) fn enrich_from_wmi(sticks: &mut [MemStick], wmi: &[WmiMem]) {
         let w = &wmi[idxs[0]];
         fill_speed(s, w);
         fill_meta(s, w);
+        fill_mem_type(s, w);
         fill_capacity_if_keyed(s, w);
     }
     fill_capacity_by_locator_secondary(sticks, wmi);
@@ -578,7 +620,77 @@ mod tests {
             manufacturer: Some("Kingston".into()),
             part_number: Some("KF560C30-32".into()),
             serial_number: Some("AD170E88".into()),
+            smbios_memory_type: None,
         }
+    }
+
+    /// 内存类型回补（第三十一轮）：SMBIOS Type 17 的 Memory Type 是泛化值时
+    /// `mem_type=None`，用 WMI `SMBIOSMemoryType`（同一套 SMBIOS 原始字节）补回。
+    #[test]
+    fn fills_missing_mem_type_from_smbios_memory_type() {
+        // 华为服务器真机形态：容量/频率/厂商都在，唯独类型解析不出（0x1A 应为 DDR4）。
+        let mut sticks = vec![stick(
+            "DIMM000",
+            "_Node0_Channel0_Dimm0",
+            Some(32768),
+            Some(2400),
+            Some("SK Hynix"),
+        )];
+        let mut w = mk_wmi(
+            "DIMM000",
+            "_Node0_Channel0_Dimm0",
+            Some(32u64 << 30),
+            Some(2400),
+            None,
+        );
+        w.smbios_memory_type = Some(0x1A); // DDR4
+        enrich_from_wmi(&mut sticks, &[w]);
+        assert_eq!(
+            sticks[0].mem_type.as_deref(),
+            Some("DDR4"),
+            "应补回 DDR4（0x1A）"
+        );
+    }
+
+    #[test]
+    fn never_overwrites_known_mem_type() {
+        let mut sticks = vec![stick(
+            "DIMM 0",
+            "P0 CHANNEL A",
+            Some(32768),
+            Some(3200),
+            None,
+        )];
+        sticks[0].mem_type = Some("DDR5".into());
+        let mut w = mk_wmi("DIMM 0", "CHANNEL A", Some(32u64 << 30), Some(3200), None);
+        w.smbios_memory_type = Some(0x1A); // DDR4（错的，用来验证不被覆盖）
+        enrich_from_wmi(&mut sticks, &[w]);
+        assert_eq!(
+            sticks[0].mem_type.as_deref(),
+            Some("DDR5"),
+            "SMBIOS 已给的类型绝不被 WMI 覆盖"
+        );
+    }
+
+    /// 泛化值（Unknown=0x02）不该被渲染成类型；越界值也不是合法 SMBIOS 字节。
+    #[test]
+    fn mem_type_ignores_generic_and_out_of_range_values() {
+        let mut sticks = vec![stick(
+            "DIMM 0",
+            "P0 CHANNEL A",
+            Some(16384),
+            Some(2666),
+            None,
+        )];
+        let mut w = mk_wmi("DIMM 0", "CHANNEL A", Some(16u64 << 30), Some(2666), None);
+        w.smbios_memory_type = Some(0x02); // Unknown（泛化值，按规范不展示）
+        enrich_from_wmi(&mut sticks, &[w]);
+        assert_eq!(sticks[0].mem_type, None, "泛化值不应显示成类型");
+
+        let mut w2 = mk_wmi("DIMM 0", "CHANNEL A", Some(16u64 << 30), Some(2666), None);
+        w2.smbios_memory_type = Some(0x1_0000); // 越界，非 u8
+        enrich_from_wmi(&mut sticks, &[w2]);
+        assert_eq!(sticks[0].mem_type, None, "越界值应丢弃");
     }
 
     #[test]

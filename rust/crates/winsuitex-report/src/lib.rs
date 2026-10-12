@@ -886,6 +886,12 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             "通道提示",
             "实插内存条为奇数（非对称双通道/flex）→ 部分通道单条运行，带宽未用满；建议补齐到偶数条、均匀分布到各通道",
         );
+    } else if has_empty {
+        // 条数是偶数不代表通道跑满了：双路各插 1 条（都在 Channel 0）也是单通道，
+        // 上面两条"数条数"的规则识别不出来，这里按 (Node, Channel) 分组兜住。
+        if let Some(msg) = winsuitex_core::memory_channels::memory_channel_warning(sticks) {
+            row(out, "通道提示", &esc(&msg));
+        }
     }
     // 口径交叉校验：OS 报告的 total_mb 与 SMBIOS 各实插槽容量之和通常应当一致；
     // 差异过大（>2%）说明某一口径不可靠（核显占用/预留内存/固件虚报容量），
@@ -991,13 +997,13 @@ fn gpu_display_section(hw: &HardwareInfo, out: &mut String) {
         let mut label = name.clone();
         if let Some(v) = &d.vendor {
             if !v.is_empty() && usable(v) {
+                // `d.vendor` 已是原始 PnP 厂商码（如 "DEL"）；品牌本地化统一走 `brand_display_or`。
+                // 显示器名在采集层已嵌入「英文（中文）」品牌（通用名分支整段替换），
+                // 仅当名字里**还没**含中文品牌时才补括号，避免重复出现「（戴尔）」。
                 let zh = vendor_zh(v);
                 if name.is_empty() {
-                    label = v.clone();
-                    if zh != *v {
-                        label.push_str(&format!("（{}）", zh));
-                    }
-                } else if zh != *v {
+                    label = winsuitex_core::brand_display_or(v);
+                } else if !name.contains(&zh) {
                     label.push_str(&format!("（{}）", zh));
                 }
             }
@@ -1342,7 +1348,7 @@ fn volume_section(volumes: &[Volume], hw: &HardwareInfo, out: &mut String) {
         <th style=\"width:auto\">总容量</th>\
         <th style=\"width:auto\">已用</th>\
         <th style=\"width:auto\">可用</th>\
-        <th style=\"width:auto\">序列号</th>\
+        <th style=\"width:auto\">磁盘序列号</th>\
         <th style=\"width:auto\">卷标</th></tr>\n",
     );
     for v in volumes {
@@ -1395,7 +1401,10 @@ fn volume_section(volumes: &[Volume], hw: &HardwareInfo, out: &mut String) {
              <td class=\"wsx-mono\">{vol}</td></tr>\n"
         ));
     }
-    out.push_str("</div></table></section>\n");
+    // ⚠️ 闭合顺序必须与开启顺序相反：外 `<div class="wsx-table-scroll">` 包内
+    // `<table>`，所以先 `</table>` 再 `</div>`。之前写成 `</div></table>`（反了），
+    // 浏览器容错看不出来，但属无效嵌套，严格解析器/复制导出会错。
+    out.push_str("</table></div></section>\n");
 }
 
 fn audio_section(hw: &HardwareInfo, out: &mut String) {
@@ -2110,6 +2119,30 @@ mod tests {
         }
     }
 
+    /// 分区表两处修复的防回归（Z.W. 2026-10-11 真机报告审阅）：
+    /// ① 表头「序列号」实为**磁盘**序列号（同盘多分区显示同一值，易误读）→ 改名；
+    /// ② 表格闭合顺序写反了（`</div></table>`）→ 无效嵌套，必须与开启顺序相反。
+    #[test]
+    fn volume_table_header_says_disk_serial_and_nesting_is_valid() {
+        let hw = base_hw();
+        // 同一块盘上的两个分区：序列号列取的是磁盘序列号，两行值相同。
+        let mut v2 = base_volume();
+        v2.letter = "D:".into();
+        let html = build_html(&hw, &[base_volume(), v2]);
+        assert!(
+            html.contains("磁盘序列号"),
+            "分区表列头应写明是磁盘序列号: {html}"
+        );
+        assert!(
+            html.contains("</table></div>"),
+            "表格闭合必须 table 在内、div 在外: {html}"
+        );
+        assert!(
+            !html.contains("</div></table>"),
+            "不应残留写反的闭合顺序: {html}"
+        );
+    }
+
     #[test]
     fn none_renders_unknown() {
         let mut hw = base_hw();
@@ -2620,6 +2653,39 @@ mod tests {
     }
 
     #[test]
+    fn display_vendor_not_duplicated_when_name_has_brand() {
+        // 回归：采集层对通用名会整段替换成「英文（中文） 型号」（如 "Dell（戴尔） A221"），
+        // 此时品牌已嵌入名字；vendor 字段是原始 PnP 码（如 "DEL"），
+        // 渲染层不应再补一次「（戴尔）」，否则会出现 "Dell（戴尔） A221（戴尔）" 这类重复。
+        let mut hw = base_hw();
+        hw.displays.clear();
+        hw.displays.push(Display {
+            name: Some("Dell（戴尔） A221".into()),
+            vendor: Some("DEL".into()),
+            size_inch: None,
+            serial: None,
+            manufacture_year: None,
+            manufacture_week: None,
+            width: Some(1920),
+            height: Some(1080),
+            refresh_hz: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("Dell（戴尔） A221"),
+            "显示器型号行应含完整品牌名: {html}"
+        );
+        assert!(
+            !html.contains("A221（戴尔）"),
+            "品牌已嵌入名字，渲染层不得重复追加「（戴尔）」: {html}"
+        );
+        assert!(
+            !html.contains("（DEL）"),
+            "PnP 原始码不得直接进括号（应解析为「（戴尔）」或省略）: {html}"
+        );
+    }
+
+    #[test]
     fn nic_virtual_label_renders_in_text() {
         // 即便描述被英文黑名单漏过（非英文 Windows 场景），kind 仍驱动标注。
         let mut hw = base_hw();
@@ -2994,6 +3060,130 @@ mod tests {
         assert!(
             html.contains("非对称双通道"),
             "奇数条已插应提示非对称双通道: {html}"
+        );
+    }
+
+    /// 真机回归（Z.W. 华为 BC11HGSB0，2026-10-11）：双路服务器每路各插 1 条、
+    /// 且都在 Channel 0 —— 条数是**偶数 2**，老的"奇数条"规则识别不出来，
+    /// 实际两颗 CPU 都在单通道跑。这条按 (Node, Channel) 分组兜住。
+    #[test]
+    fn two_sticks_one_per_node_on_same_channel_warns() {
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        // 已插：Node0/Channel0、Node1/Channel0（各路仅 1 条、仅 1 通道）
+        for (loc, bank) in [
+            ("DIMM000", "_Node0_Channel0_Dimm0"),
+            ("DIMM100", "_Node1_Channel0_Dimm0"),
+        ] {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(loc.into()),
+                bank: Some(bank.into()),
+                serial: Some("0x3239F910".into()),
+                part_no: Some("HMA84GL7AMR4N-UH".into()),
+                vendor: Some("SK Hynix".into()),
+                mem_type: None, // 该机 SMBIOS 未解析出 DDR4
+                capacity_mb: Some(MebiBytes::new(32768)),
+                speed_mhz: Some(2400),
+            });
+        }
+        // 空槽若干（有空槽才提示"可补"）
+        for loc in ["DIMM001", "DIMM101"] {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(loc.into()),
+                bank: Some("_Node0_Channel0_Dimm1".into()),
+                serial: Some("NO DIMM".into()),
+                part_no: Some("NO DIMM".into()),
+                vendor: Some("NO DIMM".into()),
+                mem_type: None,
+                capacity_mb: None,
+                speed_mhz: None,
+            });
+        }
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("通道提示"),
+            "双路各插 1 条（同通道）应出现「通道提示」: {html}"
+        );
+        assert!(
+            html.contains("单通道"),
+            "两条却都在 Channel 0 应提示单通道: {html}"
+        );
+        // 不该被老规则误判成"非对称双通道"（那是奇数条的文案）
+        assert!(
+            !html.contains("非对称双通道"),
+            "偶数条不应走奇数条文案: {html}"
+        );
+    }
+
+    /// 正常双通道（同一路的两个通道各一条）**不得**误报。
+    #[test]
+    fn proper_dual_channel_does_not_warn() {
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        for (loc, bank) in [("DIMM_A1", "P0 CHANNEL A"), ("DIMM_B1", "P0 CHANNEL B")] {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(loc.into()),
+                bank: Some(bank.into()),
+                serial: Some("SN1".into()),
+                part_no: Some("KF560C30-32".into()),
+                vendor: Some("Kingston".into()),
+                mem_type: Some("DDR5".into()),
+                capacity_mb: Some(MebiBytes::new(32768)),
+                speed_mhz: Some(6000),
+            });
+        }
+        // 仍有空槽（满足"可补"前提），但通道是满的 → 不该提示
+        for loc in ["DIMM_A2", "DIMM_B2"] {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(loc.into()),
+                bank: Some("P0 CHANNEL A".into()),
+                serial: Some("NO DIMM".into()),
+                part_no: Some("NO DIMM".into()),
+                vendor: Some("NO DIMM".into()),
+                mem_type: None,
+                capacity_mb: None,
+                speed_mhz: None,
+            });
+        }
+        let html = build_html(&hw, &[]);
+        assert!(
+            !html.contains("通道提示"),
+            "通道跑满时不应出现通道提示: {html}"
+        );
+    }
+
+    /// 槽位名里没有可判定的通道信息（"DIMM000" 且 bank 无 Channel）时**不提示**——
+    /// 拿不准宁可漏报，不可误报。
+    #[test]
+    fn unparsable_channel_never_warns() {
+        let mut hw = base_hw();
+        hw.memory.sticks.clear();
+        for loc in ["DIMM0", "DIMM1"] {
+            hw.memory.sticks.push(MemStick {
+                locator: Some(loc.into()),
+                bank: Some("BANK 0".into()), // 无 Node / 无 Channel 字样
+                serial: Some("SN".into()),
+                part_no: Some("CT16G4".into()),
+                vendor: Some("Crucial".into()),
+                mem_type: Some("DDR4".into()),
+                capacity_mb: Some(MebiBytes::new(16384)),
+                speed_mhz: Some(2666),
+            });
+        }
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM2".into()),
+            bank: Some("BANK 1".into()),
+            serial: Some("NO DIMM".into()),
+            part_no: Some("NO DIMM".into()),
+            vendor: Some("NO DIMM".into()),
+            mem_type: None,
+            capacity_mb: None,
+            speed_mhz: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            !html.contains("通道提示"),
+            "通道信息不可判定时不应提示: {html}"
         );
     }
 

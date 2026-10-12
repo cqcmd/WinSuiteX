@@ -324,6 +324,34 @@ pub fn codename_for(
     fallback
 }
 
+/// Xeon 服务器版 E 系列微架构名的纠正（`-E` → `-EP`），识别不出返回 `None`。
+///
+/// Intel 的 HEDT 与服务器**共用同一个 CPUID model**，查表只能给一个名字：
+/// | model | HEDT（Core X） | 服务器（Xeon E5/E7） |
+/// |---|---|---|
+/// | 45 | Sandy Bridge-E | Sandy Bridge-EP |
+/// | 62 | Ivy Bridge-E | Ivy Bridge-EP |
+/// | 63 | Haswell-E | Haswell-EP |
+/// | 79 | Broadwell-E | Broadwell-EP |
+///
+/// 所以按品牌串二次判定：是 Xeon 就显示 `-EP`。
+/// 真机案例（Z.W. 2026-10-11）：华为服务器 Xeon E5-2650 v4（model 79）报告里
+/// 曾显示「Broadwell-E (Xeon)」，严格说应为 **Broadwell-EP**。
+///
+/// 纯函数、不碰平台 API —— 非 Windows/非 x86_64 的 CI 也能直接单测。
+fn ep_variant(base: &str, brand: Option<&str>) -> Option<&'static str> {
+    if !brand?.contains("Xeon") {
+        return None;
+    }
+    Some(match base {
+        "Sandy Bridge-E" => "Sandy Bridge-EP",
+        "Ivy Bridge-E" => "Ivy Bridge-EP",
+        "Haswell-E" => "Haswell-EP",
+        "Broadwell-E" => "Broadwell-EP",
+        _ => return None,
+    })
+}
+
 /// 从 CPU 品牌串里推断后缀（Xeon / EPYC / Core i7 / Ryzen 9 等）。
 ///
 /// 仅当能判定时才返回 `Some`，绝不编造。
@@ -491,9 +519,15 @@ pub fn cpu_codename() -> Option<String> {
         let brand = read_brand_string();
         // 基础代号（优先精确步进匹配，回退不区分步进的同型号条目）。
         let base = codename_for(vendor, family, model, Some(stepping))?;
+        // Xeon 服务器版的 E 系列：model 与 HEDT 共用，按品牌纠正成 `-EP`（见 `ep_variant`）。
+        let base = ep_variant(base, brand.as_deref()).unwrap_or(base);
+        // `-EP` 本身就代表 Xeon 服务器版，再挂个 "(Xeon)" 是重复表达，去掉。
+        let is_ep = base.ends_with("-EP");
         let mut notes: Vec<&str> = Vec::new();
         if let Some(suffix) = brand.as_deref().and_then(brand_suffix) {
-            notes.push(suffix);
+            if !(is_ep && suffix == "Xeon") {
+                notes.push(suffix);
+            }
         }
         // Intel 12 代起的混合架构：标注 hybrid，便于识别 P-core/E-core 机型。
         if vendor == CpuVendor::Intel && intel_is_hybrid() == Some(true) {
@@ -522,6 +556,54 @@ mod tests {
             codename_for(CpuVendor::Intel, 6, 79, None),
             Some("Broadwell-E")
         );
+    }
+
+    /// model 79 同时覆盖 HEDT 与 Xeon EP：查表只能给 `Broadwell-E`，
+    /// 是 Xeon 品牌时应纠正为 `Broadwell-EP`（Z.W. 真机 E5-2650 v4）。
+    #[test]
+    fn xeon_e_family_uses_ep_variant() {
+        let xeon = "Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz";
+        assert_eq!(ep_variant("Broadwell-E", Some(xeon)), Some("Broadwell-EP"));
+        assert_eq!(
+            ep_variant(
+                "Haswell-E",
+                Some("Intel(R) Xeon(R) CPU E5-2650 v3 @ 2.30GHz")
+            ),
+            Some("Haswell-EP")
+        );
+        assert_eq!(
+            ep_variant(
+                "Sandy Bridge-E",
+                Some("Intel(R) Xeon(R) CPU E5-2650 0 @ 2.00GHz")
+            ),
+            Some("Sandy Bridge-EP")
+        );
+        assert_eq!(
+            ep_variant(
+                "Ivy Bridge-E",
+                Some("Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz")
+            ),
+            Some("Ivy Bridge-EP")
+        );
+    }
+
+    /// 非 Xeon 品牌（HEDT）保持 `-E` 原名；非 E 系列代号一律不纠正。
+    #[test]
+    fn ep_variant_keeps_hedt_and_others_untouched() {
+        assert_eq!(
+            ep_variant(
+                "Broadwell-E",
+                Some("Intel(R) Core(TM) i7-6800K CPU @ 3.40GHz")
+            ),
+            None,
+            "HEDT 是 Broadwell-E，不能改成 EP"
+        );
+        assert_eq!(
+            ep_variant("Haswell", Some("Intel(R) Xeon(R) CPU E3-1231 v3 @ 3.40GHz")),
+            None,
+            "非 E 系列代号不参与纠正"
+        );
+        assert_eq!(ep_variant("Broadwell-E", None), None, "无品牌串不纠正");
     }
 
     #[test]

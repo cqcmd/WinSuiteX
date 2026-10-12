@@ -310,7 +310,11 @@ pub fn sanitize_thread_counts(cpus: &mut [Cpu], logical_processors: Option<u32>)
 /// TODO: C++ 目前缺 `0x20 HBM / 0x21 HBM2 / 0x23 LPDDR5 / 0x24 HBM3`。
 /// 新笔记本（LPDDR5）在 Rust 侧本可显示，为保持 diff 干净暂不启用；
 /// 若要放开，需同时改 C++ `HwMemTypeToStr`，否则又是一处必然差异。
-fn mem_type_name(t: u8) -> Option<&'static str> {
+///
+/// `pub` 的原因：它是**内存类型码的唯一真源**——SMBIOS 直采与 WMI
+/// `Win32_PhysicalMemory.SMBIOSMemoryType`（回传的同样是 SMBIOS 原始字节）
+/// 两条路径共用这一张表，避免两处各维护一份枚举而对不上。
+pub fn mem_type_name(t: u8) -> Option<&'static str> {
     let s = match t {
         0x12 => "DDR",
         0x13 => "DDR2",
