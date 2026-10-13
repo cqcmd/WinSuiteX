@@ -736,25 +736,6 @@ fn cpu_section(hw: &HardwareInfo, out: &mut String) {
     out.push_str("</table></section>\n");
 }
 
-/// 从 Bank Locator 提取通道标识（"P0 CHANNEL A" → "CHANNEL A"），用于槽位名重复时消歧。
-///
-/// 部分固件把不同物理槽的 locator 都写成一样（华硕 EX-B650M 两槽均 "DIMM 0"），
-/// 报告里两行同名分不清。有 "CHANNEL X" 取它；否则回退整段 bank（"NODE 1" / "BANK 0"）。
-fn channel_tag(bank: &Option<String>) -> Option<String> {
-    let b = bank.as_ref()?;
-    let toks: Vec<&str> = b.split_whitespace().collect();
-    if let Some(pos) = toks.iter().position(|t| t.eq_ignore_ascii_case("CHANNEL")) {
-        if let Some(ch) = toks.get(pos + 1) {
-            return Some(format!("CHANNEL {}", ch));
-        }
-    }
-    let trimmed = b.trim();
-    if !trimmed.is_empty() {
-        return Some(trimmed.to_string());
-    }
-    None
-}
-
 fn memory_section(hw: &HardwareInfo, out: &mut String) {
     let total = &hw.memory.total_mb;
     let sticks = &hw.memory.sticks;
@@ -776,38 +757,18 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
     // 槽位名重复检测：部分固件（如华硕 EX-B650M 把两槽都报 "DIMM 0"）会把不同槽的
     // locator 写成一样，报告里两行同名分不清。先统计已插条里各 locator 出现次数，
     // 重复的在表头追加通道消歧（Z.W. 2026-10-09 定案，修 052 类「两个 DIMM 0」）。
-    let mut loc_freq: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for m in sticks {
-        if m.is_populated() {
-            if let Some(l) = &m.locator {
-                if !l.is_empty() {
-                    *loc_freq.entry(l.clone()).or_insert(0) += 1;
-                }
-            }
-        }
-    }
     // 空插槽先收集、循环结束后再合并成一行：12 槽机器常 8 个空槽，逐行铺开「空槽」
     // 会刷屏、对网吧资产盘点毫无价值。合并后仍能一眼看清哪些槽空着（值单元格列出各
     // 空槽原始标识），「数槽位」意图不丢（Z.W. 2026-10-09 定案，改掉逐行空槽）。
+    // locator 重复时追加通道消歧（"DIMM 0" → "DIMM 0（CHANNEL A）"）——单一真源见
+    // `winsuitex_core::memory_channels::disambiguated_slot_names`，GUI 面板共用，不做第二份。
+    let slot_names = winsuitex_core::memory_channels::disambiguated_slot_names(sticks);
     let mut empty_locators: Vec<String> = Vec::new();
-    for m in sticks {
+    for (i, m) in sticks.iter().enumerate() {
         // 表头显示固件原始槽位标识：实插槽为真实槽名（CHA_0 等），空插槽为 NO DIMM 等占位串原样保留。
         // 不做占位串清洗——"是否为空"由值单元格的「空槽」表达，表头若也洗成「空槽」会变成
         // 「空槽 | 空槽」两重空槽语义，反而别扭（用户明确要求表头保留原始 NO DIMM）。
-        // locator 重复时追加通道消歧（"DIMM 0" → "DIMM 0（CHANNEL A）"）。
-        let th = match &m.locator {
-            Some(l) if !l.is_empty() => {
-                if loc_freq.get(l).copied().unwrap_or(0) > 1 {
-                    match channel_tag(&m.bank) {
-                        Some(ch) => format!("{l}（{ch}）"),
-                        None => l.clone(),
-                    }
-                } else {
-                    l.clone()
-                }
-            }
-            _ => UNKNOWN.to_string(),
-        };
+        let th = slot_names[i].clone().unwrap_or_else(|| UNKNOWN.to_string());
         if m.is_populated() {
             let mut td = String::new();
             td.push_str(&fmt_mb(&m.capacity_mb));
@@ -869,29 +830,15 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         out.push_str(&td);
         out.push_str("</td></tr>\n");
     }
-    // 单通道提示（Z.W. 2026-10-09 定案，修 020 类只插 1 条）：
-    // 实插内存条为单数且仍有空槽 → 无法组满双通道（1 条=纯单通道；≥3 条奇数为非对称/flex
-    // 双通道），游戏内存带宽受限。单槽机器（sticks.len()==1）无双通道可组，不提示。
-    let populated_now = sticks.iter().filter(|m| m.is_populated()).count();
-    let has_empty = sticks.len() > populated_now;
-    if populated_now == 1 && has_empty {
-        row(
-            out,
-            "通道提示",
-            "仅插 1 条内存 → 单通道，带宽约为双通道一半，游戏性能受限；建议补同规格条到另一通道组双通道",
-        );
-    } else if populated_now >= 3 && populated_now % 2 == 1 && has_empty {
-        row(
-            out,
-            "通道提示",
-            "实插内存条为奇数（非对称双通道/flex）→ 部分通道单条运行，带宽未用满；建议补齐到偶数条、均匀分布到各通道",
-        );
-    } else if has_empty {
-        // 条数是偶数不代表通道跑满了：双路各插 1 条（都在 Channel 0）也是单通道，
-        // 上面两条"数条数"的规则识别不出来，这里按 (Node, Channel) 分组兜住。
-        if let Some(msg) = winsuitex_core::memory_channels::memory_channel_warning(sticks) {
-            row(out, "通道提示", &esc(&msg));
-        }
+    // 通道提示（单一真源见 `winsuitex_core::memory_channels::memory_channel_advice`）：
+    // 涵盖三档——仅 1 条 / 奇数条(flex) / 通道分布不均，并感知固件幽灵槽
+    // （SMBIOS 把空槽虚报成满容量、把真实单通道完全掩盖，见 007 真机 A/B 两通道"都占满"
+    // 却只 1 条生效）。与 GUI 面板同一函数，避免两端漂移。判定不出返回 None → 不加行。
+    if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
+        sticks,
+        total.as_ref().map(|t| t.get()),
+    ) {
+        row(out, "通道提示", &esc(&msg));
     }
     // 容量口径交叉校验：OS 总计 与 SMBIOS 各实插槽位容量之和 的差异，由 core 单一真源判定
     // （阈值与文案同 GUI 面板，避免两端漂移；>10% 会点名「固件虚报/幽灵槽位」）。

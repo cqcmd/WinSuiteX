@@ -182,6 +182,143 @@ fn fmt_mib_iec(mib: u64) -> String {
     }
 }
 
+/// 从 Bank Locator 提取通道标识（"P0 CHANNEL A" → "CHANNEL A"），用于槽位名重复时消歧。
+///
+/// 部分固件把不同物理槽的 locator 都写成一样（华硕 EX-B650M 两槽均 "DIMM 0"），
+/// 报告/面板里两行同名分不清。有 "CHANNEL X" 取它；否则回退整段 bank（"NODE 1" / "BANK 0"）。
+///
+/// 单一真源：原为 `winsuitex-report` 私有函数，GUI 面板需要同样的消歧时收进 core 共用。
+pub fn channel_tag(bank: &Option<String>) -> Option<String> {
+    let b = bank.as_ref()?;
+    let toks: Vec<&str> = b.split_whitespace().collect();
+    if let Some(pos) = toks.iter().position(|t| t.eq_ignore_ascii_case("CHANNEL")) {
+        if let Some(ch) = toks.get(pos + 1) {
+            return Some(format!("CHANNEL {}", ch));
+        }
+    }
+    let trimmed = b.trim();
+    if !trimmed.is_empty() {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
+/// 内存槽位「显示名」消歧（单一真源）：统计**已插**槽位 locator 重复情况，
+/// 重复的追加通道标识（"DIMM 1" → "DIMM 1（CHANNEL A）"）。
+///
+/// 返回与 `sticks` 等长的 `Vec`，索引一一对应；locator 缺失/空的条目为 `None`，
+/// 由调用方决定兜底文案（报告用「未知」，GUI 用空串）。空槽也参与（与报告历史行为一致：
+/// 空槽表头保留原始占位串，仅当与已插条重名时才追加通道）。
+pub fn disambiguated_slot_names(sticks: &[MemStick]) -> Vec<Option<String>> {
+    let mut freq: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for m in sticks {
+        if m.is_populated() {
+            if let Some(l) = m.locator.as_deref().filter(|l| !l.is_empty()) {
+                *freq.entry(l).or_insert(0) += 1;
+            }
+        }
+    }
+    sticks
+        .iter()
+        .map(|m| {
+            let l = m.locator.as_deref().filter(|l| !l.is_empty())?;
+            Some(if freq.get(l).copied().unwrap_or(0) > 1 {
+                match channel_tag(&m.bank) {
+                    Some(ch) => format!("{l}（{ch}）"),
+                    None => l.to_string(),
+                }
+            } else {
+                l.to_string()
+            })
+        })
+        .collect()
+}
+
+/// 判断一条实插内存是否带「真实 SPD 信息」（类型 / 速率 / PN / 厂商任一为真实数据）。
+///
+/// 固件幽灵槽的特征是全套 Unknown / 空。但**真条也可能缺 SPD 厂商**（020 类真机：
+/// 厂商未返回、显示「未知」），所以这里只做「有真实信息」的肯定判定，绝不因缺厂商
+/// 就判幻影；误判的兜底是 `memory_channel_advice` 里「spd 合计必须与 OS 总量吻合」
+/// 的双重校验——推断不吻合就放弃排除，宁可不提示也不冤枉真条。
+fn has_real_spd(m: &MemStick) -> bool {
+    let known = |s: Option<&str>| {
+        s.is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("unknown"))
+    };
+    known(m.mem_type.as_deref())
+        || m.speed_mhz.is_some_and(|s| s > 0)
+        || known(m.part_no.as_deref())
+        || known(m.vendor.as_deref())
+}
+
+/// 内存「通道提示」总入口：**单一真源**，GUI 面板与 HTML 报告共用。
+///
+/// 涵盖三档判定（文案与历史报告完全一致，避免两端漂移）：
+/// 1. 仅 1 条实插 → 纯单通道；
+/// 2. 奇数条实插（非对称双通道 / flex）；
+/// 3. 通道分布不均（按 (Node, Channel) 分组，见 `memory_channel_warning`）。
+///
+/// **幻影槽感知**：SMBIOS 常把空槽虚报成满容量幽灵条（华硕 B650 真机：物理 1 条
+/// 却报 2 条、A/B 通道"都占满"，把单通道问题完全掩盖）。当各槽合计与 OS 总量偏差
+/// 超过 10%，且「带 SPD 信息的实插条」容量合计与 OS 总量吻合（≤10%）时，判定无 SPD
+/// 的条为固件幽灵槽并排除，基于真实条做上述判定——推断不吻合就按原口径，宁漏报不误报。
+pub fn memory_channel_advice(sticks: &[MemStick], os_total_mib: Option<u64>) -> Option<String> {
+    let populated: Vec<MemStick> = sticks
+        .iter()
+        .filter(|m| m.is_populated())
+        .cloned()
+        .collect();
+    if populated.is_empty() {
+        return None;
+    }
+    let has_empty = sticks.len() > populated.len();
+
+    // —— 幻影槽推断（仅当容量口径偏差 >10% 时尝试）——
+    let mut phantom = false;
+    let mut real: Vec<MemStick> = populated.clone();
+    if let Some(total) = os_total_mib.filter(|t| *t > 0) {
+        let dev = |s: u64| s.abs_diff(total) as f64 / total as f64;
+        let sum_all: u64 = populated
+            .iter()
+            .filter_map(|m| m.capacity_mb)
+            .map(|c| c.get())
+            .sum();
+        if sum_all > 0 && dev(sum_all) > 0.10 {
+            let spd: Vec<MemStick> = populated
+                .iter()
+                .filter(|m| has_real_spd(m))
+                .cloned()
+                .collect();
+            let sum_spd: u64 = spd
+                .iter()
+                .filter_map(|m| m.capacity_mb)
+                .map(|c| c.get())
+                .sum();
+            if spd.len() < populated.len() && sum_spd > 0 && dev(sum_spd) <= 0.10 {
+                phantom = true;
+                real = spd;
+            }
+        }
+    }
+
+    let n = real.len();
+    if n == 1 && (has_empty || phantom) {
+        let base = "单通道，带宽约为双通道一半，游戏性能受限；建议补同规格条到另一通道组双通道";
+        return Some(if phantom {
+            format!("仅 1 条内存实际生效（固件幽灵槽位已按 OS 总容量排除）→ {base}")
+        } else {
+            format!("仅插 1 条内存 → {base}")
+        });
+    }
+    if n >= 3 && n % 2 == 1 && (has_empty || phantom) {
+        return Some("实插内存条为奇数（非对称双通道/flex）→ 部分通道单条运行，带宽未用满；建议补齐到偶数条、均匀分布到各通道".into());
+    }
+    // 通道分布不均（双路各插 1 条同通道、单路两槽同通道等）——**始终检测**，
+    // 不受「有无空槽 / 是否幻影」门控，与 GUI 历史行为一致：双路单通道是真实带宽
+    // 减半问题，无论插槽是否插满都应提示（空槽门控是报告侧的历史取舍，统一到
+    // 「检测即报」更正确，且 `memory_channel_warning` 自身对跑满/不可判定返回 None）。
+    memory_channel_warning(&real)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,5 +429,105 @@ mod tests {
     fn capacity_deviation_none_when_os_total_zero() {
         let sticks = vec![stick("DIMM_A1", "P0 CHANNEL A", Some(32768))];
         assert!(memory_capacity_deviation_warning(&sticks, 0).is_none());
+    }
+
+    /// 带 SPD 信息的实插条（真条）。
+    fn spd_stick(locator: &str, bank: &str, cap: u32) -> MemStick {
+        MemStick {
+            locator: Some(locator.into()),
+            bank: Some(bank.into()),
+            serial: Some("00201196".into()),
+            part_no: Some("AX5U6000C3032G-BB300".into()),
+            vendor: Some("A-DATA".into()),
+            mem_type: Some("DDR5".into()),
+            capacity_mb: Some(MebiBytes::new(cap as u64)),
+            speed_mhz: Some(6000),
+        }
+    }
+
+    /// 007 真机形态：A/B 通道各报一条 32 GiB，但 A 通道那条是固件幽灵（全套 Unknown），
+    /// OS 只见 1 条容量 → 幻影槽应被排除并正确警告「单通道」。
+    #[test]
+    fn phantom_slot_single_real_warns_single_channel() {
+        let sticks = vec![
+            stick("DIMM 0", "P0 CHANNEL A", None),
+            stick("DIMM 1", "P0 CHANNEL A", Some(32768)), // 幽灵：无任何 SPD
+            stick("DIMM 0", "P0 CHANNEL B", None),
+            spd_stick("DIMM 1", "P0 CHANNEL B", 32768), // 真条
+        ];
+        let msg = memory_channel_advice(&sticks, Some(32426)).expect("应警告单通道");
+        assert!(msg.contains("单通道"), "应含单通道: {msg}");
+        assert!(msg.contains("幽灵"), "应点名幽灵槽已排除: {msg}");
+        assert!(
+            !msg.contains("仅插 1 条"),
+            "幻影形态不该用原 1 条文案: {msg}"
+        );
+    }
+
+    /// 真的单条 + 有空槽（无幻影）：保持原「仅插 1 条」文案，不提幽灵。
+    #[test]
+    fn single_stick_no_phantom_keeps_original_text() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 16384),
+            stick("DIMM_B1", "P0 CHANNEL B", None),
+        ];
+        let msg = memory_channel_advice(&sticks, Some(16384)).expect("应警告单通道");
+        assert!(msg.contains("仅插 1 条"), "应保留原文案: {msg}");
+        assert!(!msg.contains("幽灵"), "无幻影不应提幽灵: {msg}");
+    }
+
+    /// 奇数条（flex）文案不变。
+    #[test]
+    fn flex_three_sticks_unchanged() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 16384),
+            spd_stick("DIMM_B1", "P0 CHANNEL B", 16384),
+            spd_stick("DIMM_C1", "P0 CHANNEL C", 16384),
+            stick("DIMM_D1", "P0 CHANNEL D", None),
+        ];
+        let msg = memory_channel_advice(&sticks, Some(49152)).expect("应提示 flex");
+        assert!(msg.contains("奇数"), "应保留 flex 文案: {msg}");
+    }
+
+    /// 幻影推断不吻合（spd 合计与 OS 总量也对不上）→ 放弃排除，按原口径
+    /// （两真条各占 A/B 通道 → 通道满 → 不提示），宁漏报不误报。
+    #[test]
+    fn phantom_inference_fails_when_spd_sum_mismatch() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 32768),
+            spd_stick("DIMM_B1", "P0 CHANNEL B", 32768),
+        ];
+        // OS 只见 1 条容量（比如核显吃掉一半）：spd 合计与 OS 偏差 50% → 推断失败
+        assert!(memory_channel_advice(&sticks, Some(32768)).is_none());
+    }
+
+    /// 双通道跑满 + 有空槽：不提示。
+    #[test]
+    fn dual_channel_full_no_advice() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 16384),
+            spd_stick("DIMM_B1", "P0 CHANNEL B", 16384),
+            stick("DIMM_A2", "P0 CHANNEL A", None),
+        ];
+        assert!(memory_channel_advice(&sticks, Some(32768)).is_none());
+    }
+
+    /// 007 槽位名消歧：两个 populated 都是 "DIMM 1"，应追加（CHANNEL A/B）；
+    /// 空槽 locator 不重名时保留原样。
+    #[test]
+    fn disambiguated_slot_names_appends_channel() {
+        let sticks = vec![
+            stick("DIMM 0", "P0 CHANNEL A", None),
+            stick("DIMM 1", "P0 CHANNEL A", Some(32768)),
+            stick("DIMM 0", "P0 CHANNEL B", None),
+            spd_stick("DIMM 1", "P0 CHANNEL B", 32768),
+        ];
+        let names = disambiguated_slot_names(&sticks);
+        assert_eq!(names.len(), 4);
+        assert_eq!(names[1].as_deref(), Some("DIMM 1（CHANNEL A）"));
+        assert_eq!(names[3].as_deref(), Some("DIMM 1（CHANNEL B）"));
+        // 空槽 "DIMM 0" 与已插条不重名（已插的是 DIMM 1），保留原样
+        assert_eq!(names[0].as_deref(), Some("DIMM 0"));
+        assert_eq!(names[2].as_deref(), Some("DIMM 0"));
     }
 }

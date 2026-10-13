@@ -687,10 +687,23 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 format!("已插 {populated} / 共 {} 插槽", info.memory.sticks.len()),
             ),
         ];
-        for s in info.memory.sticks.iter().filter(|s| s.is_populated()) {
+        // 槽位名消歧单一真源（与 HTML 报告共用 `winsuitex_core::memory_channels`）：
+        // locator 重复时追加通道标识（华硕 EX-B650M 两槽均 "DIMM 0" → "DIMM 0（CHANNEL A/B）"），
+        // 否则原样显示。索引 i 对应整条 sticks 数组（含空槽），用 disambiguated_slot_names 取。
+        let slot_names =
+            winsuitex_core::memory_channels::disambiguated_slot_names(&info.memory.sticks);
+        for (i, s) in info
+            .memory
+            .sticks
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.is_populated())
+        {
             let cap = s.capacity_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
             let mut parts = vec![
-                s.locator.clone().unwrap_or_default(),
+                slot_names[i]
+                    .clone()
+                    .unwrap_or_else(|| s.locator.clone().unwrap_or_default()),
                 format!("{cap:.0} GiB"),
             ];
             if let Some(t) = s
@@ -732,10 +745,13 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         // 避免两端各写一套而漂移。现场维护时面板上看一眼就知道是不是单通道，
         // 不必导出报告——双路各插 1 条（都在 Channel 0）这种"条数是偶数、实际单通道"
         // 的情况，光看"已插 2 / 共 16 插槽"是看不出来的（Z.W. 华为真机）。
+        // 同时感知固件幽灵槽（见 007 真机：A/B 两通道"都占满"却只 1 条生效，原判定
+        // 会被掩盖；`memory_channel_advice` 按 OS 总容量排除无 SPD 幽灵条后正确报单通道）。
         // 判定不出来返回 None → 不加行（诚实留白，不编造）。
-        if let Some(msg) =
-            winsuitex_core::memory_channels::memory_channel_warning(&info.memory.sticks)
-        {
+        if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
+            &info.memory.sticks,
+            info.memory.total_mb.map(|m| m.get()),
+        ) {
             rows.push(("通道提示".into(), msg));
         }
         // 容量口径提示：与 HTML 报告**同一个判定函数**（`winsuitex_core::memory_channels`），
