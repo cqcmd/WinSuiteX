@@ -225,6 +225,9 @@ pub const COL_GAP: i32 = 16;
 pub const ROW_H: i32 = 22;
 /// 分组小节条带高度（比键值行高一档，让"节"比"行"更像一个层级）。
 pub const SEC_H: i32 = 30;
+/// 小节标题下方「小字说明」每行高度（幽灵槽位等需要附注口径时使用）。
+/// 用 tiny 字号（12px）弱对比色，弱于正文行、强于页脚版权（Z.W. 2026-10-13）。
+pub const SEC_NOTE_H: i32 = 18;
 /// 图标瓦片边长。
 pub const TILE: i32 = 22;
 

@@ -521,6 +521,11 @@ pub(crate) struct Section {
     /// 每行值列（右侧）可选的状态色：用于给温度等数值上阈值色（≥85°红 / ≥75°橙）。
     /// `None` = 用默认白字；与 HTML 报告 `telemetry_line` 的阈值色一致，保持两端观感统一。
     pub(crate) value_colors: Vec<Option<Color>>,
+    /// 小节标题下方的「小字说明」（弱对比、tiny 字号），用于给该节的特殊口径/ caveat
+    /// 一句带过——例如内存节出现固件虚报的幽灵槽位时，解释为何 SMBIOS 显示 N 条而
+    /// OS / SPD 直读工具只见真实条数。绝大多数分组为 `None`（不占高度、不画）；
+    /// 与正文行不同，它是"节级"附注，量高趟与绘制趟走同一个 `wrap_value` 保证不裁。
+    pub(crate) note: Option<String>,
 }
 
 /// 硬件页磁盘行健康徽标：实色圆角小条 + 反色状态词。
@@ -579,6 +584,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         ],
         health: Vec::new(),
         value_colors: Vec::new(),
+        note: None,
     });
 
     // —— 主板 / BIOS ——
@@ -629,6 +635,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             rows: board_rows,
             health: Vec::new(),
             value_colors: Vec::new(),
+            note: None,
         });
     }
 
@@ -657,6 +664,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             rows,
             health: Vec::new(),
             value_colors: Vec::new(),
+            note: None,
         });
     }
 
@@ -785,12 +793,26 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         ) {
             rows.push(("容量口径提示".into(), msg));
         }
+        // 内存节标题小字说明：仅在出现固件虚报（幽灵槽位）时显示，解释口径依据——
+        // SMBIOS 把空槽虚报成已插满容量、却无 SPD 数据，导致"显示 N 条"而 OS / SPD 直读工具
+        // 只见真实条数；我们按 OS 总容量交叉校验自动剔除幽灵条，与 CPU-Z / HWiNFO 等口径一致。
+        let mem_note = if phantom.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "SMBIOS 报 {} 槽已插、含 {} 个固件虚报的幽灵槽位（无 SPD 数据）；已按 OS 总容量自动剔除，真实仅 {} 条生效。CPU-Z / HWiNFO 等经 SPD 直读工具口径一致。",
+                populated,
+                phantom.len(),
+                real_pop
+            ))
+        };
         out.push(Section {
             icon: HwIcon::Mem,
             title: "内存",
             rows,
             health: Vec::new(),
             value_colors: Vec::new(),
+            note: mem_note,
         });
     }
 
@@ -835,6 +857,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             rows: gpu_rows,
             health: Vec::new(),
             value_colors: gpu_vc,
+            note: None,
         });
     }
 
@@ -865,6 +888,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 .map(|d| d.smart.as_ref().map(|s| s.health_status))
                 .collect(),
             value_colors: Vec::new(),
+            note: None,
         });
     }
 
@@ -906,6 +930,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             rows,
             health: Vec::new(),
             value_colors: Vec::new(),
+            note: None,
         });
     }
 
@@ -954,6 +979,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             rows,
             health: Vec::new(),
             value_colors: Vec::new(),
+            note: None,
         });
     }
 
@@ -978,6 +1004,7 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
         snap,
         f_sec,
         f_body,
+        f_tiny,
         ..
     } = *ctx;
     let Some(r) = snap else {
@@ -1005,6 +1032,13 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
             bottom += scale(12);
         }
         bottom += scale(SEC_H);
+        // 小节标题下方小字说明（幽灵槽位等 caveat）：与绘制趟走同一个 `wrap_value` 折行，
+        // 行数必然一致 → 量高不偏矮，滚动到底不裁末行（Z.W. 2026-10-13）。
+        if let Some(note) = &s.note {
+            let note_w = (right - pad) - lay.x_key;
+            let n = wrap_value(hdc, f_tiny, note, note_w).len().max(1) as i32;
+            bottom += scale(SEC_NOTE_H) * n;
+        }
         // ⚠️ 带健康徽标的行：绘制趟把值列右界收窄 `DISK_BADGE_RESERVE`（见第二趟
         // 的 `lay_row`），量高必须用**同一个数**——否则硬盘这类长值行量高按全宽
         // 算 1 行、绘制按收窄宽折 2 行，总高量矮 → `max_scroll` 偏小 → 滚动到底
@@ -1058,6 +1092,22 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
             s.icon,
             s.title,
         );
+        // 小节标题下方小字说明（幽灵槽位等 caveat）：tiny 字号、弱对比色，弱于正文行、
+        // 强于页脚版权；与量高趟走同一个 `wrap_value` 折行，行数必然一致，滚动到底不裁。
+        if let Some(note) = &s.note {
+            let note_w = (right - pad) - lay.x_key;
+            let lines = wrap_value(hdc, f_tiny, note, note_w);
+            for (i, ln) in lines.iter().enumerate() {
+                let nr = RECT {
+                    left: lay.x_key,
+                    top: y + i as i32 * scale(SEC_NOTE_H),
+                    right: right - pad,
+                    bottom: y + (i as i32 + 1) * scale(SEC_NOTE_H),
+                };
+                text(hdc, &nr, ln, f_tiny, C_ON_GRAD_DIM, false);
+            }
+            y += scale(SEC_NOTE_H) * lines.len().max(1) as i32;
+        }
         for (i, (k, v)) in s.rows.iter().enumerate() {
             // 该行若有健康徽标，给值列右侧预留空白，避免文字压到徽标。
             let val_end = if s.health.get(i).copied().flatten().is_some() {
@@ -2487,7 +2537,7 @@ mod hw_vendor_zh_tests {
     //! 输入命中同一规范条目。
 
     use super::{build_hw_sections, Section};
-    use winsuitex_core::model::{BoardInfo, GpuKind, MemStick, MemoryInfo};
+    use winsuitex_core::model::{BoardInfo, GpuKind, HardwareInfo, MemStick, MemoryInfo, MebiBytes};
     use winsuitex_core::CollectResult;
 
     fn stick(locator: &str, vendor: Option<&str>) -> MemStick {
@@ -2790,5 +2840,49 @@ mod hw_vendor_zh_tests {
         let sections = build_hw_sections(&r);
         let s = find(&sections, "主板 / BIOS");
         assert_eq!(s.rows[0].0, "型号", "无厂商时不得出现空厂商行");
+    }
+
+    #[test]
+    fn memory_section_shows_phantom_note_when_firmware_lies() {
+        // 007 真机形态：SMBIOS 报 2 槽已插（各 32G），但其中 1 条是固件虚报的幽灵槽位
+        // （无 SPD 数据），OS 总容量只见 32G。面板应在内存节标题下加一句小字说明口径。
+        let mut real = stick("DIMM 0", Some("Corsair"));
+        real.capacity_mb = Some(MebiBytes::new(32768));
+        let mut ghost = stick("DIMM 1", None);
+        ghost.capacity_mb = Some(MebiBytes::new(32768));
+        // 幽灵槽：所有 SPD 字段缺失 → has_real_spd 为 false。
+        ghost.mem_type = None;
+        ghost.speed_mhz = None;
+        ghost.part_no = None;
+        ghost.serial = None;
+        let r = CollectResult {
+            volumes: vec![],
+            info: HardwareInfo {
+                memory: MemoryInfo {
+                    total_mb: Some(MebiBytes::new(32768)),
+                    sticks: vec![real, ghost],
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let sections = build_hw_sections(&r);
+        let s = find(&sections, "内存");
+        let note = s.note.as_deref().expect("幽灵槽位存在时应有口径说明");
+        assert!(note.contains("幽灵槽位"), "说明应点名幽灵槽位: {note}");
+        assert!(note.contains("1 个"), "应说明虚报数量: {note}");
+        assert!(note.contains("CPU-Z"), "应点出与 SPD 直读工具口径一致: {note}");
+    }
+
+    #[test]
+    fn memory_section_has_no_note_on_clean_machine() {
+        // 正常机器（双通道 2 条真条）不应出现小字说明，避免无谓干扰。
+        let r = res(BoardInfo::default(), vec![
+            stick("DIMM 0", Some("Corsair")),
+            stick("DIMM 1", Some("Corsair")),
+        ]);
+        let sections = build_hw_sections(&r);
+        let s = find(&sections, "内存");
+        assert!(s.note.is_none(), "无幽灵槽位时不应有小字说明");
     }
 }
