@@ -893,48 +893,13 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
             row(out, "通道提示", &esc(&msg));
         }
     }
-    // 口径交叉校验：OS 报告的 total_mb 与 SMBIOS 各实插槽容量之和通常应当一致；
-    // 差异过大（>2%）说明某一口径不可靠（核显占用/预留内存/固件虚报容量），
-    // 这里显式提示差异而非静默采用单一口径，避免误导资产盘点。
-    // 容量口径偏差阈值：≤2% 属固件/核显的正常口径差，不提示；
-    // 2%~10% 温和提示；>10% 必须告警，不能再一律说"属正常"。
-    const DIFF_IGNORE_RATIO: f64 = 0.02;
-    const DIFF_ALERT_RATIO: f64 = 0.10;
-
-    if let Some(total_val) = total {
-        let sum_sticks: u64 = sticks
-            .iter()
-            .filter(|m| m.is_populated())
-            .filter_map(|m| m.capacity_mb)
-            .map(|c| c.get())
-            .sum();
-        if sum_sticks > 0 && total_val.get() > 0 {
-            let diff = total_val.get().abs_diff(sum_sticks);
-            let ratio = diff as f64 / total_val.get() as f64;
-            if diff > 0 && ratio > DIFF_IGNORE_RATIO {
-                let msg = if ratio > DIFF_ALERT_RATIO {
-                    // 差一半绝不是"核显/预留"能解释的。真机上曾因 SMBIOS Size=0x7FFF
-                    // 哨兵被当成 32767 MiB，各槽合计只有 OS 总计的一半，
-                    // 却被一句「属正常」洗白过去 —— 所以这一档必须报警。
-                    format!(
-                        "OS 总计 {tb} 与 SMBIOS 各槽合计 {sb} 相差 {d} MiB（偏差 {p:.0}%）—— \
-                         偏差过大，SMBIOS 槽位容量口径不可信，请核对实插条数与单条容量",
-                        tb = fmt_mb(total),
-                        sb = fmt_bytes_int_val(sum_sticks << 20),
-                        d = diff,
-                        p = ratio * 100.0
-                    )
-                } else {
-                    format!(
-                        "OS 总计 {tb} 与 SMBIOS 各槽合计 {sb} 相差 {d} MiB（可能含核显/预留内存）",
-                        tb = fmt_mb(total),
-                        sb = fmt_bytes_int_val(sum_sticks << 20),
-                        d = diff
-                    )
-                };
-                row(out, "容量口径提示", &msg);
-            }
-        }
+    // 容量口径交叉校验：OS 总计 与 SMBIOS 各实插槽位容量之和 的差异，由 core 单一真源判定
+    // （阈值与文案同 GUI 面板，避免两端漂移；>10% 会点名「固件虚报/幽灵槽位」）。
+    if let Some(msg) = winsuitex_core::memory_channels::memory_capacity_deviation_warning(
+        sticks,
+        total.as_ref().map_or(0, |t| t.get()),
+    ) {
+        row(out, "容量口径提示", &esc(&msg));
     }
     out.push_str("</table></section>\n");
 }

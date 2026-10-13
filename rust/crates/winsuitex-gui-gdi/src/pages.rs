@@ -738,6 +738,15 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         {
             rows.push(("通道提示".into(), msg));
         }
+        // 容量口径提示：与 HTML 报告**同一个判定函数**（`winsuitex_core::memory_channels`），
+        // 避免两端漂移。点名"固件虚报/幽灵槽位"，让技师一眼看懂为何槽位数对不上，
+        // 不误以为是采集 bug。OS 未报总量（total_mb 为 None）时不提示。
+        if let Some(msg) = winsuitex_core::memory_channels::memory_capacity_deviation_warning(
+            &info.memory.sticks,
+            info.memory.total_mb.map_or(0, |m| m.get()),
+        ) {
+            rows.push(("容量口径提示".into(), msg));
+        }
         out.push(Section {
             icon: HwIcon::Mem,
             title: "内存",

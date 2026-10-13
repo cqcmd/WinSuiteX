@@ -103,6 +103,85 @@ pub fn memory_channel_warning(sticks: &[MemStick]) -> Option<String> {
     ))
 }
 
+/// 内存「容量口径偏差」判定：**单一真源**，GUI 面板与 HTML 报告共用（同 `memory_channel_warning` 的路线）。
+///
+/// 口径交叉校验：OS 报告的总内存（`os_total_mib`）与 SMBIOS 各**实插**槽位容量之和
+/// 通常应当一致；差异过大说明某一口径不可靠（核显占用 / 预留内存 / **固件虚报槽位**），
+/// 这里显式提示差异而非静默采用单一口径，避免误导资产盘点。
+///
+/// 阈值（与 GUI / 报告一致，避免两端漂移）：
+/// - ≤2%：属核显 / 预留的正常口径差，不提示；
+/// - 2%~10%：温和提示「可能含核显 / 预留内存」；
+/// - 偏差 >10%：必须告警。
+///
+/// 偏差 >10% 这一档的差一半绝不是核显 / 预留能解释的——真机上曾因 SMBIOS `Size=0x7FFF`
+/// 哨兵被当成 32767 MiB，各槽合计只有 OS 总计的一半却被「属正常」洗白过去。
+/// 该档文案明确点名「固件虚报 / 幽灵槽位」，让技师一眼看懂为何槽位数对不上，
+/// 不误以为是采集 bug（Z.W. 真机：物理 1 条，固件虚报 CHANNEL A 幽灵槽 → 显示 2 条）。
+///
+/// 返回的文案可直接渲染（面板行 / 报告行共用）。`os_total_mib` 为 0（OS 未报总量）时返回 `None`。
+pub fn memory_capacity_deviation_warning(sticks: &[MemStick], os_total_mib: u64) -> Option<String> {
+    const DIFF_IGNORE_RATIO: f64 = 0.02;
+    const DIFF_ALERT_RATIO: f64 = 0.10;
+    let sum_sticks: u64 = sticks
+        .iter()
+        .filter(|m| m.is_populated())
+        .filter_map(|m| m.capacity_mb)
+        .map(|c| c.get())
+        .sum();
+    if sum_sticks == 0 || os_total_mib == 0 {
+        return None;
+    }
+    let diff = os_total_mib.abs_diff(sum_sticks);
+    let ratio = diff as f64 / os_total_mib as f64;
+    if diff == 0 || ratio <= DIFF_IGNORE_RATIO {
+        return None;
+    }
+    let tb = fmt_mib_iec(os_total_mib);
+    let sb = fmt_mib_iec(sum_sticks);
+    if ratio > DIFF_ALERT_RATIO {
+        Some(format!(
+            "OS 总计 {tb} 与 SMBIOS 各槽合计 {sb} 相差 {d} MiB（偏差 {p:.0}%）—— \
+             偏差过大，SMBIOS 槽位容量口径不可信；常见原因为固件虚报（幽灵槽位被填成满容量 / \
+             Size 哨兵 0x7FFF 误当 32767 MiB），请核对实插条数与单条容量",
+            tb = tb,
+            sb = sb,
+            d = diff,
+            p = ratio * 100.0
+        ))
+    } else {
+        Some(format!(
+            "OS 总计 {tb} 与 SMBIOS 各槽合计 {sb} 相差 {d} MiB（可能含核显 / 预留内存）",
+            tb = tb,
+            sb = sb,
+            d = diff
+        ))
+    }
+}
+
+/// MiB → 人类可读容量（取整，IEC 单位：KiB/MiB/GiB/TiB）。
+///
+/// 与 `winsuitex_report::fmt_bytes_int_val(mib << 20)` 输出一致，放在 core 让
+/// `memory_capacity_deviation_warning` 在 GUI / 报告两端产出完全相同的文案，不漂移。
+fn fmt_mib_iec(mib: u64) -> String {
+    let bytes = mib * 1024 * 1024;
+    const KIB: u64 = 1024;
+    const MIB: u64 = 1024 * 1024;
+    const GIB: u64 = 1024 * 1024 * 1024;
+    const TIB: u64 = 1024 * 1024 * 1024 * 1024;
+    if bytes >= TIB {
+        format!("{} TiB", (bytes + TIB / 2) / TIB)
+    } else if bytes >= GIB {
+        format!("{} GiB", (bytes + GIB / 2) / GIB)
+    } else if bytes >= MIB {
+        format!("{} MiB", (bytes + MIB / 2) / MIB)
+    } else if bytes >= KIB {
+        format!("{} KiB", (bytes + KIB / 2) / KIB)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,5 +246,51 @@ mod tests {
     fn single_or_empty_is_none() {
         assert!(memory_channel_warning(&[]).is_none());
         assert!(memory_channel_warning(&[stick("DIMM_A1", "P0 CHANNEL A", Some(16384))]).is_none());
+    }
+
+    /// 容量偏差 ≤2%：双条 16 GiB 实插、OS 总计 32 GiB → 不提示（属核显/预留正常口径差）。
+    #[test]
+    fn capacity_deviation_ignored_when_close() {
+        let sticks = vec![
+            stick("DIMM_A1", "P0 CHANNEL A", Some(16384)),
+            stick("DIMM_B1", "P0 CHANNEL B", Some(16384)),
+        ];
+        assert!(
+            memory_capacity_deviation_warning(&sticks, 32768).is_none(),
+            "差异极小不应提示"
+        );
+    }
+
+    /// 容量偏差 >10%：物理 1 条 32 GiB，但固件虚报第 2 槽满容量 → SMBIOS 合计 64 GiB（偏差 100%）。
+    /// 必须告警且点名「幽灵槽位」，让技师看懂不是采集 bug。
+    #[test]
+    fn capacity_deviation_alert_mentions_phantom_slot() {
+        let sticks = vec![
+            stick("DIMM_A1", "P0 CHANNEL A", Some(32768)),
+            stick("DIMM_B1", "P0 CHANNEL B", Some(32768)), // 幽灵槽被填成满容量
+        ];
+        let msg = memory_capacity_deviation_warning(&sticks, 32768).expect("应告警");
+        assert!(msg.contains("偏差过大"), "应报偏差过大: {msg}");
+        assert!(msg.contains("幽灵槽位"), "应点名固件虚报/幽灵槽位: {msg}");
+    }
+
+    /// 容量偏差 2%~10%：SMBIOS 合计比 OS 多 ~3% → 温和提示，不报"偏差过大"。
+    #[test]
+    fn capacity_deviation_mild_between_2_and_10_percent() {
+        // OS 32768 MiB，SMBIOS 合计 16384+17408=33792 MiB（差 1024 MiB ≈ 3.1%）
+        let sticks = vec![
+            stick("DIMM_A1", "P0 CHANNEL A", Some(16384)),
+            stick("DIMM_B1", "P0 CHANNEL B", Some(17408)),
+        ];
+        let msg = memory_capacity_deviation_warning(&sticks, 32768).expect("应温和提示");
+        assert!(!msg.contains("偏差过大"), "3% 不应报偏差过大: {msg}");
+        assert!(msg.contains("可能含核显"), "应温和提示核显/预留: {msg}");
+    }
+
+    /// OS 未报总量（0）时不提示——避免拿不到 OS 总计时凭空报偏差。
+    #[test]
+    fn capacity_deviation_none_when_os_total_zero() {
+        let sticks = vec![stick("DIMM_A1", "P0 CHANNEL A", Some(32768))];
+        assert!(memory_capacity_deviation_warning(&sticks, 0).is_none());
     }
 }
