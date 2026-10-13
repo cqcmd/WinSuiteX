@@ -744,15 +744,26 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
     }
     out.push_str(&format!("<section class=\"wsx-card\"><div class=\"wsx-card-title\"><span class=\"wsx-idx\">{}</span>内存 <span class=\"wsx-subtle\">MEMORY</span></div><table class=\"wsx-kv\">\n", ICON_MEMORY));
     row(out, "总计", &fmt_mb(total));
+    // 固件幻影槽（单一真源 `phantom_slot_indices`，与 GUI 共用）：SMBIOS 把空槽虚报成
+    // 已插满容量、无 SPD 数据。基于 OS 总容量交叉校验标出，报告据此只统计真正生效的内存条
+    // （与 CPU-Z / HWiNFO 这类 SPD 直读工具口径一致），不再被虚报槽带偏。
+    let phantom =
+        winsuitex_core::memory_channels::phantom_slot_indices(sticks, total.map(|t| t.get()));
     // 槽位占用汇总：SMBIOS 只枚举到部分槽时（如 24 槽机器只报出 8 根），
     // 这一行让"各槽合计与总计对不上"一眼可见，不必读者自己数行数。
     if !sticks.is_empty() {
         let populated = sticks.iter().filter(|m| m.is_populated()).count();
-        row(
-            out,
-            "插槽占用",
-            &format!("{populated} / {} 槽已插", sticks.len()),
-        );
+        let real = populated.saturating_sub(phantom.len());
+        let txt = if phantom.is_empty() {
+            format!("{real} / {} 槽已插", sticks.len())
+        } else {
+            format!(
+                "{real} / {} 槽已插（含 {} 固件虚报）",
+                sticks.len(),
+                phantom.len()
+            )
+        };
+        row(out, "插槽占用", &txt);
     }
     // 槽位名重复检测：部分固件（如华硕 EX-B650M 把两槽都报 "DIMM 0"）会把不同槽的
     // locator 写成一样，报告里两行同名分不清。先统计已插条里各 locator 出现次数，
@@ -770,6 +781,14 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         // 「空槽 | 空槽」两重空槽语义，反而别扭（用户明确要求表头保留原始 NO DIMM）。
         let th = slot_names[i].clone().unwrap_or_else(|| UNKNOWN.to_string());
         if m.is_populated() {
+            // 固件虚报槽位（幽灵槽）：SMBIOS 写成已插满容量却无 SPD 数据。标「幽灵槽位」
+            // 而非伪造容量，保留原始槽名便于核错，与 SPD 直读工具口径一致。
+            if phantom.contains(&i) {
+                out.push_str("<tr><th>");
+                out.push_str(&esc(&th));
+                out.push_str("</th><td><span class=\"wsx-muted\">固件虚报（幽灵槽位 · 无 SPD 数据）</span></td></tr>\n");
+                continue;
+            }
             let mut td = String::new();
             td.push_str(&fmt_mb(&m.capacity_mb));
             if let Some(t) = &m.mem_type {

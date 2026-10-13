@@ -241,13 +241,56 @@ pub fn disambiguated_slot_names(sticks: &[MemStick]) -> Vec<Option<String>> {
 /// 就判幻影；误判的兜底是 `memory_channel_advice` 里「spd 合计必须与 OS 总量吻合」
 /// 的双重校验——推断不吻合就放弃排除，宁可不提示也不冤枉真条。
 fn has_real_spd(m: &MemStick) -> bool {
-    let known = |s: Option<&str>| {
-        s.is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("unknown"))
-    };
+    let known =
+        |s: Option<&str>| s.is_some_and(|s| !s.is_empty() && !s.eq_ignore_ascii_case("unknown"));
     known(m.mem_type.as_deref())
         || m.speed_mhz.is_some_and(|s| s > 0)
         || known(m.part_no.as_deref())
         || known(m.vendor.as_deref())
+}
+
+/// 找出被固件虚报的「已插」槽位在 `sticks` 中的索引（幽影槽 / 幽灵槽）。
+///
+/// 判定口径（与 `memory_channel_advice` 完全一致，单一真源，避免两端漂移）：
+/// 仅当 SMBIOS 各**实插**槽位容量合计 与 OS 总量偏差 >10%，且「带真实 SPD 的实插条」
+/// 容量合计与 OS 总量吻合（≤10%）时，把无真实 SPD 的实插条判为固件幻影并标出。
+/// 推断不吻合（如核显吃掉一半容量、或真条也缺 SPD 厂商）则整体返回空——宁漏报不误报。
+///
+/// 返回索引对 `sticks` 有效；调用方据此把对应槽标「固件虚报」并排除出实插计数，
+/// 让面板/报告像 SPD 直读工具（CPU-Z / HWiNFO / AIDA64）一样只统计真正生效的内存条，
+/// 而不是被 SMBIOS Type 17 的虚报槽带偏（AM5 平台已知 AGESA 缺陷：空槽被写成已插满容量）。
+pub fn phantom_slot_indices(sticks: &[MemStick], os_total_mib: Option<u64>) -> Vec<usize> {
+    let populated: Vec<(usize, &MemStick)> = sticks
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.is_populated())
+        .collect();
+    if let Some(total) = os_total_mib.filter(|t| *t > 0) {
+        let dev = |s: u64| s.abs_diff(total) as f64 / total as f64;
+        let sum_all: u64 = populated
+            .iter()
+            .map(|(_, m)| m.capacity_mb.map_or(0, |c| c.get()))
+            .sum();
+        if sum_all > 0 && dev(sum_all) > 0.10 {
+            let spd: Vec<&MemStick> = populated
+                .iter()
+                .filter(|(_, m)| has_real_spd(m))
+                .map(|(_, m)| *m)
+                .collect();
+            let sum_spd: u64 = spd
+                .iter()
+                .map(|m| m.capacity_mb.map_or(0, |c| c.get()))
+                .sum();
+            if spd.len() < populated.len() && sum_spd > 0 && dev(sum_spd) <= 0.10 {
+                return populated
+                    .iter()
+                    .filter(|(_, m)| !has_real_spd(m))
+                    .map(|(i, _)| *i)
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// 内存「通道提示」总入口：**单一真源**，GUI 面板与 HTML 报告共用。
@@ -272,33 +315,20 @@ pub fn memory_channel_advice(sticks: &[MemStick], os_total_mib: Option<u64>) -> 
     }
     let has_empty = sticks.len() > populated.len();
 
-    // —— 幻影槽推断（仅当容量口径偏差 >10% 时尝试）——
-    let mut phantom = false;
-    let mut real: Vec<MemStick> = populated.clone();
-    if let Some(total) = os_total_mib.filter(|t| *t > 0) {
-        let dev = |s: u64| s.abs_diff(total) as f64 / total as f64;
-        let sum_all: u64 = populated
+    // —— 幻影槽推断（单一真源见 `phantom_slot_indices`）——
+    let phantom_idx = phantom_slot_indices(sticks, os_total_mib);
+    let phantom = !phantom_idx.is_empty();
+    let real: Vec<MemStick> = if phantom {
+        let set: std::collections::HashSet<usize> = phantom_idx.iter().copied().collect();
+        sticks
             .iter()
-            .filter_map(|m| m.capacity_mb)
-            .map(|c| c.get())
-            .sum();
-        if sum_all > 0 && dev(sum_all) > 0.10 {
-            let spd: Vec<MemStick> = populated
-                .iter()
-                .filter(|m| has_real_spd(m))
-                .cloned()
-                .collect();
-            let sum_spd: u64 = spd
-                .iter()
-                .filter_map(|m| m.capacity_mb)
-                .map(|c| c.get())
-                .sum();
-            if spd.len() < populated.len() && sum_spd > 0 && dev(sum_spd) <= 0.10 {
-                phantom = true;
-                real = spd;
-            }
-        }
-    }
+            .enumerate()
+            .filter(|(i, m)| m.is_populated() && !set.contains(i))
+            .map(|(_, m)| m.clone())
+            .collect()
+    } else {
+        populated
+    };
 
     let n = real.len();
     if n == 1 && (has_empty || phantom) {
@@ -529,5 +559,44 @@ mod tests {
         // 空槽 "DIMM 0" 与已插条不重名（已插的是 DIMM 1），保留原样
         assert_eq!(names[0].as_deref(), Some("DIMM 0"));
         assert_eq!(names[2].as_deref(), Some("DIMM 0"));
+    }
+
+    /// 幻影槽索引：A 通道无 SPD 的 32 GiB 条应被标出（索引 1），真条（索引 3）不动。
+    #[test]
+    fn phantom_slot_indices_finds_no_spd_phantom() {
+        let sticks = vec![
+            stick("DIMM 0", "P0 CHANNEL A", None),
+            stick("DIMM 1", "P0 CHANNEL A", Some(32768)), // 幻影：无 SPD
+            stick("DIMM 0", "P0 CHANNEL B", None),
+            spd_stick("DIMM 1", "P0 CHANNEL B", 32768), // 真条
+        ];
+        let idx = phantom_slot_indices(&sticks, Some(32426));
+        assert_eq!(idx, vec![1], "应标出第 2 条（索引 1）为固件幻影");
+    }
+
+    /// 正常双通道（两条都带 SPD、偏差 0）→ 不标任何幻影，绝不误伤真条。
+    #[test]
+    fn phantom_slot_indices_empty_when_no_phantom() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 16384),
+            spd_stick("DIMM_B1", "P0 CHANNEL B", 16384),
+        ];
+        assert!(
+            phantom_slot_indices(&sticks, Some(32768)).is_empty(),
+            "正常双通道不应标幻影"
+        );
+    }
+
+    /// 单条 + 空槽（无幻影）：偏差 0 → 不标，保持原「仅插 1 条」口径。
+    #[test]
+    fn phantom_slot_indices_empty_for_single_real_stick() {
+        let sticks = vec![
+            spd_stick("DIMM_A1", "P0 CHANNEL A", 16384),
+            stick("DIMM_B1", "P0 CHANNEL B", None),
+        ];
+        assert!(
+            phantom_slot_indices(&sticks, Some(16384)).is_empty(),
+            "单条真机不应标幻影"
+        );
     }
 }

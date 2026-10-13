@@ -680,12 +680,26 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             .iter()
             .filter(|s| !s.is_populated())
             .collect();
+        // 固件幻影槽（单一真源 `phantom_slot_indices`）：SMBIOS 把空槽虚报成已插满容量、
+        // 无 SPD 数据。基于 OS 总容量交叉校验后标出，面板/报告据此只统计真正生效的内存条
+        // （与 CPU-Z / HWiNFO 这类 SPD 直读工具口径一致），不再被虚报槽带偏。
+        let phantom = winsuitex_core::memory_channels::phantom_slot_indices(
+            &info.memory.sticks,
+            info.memory.total_mb.map(|m| m.get()),
+        );
+        let real_pop = populated.saturating_sub(phantom.len());
+        let slot_summary = if phantom.is_empty() {
+            format!("已插 {real_pop} / 共 {} 插槽", info.memory.sticks.len())
+        } else {
+            format!(
+                "已插 {real_pop} / 共 {} 插槽（含 {} 固件虚报）",
+                info.memory.sticks.len(),
+                phantom.len()
+            )
+        };
         let mut rows = vec![
             ("总计".into(), format!("{total_gb:.1} GiB")),
-            (
-                "插槽".into(),
-                format!("已插 {populated} / 共 {} 插槽", info.memory.sticks.len()),
-            ),
+            ("插槽".into(), slot_summary),
         ];
         // 槽位名消歧单一真源（与 HTML 报告共用 `winsuitex_core::memory_channels`）：
         // locator 重复时追加通道标识（华硕 EX-B650M 两槽均 "DIMM 0" → "DIMM 0（CHANNEL A/B）"），
@@ -699,13 +713,21 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             .enumerate()
             .filter(|(_, s)| s.is_populated())
         {
+            let name = slot_names[i]
+                .clone()
+                .unwrap_or_else(|| s.locator.clone().unwrap_or_default());
+            // 固件虚报槽位（幽灵槽）：SMBIOS 把空槽写成已插满容量却无 SPD 数据。
+            // 标「幽灵槽位」而非伪造容量，让技师一眼看懂为何 SMBIOS 显示 2 条而 OS 只见 1 条；
+            // 保留原始槽名便于核错，与 SPD 直读工具口径一致。
+            if phantom.contains(&i) {
+                rows.push((
+                    "插槽".into(),
+                    join_parts(&[name, "固件虚报（幽灵槽位 · 无 SPD）".into()]),
+                ));
+                continue;
+            }
             let cap = s.capacity_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
-            let mut parts = vec![
-                slot_names[i]
-                    .clone()
-                    .unwrap_or_else(|| s.locator.clone().unwrap_or_default()),
-                format!("{cap:.0} GiB"),
-            ];
+            let mut parts = vec![name, format!("{cap:.0} GiB")];
             if let Some(t) = s
                 .mem_type
                 .as_deref()
