@@ -597,6 +597,18 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
                 .unwrap_or_default(),
             b.bios_version.clone().unwrap_or_default(),
         ]);
+        // BIOS 发布日期：采集层已拿到（SMBIOS Type 0），与 HTML 报告一致归一化显示，
+        // 避免 GUI 漏字段导致「报告有日期、界面没有」的不一致（2026-10-13 用户反馈）。
+        let bios = match b
+            .bios_date
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(winsuitex_core::normalize_bios_date)
+        {
+            Some(d) if !bios.is_empty() => format!("{bios} · {d}"),
+            Some(d) => d,
+            None => bios,
+        };
         // 主板厂商单独成行（`英文（中文）` 规范格式，未命中回原文），None 时不加行避免空值。
         let mut board_rows = vec![("型号".into(), model), ("BIOS".into(), bios)];
         if let Some(v) = b.vendor.as_deref().map(str::trim).filter(|v| !v.is_empty()) {

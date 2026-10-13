@@ -254,6 +254,23 @@ pub struct BoardInfo {
     pub bios_date: Option<String>,
 }
 
+/// BIOS 发布日期归一化：`MM/DD/YYYY` → `YYYY-MM-DD`。
+///
+/// SMBIOS Type 0 的 BIOS Release Date 多为美式 `04/03/2026`，中文报告/界面里
+/// 直接显示需要二次判读（"02/24" 是 2 月还是 24 年？）。归一成 `2026-04-03`
+/// 后顺序一致、无需脑内换算。非该格式（已含 `-` 或未知写法）原样返回。
+pub fn normalize_bios_date(s: &str) -> String {
+    let b = s.as_bytes();
+    if b.len() == 10 && b[2] == b'/' && b[5] == b'/' {
+        let (m, d, y) = (&s[0..2], &s[3..5], &s[6..10]);
+        let all_digit = |t: &str| t.bytes().all(|c| c.is_ascii_digit());
+        if all_digit(m) && all_digit(d) && all_digit(y) {
+            return format!("{y}-{m}-{d}");
+        }
+    }
+    s.to_string()
+}
+
 /// 单颗物理 CPU（SMBIOS Type 4）。
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Cpu {
@@ -582,6 +599,21 @@ mod timestamp_tests {
             "2024-01-01 08:00:00",
             "中国本地时间须为 UTC+8"
         );
+    }
+
+    #[test]
+    fn normalize_bios_date_reorders_us_format() {
+        // SMBIOS Type 0 多为美式 MM/DD/YYYY，中文界面需归一化成 YYYY-MM-DD。
+        assert_eq!(normalize_bios_date("04/03/2026"), "2026-04-03");
+        assert_eq!(normalize_bios_date("11/13/2025"), "2025-11-13");
+    }
+
+    #[test]
+    fn normalize_bios_date_passthrough_when_not_us() {
+        // 已是 ISO 格式或未知写法，原样返回，避免误改。
+        assert_eq!(normalize_bios_date("2023-01-01"), "2023-01-01");
+        assert_eq!(normalize_bios_date("Unknown"), "Unknown");
+        assert_eq!(normalize_bios_date(""), "");
     }
 
     #[test]

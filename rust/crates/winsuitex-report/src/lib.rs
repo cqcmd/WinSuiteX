@@ -261,7 +261,7 @@ pub fn build_text(hw: &HardwareInfo) -> String {
             .board
             .as_ref()
             .and_then(|b| b.bios_date.clone())
-            .map(|d| normalize_bios_date(&d));
+            .map(|d| winsuitex_core::normalize_bios_date(&d));
         let mut s = String::new();
         let has = bv.is_some() || bvv.is_some();
         if has {
@@ -671,7 +671,7 @@ fn board_section(hw: &HardwareInfo, out: &mut String) {
             .board
             .as_ref()
             .and_then(|b| b.bios_date.clone())
-            .map(|d| normalize_bios_date(&d));
+            .map(|d| winsuitex_core::normalize_bios_date(&d));
         let mut cell = String::new();
         if bv.is_some() || bvv.is_some() {
             if let Some(lbl) = vendor_label(&bv) {
@@ -1865,18 +1865,6 @@ fn fmt_bytes_int_val(bytes: u64) -> String {
 /// 中文报告里 `02/24/2022` 得二次判读才能确认是 2 月还是 24 月，
 /// 统一成 `YYYY-MM-DD`。厂商填了别的格式（或压根不是日期）时原样返回，
 /// 宁可显示原始串也不猜错。
-fn normalize_bios_date(s: &str) -> String {
-    let b = s.as_bytes();
-    if b.len() == 10 && b[2] == b'/' && b[5] == b'/' {
-        let (m, d, y) = (&s[0..2], &s[3..5], &s[6..10]);
-        let all_digit = |t: &str| t.bytes().all(|c| c.is_ascii_digit());
-        if all_digit(m) && all_digit(d) && all_digit(y) {
-            return format!("{y}-{m}-{d}");
-        }
-    }
-    s.to_string()
-}
-
 fn fmt_cluster(b: &Option<u32>) -> String {
     match b {
         Some(v) if *v > 0 => {

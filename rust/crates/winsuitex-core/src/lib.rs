@@ -16,7 +16,7 @@ pub mod vendor_zh;
 pub use error::{CollectResult, Diagnostic, Error, Result};
 pub use model::nic_vendor_from_desc;
 pub use model::{auto_ip_tag, nic_ipv4_for_display, nic_should_show_auto_ip};
-pub use model::{fmt_link_speed, real_link_speed};
+pub use model::{fmt_link_speed, normalize_bios_date, real_link_speed};
 pub use model::{
     AudioDevice, BoardInfo, Cpu, Display, Feature, FeatureId, FeatureKind, Gpu, GpuTelemetry,
     HardwareInfo, MachineInfo, MebiBytes, MemStick, MemoryInfo, Nic, OsInfo, PhysicalDisk, RegRoot,
