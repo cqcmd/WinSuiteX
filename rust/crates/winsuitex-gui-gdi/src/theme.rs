@@ -1,151 +1,40 @@
-//! WinSuiteX GDI 面板的**视觉语言**：配色、字体、间距、圆角。
+//! WinSuiteX GDI 面板的**视觉语言**：配色、间距体系。
 //!
-//! 设计取自 Ant Design 规范（8px 栅格、`colorBgContainer`/`blue-7` 等语义色），
-//! 与 C++ 版同源但更精细一档：
-//!   - 圆角 12px（C++ 版 8px），在大卡片上更显现代；
-//!   - 卡片是"玻璃奶白"而非纯白，配合紫色顶栏形成层次；
-//!   - 顶栏用 #7C3AED → #5E6EDC → #2563EB 三段紫蓝渐变（同 C++ 版 glass4）。
-//!
-//! 所有几何常量都是 **96-DPI 基准值**，绘制时统一经 `scale()` 换算到实际像素，
-//! 布局关系因此一目了然，且高 DPI 下不会错位。
+//! ## GDI 怎么做"半透明"
+//! GDI 没有 alpha 通道，所有毛玻璃效果都用**"取该处渐变色 → 与目标色按比例混合"**
+//! 实现（见 [`mix`]）。因为底色是随 y 变化的渐变，混合必须**逐行**做，
+//! 见 `draw::fill_glass_round` —— 一次性混一个固定值会让长卡片上下端与背景脱节。
+// ============================================================
 
-// 本模块是**视觉语言表**：色板 / 间距 / 圆角先按设计语言列全，用到的自然消耗，
-// 尚未用到的（如按下态、错误态、深色态）在后续迭代自然会被页面代码取用。
-// 一次性列全，好过每加一个色就临时起名、导致同色不同名。
 #![allow(dead_code)]
 
 use windows::Win32::Foundation::COLORREF;
 
 // ============================================================
-// 配色 —— **紫蓝渐变玻璃主题**（与 C++ 版 1.6.7 同一套视觉语言）
-//
-// 全部色值来自 C++ 版真机截图的**像素采样**（2026-10-07 用 PIL 量），
-// 不是凭印象调的。采样口径与结果见 `.workbuddy/memory/2026-10-07.md` 第七轮。
-//
-// ## GDI 怎么做"半透明"
-// GDI 没有 alpha 通道，所有毛玻璃效果都用**"取该处渐变色 → 与目标色按比例混合"**
-// 实现（见 [`mix`]）。因为底色是随 y 变化的渐变，混合必须**逐行**做，
-// 见 `draw::fill_glass_round` —— 一次性混一个固定值会让长卡片上下端与背景脱节。
+// 混合原语
 // ============================================================
 
-/// 整窗垂直渐变顶（实测 C++ 顶栏 `(135,81,238)`）。
-pub const C_GRAD_TOP: Color = rgb(135, 81, 238);
-/// 整窗垂直渐变底（实测 C++ 窗口底 `(38,98,235)`）。
-pub const C_GRAD_BOT: Color = rgb(38, 98, 235);
-/// 底部栏实色（实测 `(27,54,122)`）——比渐变底更深的藏青，压住整窗重心。
-pub const C_FOOTER_BG: Color = rgb(27, 54, 122);
-/// 窗口外描边（渐变上叠白 45% 的观感，任何壁纸上都能看清轮廓）。
-pub const C_WIN_BORDER: Color = rgb(170, 160, 245);
+/// GDI 颜色（`COLORREF`，0x00BBGGRR）。
+pub type Color = COLORREF;
 
-/// 纯白：既是渐变上的文字色，也是玻璃卡片的混合目标色。
-pub const C_WHITE: Color = rgb(255, 255, 255);
-/// 渐变上的主文字。
-pub const C_ON_GRAD: Color = rgb(255, 255, 255);
-/// 渐变上次级文字（白 ~85%，页签未选中 / 表头）。
-pub const C_ON_GRAD_DIM: Color = rgb(224, 216, 250);
-/// 渐变上更淡的文字（白 ~70%，字段名 / 说明 / 版权）。
-pub const C_ON_GRAD_FAINT: Color = rgb(198, 190, 240);
-
-/// 右键页卡片的"暗玻璃"混合色（叠在渐变上 ≈ C++ 的毛玻璃暗卡）。
-pub const C_GLASS_DARK: Color = rgb(64, 60, 96);
-/// 内容卡片的"深玻璃"混合色：在渐变上叠一层深 navy，把卡片**压暗**而非提亮，
-/// 让白字对比度从 ~3.5:1 拉到 ~5.5:1（Z.W. 反馈"字看不清"的根因是之前
-/// 用白 18% 把卡片提亮，白字压在浅底上对比度不足）。菜单页同理用 C_GLASS_DARK。
-pub const C_GLASS_TINT: Color = rgb(20, 24, 52);
-/// 分组图标统一描边色：玻璃主题下不再用 8 色高饱强调色（太花眼），
-/// 统一柔和淡紫，与 C++ 版单色线性图标一致。
-pub const C_ICON: Color = rgb(214, 208, 248);
-/// 卡片描边：已启用=亮绿 / 未启用=叠白（运行时混合）。
-pub const C_CARD_EDGE_ON: Color = rgb(52, 199, 89);
-
-/// 磁盘页选中行：薄荷绿实底（实测 `(216,240,228)`）+ 深字。
-pub const C_SEL_ROW: Color = rgb(216, 240, 228);
-pub const C_SEL_ROW_TEXT: Color = rgb(28, 62, 44);
-
-/// 靛蓝按钮（实测 C++「启用」按钮 `(79,70,229)`）。
-pub const C_BTN: Color = rgb(79, 70, 229);
-pub const C_BTN_H: Color = rgb(99, 91, 240);
-/// 白底按钮（导出报告 / 一键复制），深字。
-pub const C_BTN_WHITE: Color = rgb(255, 255, 255);
-pub const C_BTN_WHITE_H: Color = rgb(232, 228, 252);
-pub const C_BTN_WHITE_TEXT: Color = rgb(40, 36, 70);
-/// 关闭按钮 hover 红。
-pub const C_TB_CLOSE_HOVER: Color = rgb(232, 17, 35);
-
-// —— 以下保留为兼容层：部分旧常量仍在 `draw.rs` 的通用控件里被引用 ——
-/// 窗口底色（渐变主题下不再单独使用，仅作为 DIB 初始化兜底色）。
-pub const C_BG: Color = rgb(135, 81, 238);
-/// 顶栏底色（同渐变顶）。
-pub const C_TB_BG: Color = rgb(135, 81, 238);
-/// 卡片底（玻璃主题下卡片由逐行混合生成，这是兜底值）。
-pub const C_CARD_BG: Color = rgb(250, 250, 253);
-/// 卡片描边。
-pub const C_BORDER: Color = rgb(217, 217, 217);
-/// 分隔线。
-pub const C_DIVIDER: Color = rgb(240, 240, 240);
-/// 主文字（渐变主题下统一用白）。
-pub const C_TITLE: Color = rgb(255, 255, 255);
-/// 正文。
-pub const C_TEXT: Color = rgb(255, 255, 255);
-/// 次级文字。
-pub const C_SUBTITLE: Color = rgb(224, 216, 250);
-/// 描述文字。
-pub const C_DESC: Color = rgb(198, 190, 240);
-/// 主色（渐变主题下=靛蓝按钮色）。
-pub const C_PRIMARY: Color = rgb(79, 70, 229);
-pub const C_PRIMARY_H: Color = rgb(99, 91, 240);
-pub const C_PRIMARY_A: Color = rgb(60, 52, 200);
-/// 成功绿 / 警告琥珀 / 错误红（徽章与状态色仍用）。
-pub const C_SUCCESS: Color = rgb(52, 199, 89);
-pub const C_WARNING: Color = rgb(250, 173, 20);
-pub const C_ERROR: Color = rgb(255, 77, 79);
-/// 徽章色（已启用 / 未启用 / 警告）。
-pub const C_GREEN_DARK: Color = rgb(21, 128, 61);
-pub const C_GREEN_BG: Color = rgb(223, 242, 230);
-pub const C_GRAY_DARK: Color = rgb(89, 89, 89);
-pub const C_GRAY_BG: Color = rgb(242, 242, 242);
-pub const C_AMBER_DARK: Color = rgb(202, 110, 4);
-pub const C_AMBER_BG: Color = rgb(254, 244, 225);
-
-/// 硬件页各分组的图标强调色（C++ 版同思路：每组一个可辨识的色）。
+/// 按 r/g/b 组装 `COLORREF`（Windows 用 BGR 存储，常量式写法更直观）。
 ///
-/// ⚠️ 这是**高饱和原版**，第八轮因"太花眼"被停用，这里仅作兼容保留（见下方
-/// `C_ACCENT_SOFT`）。分组图标实际渲染走 `C_ACCENT_SOFT`。
-pub const C_ACCENT: [Color; 8] = [
-    rgb(34, 211, 238),  // Os   青
-    rgb(251, 146, 60),  // Board 橙
-    rgb(167, 139, 250), // Cpu  紫
-    rgb(52, 211, 153),  // Mem  绿
-    rgb(251, 113, 133), // Gpu  玫红
-    rgb(250, 204, 21),  // Disk 黄
-    rgb(96, 165, 250),  // Nic  蓝
-    rgb(244, 114, 182), // Audio 粉
-];
+/// 注意 `COLORREF` 在 windows 0.62 是 `pub struct COLORREF(pub u32)` 的 tuple struct，
+/// 不是 type alias，所以只能 `Color(v)` 构造，不能用 `as Color` 强转。
+pub const fn rgb(r: u8, g: u8, b: u8) -> Color {
+    // 注意：上面 `Color` 只是 `type Color = COLORREF` 的别名，别名不能当构造器用，
+    // 因此这里必须写真名 `COLORREF(..)`。
+    COLORREF((b as u32) << 16 | (g as u32) << 8 | r as u32)
+}
 
-/// 分组图标**柔和粉彩**强调色（Z.W. 反馈"小图标没色彩了"后的折中）。
-///
-/// 第九轮：第八轮把图标一刀切成淡紫单色（`C_ICON`）治"花眼"，但用户觉得"没了色彩"。
-/// 这版把 `C_ACCENT` 每个色相**混入约 45% 淡紫底 `C_ICON`**——既保留分组可辨识的
-/// 色相，又把饱和度压到不刺眼，在深 navy 玻璃卡上是"柔彩"而非"彩虹"。
-/// 数值 = `accent * 0.55 + C_ICON(214,208,248) * 0.45`，手写取整。
-pub const C_ACCENT_SOFT: [Color; 8] = [
-    rgb(115, 210, 242), // Os   柔天蓝（青降饱和）
-    rgb(234, 174, 144), // Board 柔桃（橙降饱和）
-    rgb(188, 170, 249), // Cpu  柔薰衣草紫
-    rgb(124, 210, 196), // Mem  柔薄荷（绿降饱和）
-    rgb(234, 155, 185), // Gpu  柔粉（玫红降饱和）
-    rgb(233, 206, 123), // Disk 柔金（黄降饱和）
-    rgb(149, 184, 249), // Nic  柔蓝
-    rgb(230, 156, 212), // Audio 柔品红
-];
-
-/// 取窗口渐变在屏幕 y（0..`h`）处的颜色。
-///
-/// 卡片要"透"出背景，就必须知道**自己所在位置**的背景是什么色——
-/// 所以混合不能用一个固定值，必须按 y 现算。
-pub fn grad_at(y: i32, h: i32) -> Color {
-    let t = (y.clamp(0, h.max(1)) as f32 / h.max(1) as f32).clamp(0.0, 1.0);
-    mix(C_GRAD_TOP, C_GRAD_BOT, t)
+/// 拆出 COLORREF 的 r/g/b（Windows 内部 0x00BBGGRR）。
+fn split(c: Color) -> (u8, u8, u8) {
+    let v = c.0;
+    (
+        (v & 0xFF) as u8,
+        ((v >> 8) & 0xFF) as u8,
+        ((v >> 16) & 0xFF) as u8,
+    )
 }
 
 /// 颜色按 `t` 线性混合（`t=0` 得 `a`，`t=1` 得 `b`）。
@@ -166,18 +55,99 @@ pub fn over(base: Color, over_c: Color, alpha: f32) -> Color {
     mix(base, over_c, alpha)
 }
 
-/// 拆出 COLORREF 的 r/g/b（Windows 内部 0x00BBGGRR）。
-fn split(c: Color) -> (u8, u8, u8) {
-    let v = c.0;
-    (
-        (v & 0xFF) as u8,
-        ((v >> 8) & 0xFF) as u8,
-        ((v >> 16) & 0xFF) as u8,
-    )
-}
+// ============================================================
+// 配色（深空玻璃 · 紫蓝渐变 + 深 navy 玻璃）
+//
+// 与 `design-demos/ui-schemes-compare.html` 方案 A 同源（零回归护栏：
+// `smoke_tests::theme_constants_regression` 钉死这些关键值）。
+// ============================================================
 
-/// 卡片圆角（玻璃卡片比窗口圆角小一档，层次更清楚）。
-pub const CARD_RADIUS: i32 = 8;
+/// 整窗垂直渐变顶。
+pub const C_GRAD_TOP: Color = rgb(135, 81, 238);
+/// 整窗垂直渐变底。
+pub const C_GRAD_BOT: Color = rgb(38, 98, 235);
+/// 底部栏实色。
+pub const C_FOOTER_BG: Color = rgb(27, 54, 122);
+/// 窗口外描边（中深灰，任何壁纸下可见）。
+pub const C_WIN_BORDER: Color = rgb(170, 160, 245);
+
+/// 主文字（卡片/渐变上的白字）。
+pub const C_ON_GRAD: Color = rgb(255, 255, 255);
+/// 次级文字（页签未选中 / 表头）。
+pub const C_ON_GRAD_DIM: Color = rgb(224, 216, 250);
+/// 弱文字（字段名 / 说明 / 版权）。
+pub const C_ON_GRAD_FAINT: Color = rgb(198, 190, 240);
+/// 渐变上的**实色线条/强调**（页签下划线、滑块、hover 玻璃层混合目标）= 白。
+pub const C_WHITE: Color = rgb(255, 255, 255);
+
+/// 玻璃卡 tint 混合基准色（深 navy，压暗让白字清楚）。
+pub const C_GLASS_TINT: Color = rgb(20, 24, 52);
+/// 右键页"暗玻璃"混合色。
+pub const C_GLASS_DARK: Color = rgb(64, 60, 96);
+
+/// 分组图标统一描边色（淡紫）。
+pub const C_ICON: Color = rgb(214, 208, 248);
+/// 分组图标柔和粉彩强调色（8 组，顺序见 `icons::HwIcon`）。
+/// `C_ACCENT 高饱和 × 0.55 + 淡紫(214,208,248) × 0.45`，深 navy 玻璃卡上的"柔彩"
+/// 观感（第九轮 Z.W. 定案：禁用 emoji、禁用一刀切淡紫、禁用高饱和彩虹）。
+pub const C_ACCENT_SOFT: [Color; 8] = [
+    rgb(115, 210, 242), // Os   柔天蓝
+    rgb(234, 174, 144), // Board 柔桃
+    rgb(188, 170, 249), // Cpu  柔薰衣草紫
+    rgb(124, 210, 196), // Mem  柔薄荷
+    rgb(234, 155, 185), // Gpu  柔粉
+    rgb(233, 206, 123), // Disk 柔金
+    rgb(149, 184, 249), // Nic  柔蓝
+    rgb(230, 156, 212), // Audio 柔品红
+];
+
+/// 已启用卡片的亮色描边（亮绿）。
+pub const C_CARD_EDGE_ON: Color = rgb(52, 199, 89);
+/// 纯色卡兜底底色（`draw::card` 死代码原语用）。
+pub const C_CARD_BG: Color = rgb(250, 250, 253);
+/// 纯色卡描边。
+pub const C_BORDER: Color = rgb(217, 217, 217);
+
+/// 选中行底（薄荷绿）。
+pub const C_SEL_ROW: Color = rgb(216, 240, 228);
+/// 选中行字（深绿）。
+pub const C_SEL_ROW_TEXT: Color = rgb(28, 62, 44);
+
+/// 按钮基底色（品牌紫）。
+pub const C_BTN: Color = rgb(79, 70, 229);
+/// 按钮 hover 色。
+pub const C_BTN_H: Color = rgb(99, 91, 240);
+/// 白底按钮。
+pub const C_BTN_WHITE: Color = rgb(255, 255, 255);
+/// 白底按钮 hover。
+pub const C_BTN_WHITE_H: Color = rgb(232, 228, 252);
+/// 白底按钮字（深靛）。
+pub const C_BTN_WHITE_TEXT: Color = rgb(40, 36, 70);
+
+/// 标题栏关闭按钮 hover 红。
+pub const C_TB_CLOSE_HOVER: Color = rgb(232, 17, 35);
+
+/// 状态色：成功 / 预警 / 错误。
+pub const C_SUCCESS: Color = rgb(52, 199, 89);
+pub const C_WARNING: Color = rgb(250, 173, 20);
+pub const C_ERROR: Color = rgb(255, 77, 79);
+
+/// 徽章（已启用/未启用/警告）文字/背景色。
+pub const C_GREEN_DARK: Color = rgb(21, 128, 61);
+pub const C_GREEN_BG: Color = rgb(223, 242, 230);
+pub const C_GRAY_DARK: Color = rgb(89, 89, 89);
+pub const C_GRAY_BG: Color = rgb(242, 242, 242);
+pub const C_AMBER_DARK: Color = rgb(202, 110, 4);
+pub const C_AMBER_BG: Color = rgb(254, 244, 225);
+
+/// 取窗口渐变在屏幕 y（0..`h`）处的颜色。
+///
+/// 卡片要"透"出背景，就必须知道**自己所在位置**的背景是什么色——
+/// 所以混合不能用一个固定值，必须按 y 现算。
+pub fn grad_at(y: i32, h: i32) -> Color {
+    let t = (y.clamp(0, h.max(1)) as f32 / h.max(1) as f32).clamp(0.0, 1.0);
+    mix(C_GRAD_TOP, C_GRAD_BOT, t)
+}
 
 // ============================================================
 // 几何（96-DPI 基准）
@@ -191,8 +161,6 @@ pub const TAB_H: i32 = 44;
 pub const TAB_W: i32 = 96;
 /// 底部提示条高度（提示 + 版权）。
 pub const FOOTER_H: i32 = 64;
-/// 窗口/卡片圆角（比 C++ 的 8 略大，更现代）。
-pub const WIN_RADIUS: i32 = 12;
 /// 窗口内边距（Ant 8px 栅格 ×3）。
 pub const MARGIN: i32 = 24;
 /// 阴影绘制留白。
@@ -237,22 +205,14 @@ pub const WIN_H: i32 = 948;
 /// 磁盘页自适应窗口的**最小高度**（分区极少时窗口也不至于矮到畸形）。
 pub const DISK_MIN_H: i32 = 360;
 
-// ============================================================
-// 类型
-// ============================================================
+/// 卡片圆角（96-DPI 基准）。
+pub const CARD_RADIUS: i32 = 8;
+/// 窗口圆角（96-DPI 基准，`SetWindowRgn` 用）。
+pub const WIN_RADIUS: i32 = 12;
 
-/// GDI 颜色（`COLORREF`，0x00BBGGRR）。
-pub type Color = COLORREF;
-
-/// 按 r/g/b 组装 `COLORREF`（Windows 用 BGR 存储，常量式写法更直观）。
-///
-/// 注意 `COLORREF` 在 windows 0.62 是 `pub struct COLORREF(pub u32)` 的 tuple struct，
-/// 不是 type alias，所以只能 `Color(v)` 构造，不能用 `as Color` 强转。
-pub const fn rgb(r: u8, g: u8, b: u8) -> Color {
-    // 注意：上面 `Color` 只是 `type Color = COLORREF` 的别名，别名不能当构造器用，
-    // 因此这里必须写真名 `COLORREF(..)`。
-    COLORREF((b as u32) << 16 | (g as u32) << 8 | r as u32)
-}
+// ============================================================
+// DPI
+// ============================================================
 
 /// 当前窗口 DPI；`scale()` 把 96-DPI 基准值换算为实际像素。
 ///
@@ -271,4 +231,45 @@ pub fn set_dpi(dpi: u32) {
 pub fn scale(v: i32) -> i32 {
     let dpi = DPI.load(std::sync::atomic::Ordering::Relaxed);
     ((v * dpi + 48) / 96).max(1)
+}
+
+// ============================================================
+// 调试用可调主题参数（「调试」页实时调节，Z.W. 试出满意值后固化回 theme.rs）
+// ============================================================
+//
+// 这两个参数是**调试滑杆**的作用目标：全部 tint 玻璃卡（硬件页大卡/头部/
+// 表格/详情卡/分组横条）都读取它们，于是拖动滑杆时全窗口玻璃观感实时联动。
+
+/// 控件① 玻璃透明度：tint 叠层的不透明度百分比，0-100。
+/// 0 = 卡片完全透出窗口渐变（只剩文字浮在渐变上）；100 = tint 层全实。
+static GLASS_ALPHA: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(22);
+
+/// 控件② 叠色深浅：tint 混合色在「渐变顶 → 深 navy tint」之间的位置百分比，0-100。
+/// 100 = tint 全实（默认深 navy 最暗）；0 = 渐变顶色。
+static TINT_DEPTH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(100);
+
+/// 取玻璃透明度（0.0-1.0，供绘制原语直接消费）。
+pub fn glass_alpha() -> f32 {
+    GLASS_ALPHA.load(std::sync::atomic::Ordering::Relaxed) as f32 / 100.0
+}
+
+/// 设置玻璃透明度（百分比，自动钳制 0-100）。
+pub fn set_glass_alpha(pct: u32) {
+    GLASS_ALPHA.store(pct.min(100), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 取叠色深浅（百分比 0-100）。
+pub fn tint_depth() -> u32 {
+    TINT_DEPTH.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 设置叠色深浅（百分比，自动钳制 0-100）。
+pub fn set_tint_depth(pct: u32) {
+    TINT_DEPTH.store(pct.min(100), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 当前 tint 混合色：渐变顶 `C_GRAD_TOP` → 深 navy `C_GLASS_TINT` 按深浅插值。
+/// 深浅 100 = tint 全实（默认）；0 = 渐变顶色。
+pub fn tint_color() -> Color {
+    mix(C_GRAD_TOP, C_GLASS_TINT, tint_depth() as f32 / 100.0)
 }
