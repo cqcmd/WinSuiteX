@@ -874,17 +874,49 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
     // ⚠️ 副行里**不要塞 index**：`硬盘#0` 这个标签已经带了序号，
     // 副行再来一个 `· 0 ·` 就是重复（真机截图上被 Z.W. 一眼看出）。
     if !info.disks.is_empty() {
+        // 分区格式（文件系统）：按 `disk_index` 把卷挂回物理盘，去重后拼接。
+        // 无卷 / 未挂载 / RAW / 读不到文件系统 → 不加（诚实留白，不编造）。
+        // 多个分区格式用 "+" 连成一个词位（与 iface/media 的 " · " 区分开）；
+        // HTML 报告本就有完整分区表（含文件系统列），面板此前缺这一项，补齐对齐。
+        let fs_for = |idx: u32| -> Option<String> {
+            let mut fss: Vec<String> = Vec::new();
+            for v in &r.volumes {
+                if v.disk_index != Some(idx) {
+                    continue;
+                }
+                if let Some(fs) = v
+                    .fs_name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|f| !f.is_empty() && !f.eq_ignore_ascii_case("unknown"))
+                {
+                    if !fss.iter().any(|x| x.eq_ignore_ascii_case(fs)) {
+                        fss.push(fs.to_string());
+                    }
+                }
+            }
+            (!fss.is_empty()).then(|| fss.join("+"))
+        };
         let rows = info
             .disks
             .iter()
             .map(|d| {
                 let model = d.model.clone().unwrap_or_else(|| "未知".into());
-                let sub = join_parts(&[
+                let mut parts = vec![
                     d.iface.clone().unwrap_or_default(),
                     d.media.clone().unwrap_or_default(),
-                    format!("{:.1} GiB", d.size_bytes.unwrap_or(0) as f64 / 1073741824.0),
-                ]);
-                (format!("硬盘#{}", d.index), join_parts(&[model, sub]))
+                ];
+                if let Some(fs) = fs_for(d.index) {
+                    parts.push(fs);
+                }
+                parts.push(format!(
+                    "{:.1} GiB",
+                    d.size_bytes.unwrap_or(0) as f64 / 1073741824.0
+                ));
+                (
+                    format!("硬盘#{}", d.index),
+                    join_parts(&[model, join_parts(&parts)]),
+                )
             })
             .collect();
         out.push(Section {

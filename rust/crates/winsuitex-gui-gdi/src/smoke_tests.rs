@@ -614,6 +614,80 @@ fn hw_disk_rows_carry_smart_health_badge() {
     }
 }
 
+/// 硬件页「硬盘」行应携带分区格式（文件系统）：按 `disk_index` 把卷挂回物理盘，
+/// 去重后以 "+" 拼接；无卷 / 文件系统读不到（unknown 脏数据）的盘不添加（诚实留白）。
+/// Z.W. 2026-10-14 要求补齐——HTML 报告分区表本就有文件系统列，面板此前缺这项。
+#[test]
+fn hw_disk_rows_show_partition_filesystem() {
+    let r = CollectResult {
+        info: HardwareInfo {
+            disks: vec![
+                PhysicalDisk {
+                    index: 0,
+                    model: Some("SSD-A".into()),
+                    ..Default::default()
+                },
+                PhysicalDisk {
+                    index: 1,
+                    model: Some("SSD-B".into()),
+                    ..Default::default()
+                },
+                PhysicalDisk {
+                    index: 2,
+                    model: Some("SSD-C".into()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        },
+        volumes: vec![
+            Volume {
+                letter: "C:".into(),
+                disk_index: Some(0),
+                fs_name: Some("NTFS".into()),
+                ..Default::default()
+            },
+            Volume {
+                letter: "D:".into(),
+                disk_index: Some(0),
+                fs_name: Some("NTFS".into()), // 同盘重复格式 → 去重
+                ..Default::default()
+            },
+            Volume {
+                letter: "E:".into(),
+                disk_index: Some(0),
+                fs_name: Some("FAT32".into()),
+                ..Default::default()
+            },
+            Volume {
+                letter: "F:".into(),
+                disk_index: Some(2),
+                fs_name: Some("unknown".into()), // 脏数据 → 不显示
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let sections = crate::pages::build_hw_sections(&r);
+    let disk_sec = sections
+        .iter()
+        .find(|s| s.title == "硬盘")
+        .expect("硬件页应有「硬盘」分组");
+    let (k0, v0) = &disk_sec.rows[0];
+    assert_eq!(k0, "硬盘#0");
+    assert!(v0.contains("NTFS+FAT32"), "同盘多格式应去重后 + 拼接: {v0}");
+    let (_, v1) = &disk_sec.rows[1];
+    assert!(
+        !v1.contains("NTFS") && !v1.contains("FAT32"),
+        "无卷的盘不应显示分区格式: {v1}"
+    );
+    let (_, v2) = &disk_sec.rows[2];
+    assert!(
+        !v2.to_lowercase().contains("unknown"),
+        "文件系统 unknown 脏数据不应显示: {v2}"
+    );
+}
+
 /// 单盘快照：`smart=false` 时 `smart=None`（无徽标形态，值列不收窄）。
 fn disk_snapshot(model: &str, smart: bool) -> CollectResult {
     CollectResult {
@@ -1072,4 +1146,32 @@ fn hw_memory_section_omits_channel_warning_when_channels_are_full() {
         mem.rows.iter().all(|(k, _)| k != "通道提示"),
         "通道跑满时不应出现通道提示行"
     );
+}
+
+/// 主题色板回归（零回归护栏）：把关键 `C_*` 常量钉在深空玻璃配色上，
+/// 防止日后误改把默认观感悄悄换掉（第三十七轮皮肤切换系统已撤销，
+/// 回退为单一主题常量；颜色值与原 SKIN_A 一致）。
+#[test]
+fn theme_constants_regression() {
+    use crate::theme::{
+        rgb, C_BTN, C_FOOTER_BG, C_GLASS_DARK, C_GLASS_TINT, C_GRAD_BOT, C_GRAD_TOP, C_ICON,
+        C_ON_GRAD_DIM, C_ON_GRAD_FAINT, C_SEL_ROW, C_TB_CLOSE_HOVER, C_WIN_BORDER,
+    };
+    let exp: [(u32, (u8, u8, u8)); 12] = [
+        (C_GRAD_TOP.0, (135, 81, 238)),
+        (C_GRAD_BOT.0, (38, 98, 235)),
+        (C_FOOTER_BG.0, (27, 54, 122)),
+        (C_WIN_BORDER.0, (170, 160, 245)),
+        (C_ON_GRAD_DIM.0, (224, 216, 250)),
+        (C_ON_GRAD_FAINT.0, (198, 190, 240)),
+        (C_GLASS_TINT.0, (20, 24, 52)),
+        (C_GLASS_DARK.0, (64, 60, 96)),
+        (C_ICON.0, (214, 208, 248)),
+        (C_SEL_ROW.0, (216, 240, 228)),
+        (C_BTN.0, (79, 70, 229)),
+        (C_TB_CLOSE_HOVER.0, (232, 17, 35)),
+    ];
+    for (got, want) in exp {
+        assert_eq!(got, rgb(want.0, want.1, want.2).0, "主题色板漂离基线");
+    }
 }
