@@ -804,6 +804,13 @@ pub struct PhysicalDisk {
     /// 反序列化旧 JSON（无此字段）默认 `None`，不报错。
     #[serde(default)]
     pub storage_backend: Option<String>,
+    /// 分区表类型（per-disk，非 per-volume）：GPT / MBR / RAW。
+    /// 由 `IOCTL_DISK_GET_DRIVE_LAYOUT_EX` 读 `DRIVE_LAYOUT_INFORMATION_EX.PartitionStyle`
+    /// 得到，与文件系统（NTFS/exFAT，per-volume）是两回事——用户要的"分区格式"通常指这个。
+    /// 读不到（非提权/IOCTL 被拒）就 `None`，面板/报告据此留白，绝不编造。
+    /// 反序列化旧 JSON（无此字段）默认 `None`，不报错。
+    #[serde(default)]
+    pub partition_style: Option<String>,
 }
 
 /// 音频设备类型，由名称 / 角色 / VID 启发式判定（见 platform `audio.rs`）。

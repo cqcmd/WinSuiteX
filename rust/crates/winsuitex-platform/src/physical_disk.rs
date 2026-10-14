@@ -33,12 +33,13 @@ use windows::Win32::Storage::IscsiDisc::{
 use windows::Win32::System::Ioctl::{
     NVMeDataTypeLogPage, PropertyStandardQuery, ProtocolTypeNvme, StorageDeviceProperty,
     StorageDeviceProtocolSpecificProperty, StorageDeviceSeekPenaltyProperty, DISK_EXTENT,
-    GET_LENGTH_INFORMATION, GUID_DEVINTERFACE_DISK, IOCTL_DISK_GET_LENGTH_INFO,
-    IOCTL_STORAGE_PROTOCOL_COMMAND, IOCTL_STORAGE_QUERY_PROPERTY, STORAGE_DEVICE_DESCRIPTOR,
-    STORAGE_PROPERTY_QUERY, STORAGE_PROTOCOL_COMMAND_FLAG_ADAPTER_REQUEST,
-    STORAGE_PROTOCOL_COMMAND_LENGTH_NVME, STORAGE_PROTOCOL_DATA_DESCRIPTOR,
-    STORAGE_PROTOCOL_SPECIFIC_DATA, STORAGE_PROTOCOL_SPECIFIC_NVME_ADMIN_COMMAND,
-    STORAGE_PROTOCOL_STATUS_SUCCESS, STORAGE_PROTOCOL_STRUCTURE_VERSION, VOLUME_DISK_EXTENTS,
+    GET_LENGTH_INFORMATION, GUID_DEVINTERFACE_DISK, IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+    IOCTL_DISK_GET_LENGTH_INFO, IOCTL_STORAGE_PROTOCOL_COMMAND, IOCTL_STORAGE_QUERY_PROPERTY,
+    STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY,
+    STORAGE_PROTOCOL_COMMAND_FLAG_ADAPTER_REQUEST, STORAGE_PROTOCOL_COMMAND_LENGTH_NVME,
+    STORAGE_PROTOCOL_DATA_DESCRIPTOR, STORAGE_PROTOCOL_SPECIFIC_DATA,
+    STORAGE_PROTOCOL_SPECIFIC_NVME_ADMIN_COMMAND, STORAGE_PROTOCOL_STATUS_SUCCESS,
+    STORAGE_PROTOCOL_STRUCTURE_VERSION, VOLUME_DISK_EXTENTS,
 };
 use windows::Win32::System::IO::DeviceIoControl;
 
@@ -195,6 +196,41 @@ fn query_length(handle: HANDLE) -> Option<u64> {
         return None;
     }
     Some(gli.Length as u64)
+}
+
+/// 取分区表类型（GPT / MBR / RAW）。失败（非提权/IOCTL 被拒）返回 `None`。
+///
+/// `IOCTL_DISK_GET_DRIVE_LAYOUT_EX` 的输出缓冲头部第一个字段就是
+/// `DRIVE_LAYOUT_INFORMATION_EX.PartitionStyle`（一个 `PARTITION_STYLE` 枚举：
+/// MBR=0 / GPT=1 / RAW=2）。我们只需这一个 DWORD，故分配一块足够大的缓冲，
+/// 直接读前 4 字节小端即可，无需定义可变长结构体——比拼全结构体布局更稳。
+fn query_partition_style(handle: HANDLE) -> Option<String> {
+    let mut buf: [u8; 4096] = [0u8; 4096];
+    let mut ret = 0u32;
+    // SAFETY: buf 在本作用域有效，4096 字节足以容纳头部 + 若干分区项。
+    let ok = unsafe {
+        DeviceIoControl(
+            handle,
+            IOCTL_DISK_GET_DRIVE_LAYOUT_EX,
+            None,
+            0,
+            Some(buf.as_mut_ptr() as *mut core::ffi::c_void),
+            buf.len() as u32,
+            Some(&mut ret),
+            None,
+        )
+    };
+    if ok.is_err() {
+        return None;
+    }
+    // 头部第一个字段 PartitionStyle（u32 小端）。
+    let style = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
+    match style {
+        0 => Some("MBR".to_string()),
+        1 => Some("GPT".to_string()),
+        2 => Some("RAW".to_string()),
+        _ => None,
+    }
 }
 
 /// 自定义 seek-penalty 描述符：避免不同 SDK 下该结构体定义差异（与 C++ 同思路）。
@@ -494,6 +530,9 @@ fn query_disk(path: &str, disk: &mut PhysicalDisk) -> bool {
     if let Some(size) = query_length(handle.0) {
         disk.size_bytes = Some(size);
     }
+
+    // 分区表类型（GPT/MBR/RAW，per-disk）：只读句柄即可，失败降级 None。
+    disk.partition_style = query_partition_style(handle.0);
 
     // 介质类型：无寻道惩罚 = SSD（拿不到就 None，不猜）
     match query_seek_penalty(handle.0) {

@@ -786,12 +786,10 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         // 「空槽 | 空槽」两重空槽语义，反而别扭（用户明确要求表头保留原始 NO DIMM）。
         let th = slot_names[i].clone().unwrap_or_else(|| UNKNOWN.to_string());
         if m.is_populated() {
-            // 固件虚报槽位（幽灵槽）：SMBIOS 写成已插满容量却无 SPD 数据。标「幽灵槽位」
-            // 而非伪造容量，保留原始槽名便于核错，与 SPD 直读工具口径一致。
+            // 固件虚报槽位（幽灵槽）：既然 `phantom_slot_indices` 已能识别，就整条剔除、
+            // 只展示真实生效的内存条——与 GUI 面板口径一致，信息收敛避免"看着头大"
+            // （Z.W. 2026-10-14）。虚报数量由「插槽占用」行的"（含 N 固件虚报）"带过。
             if phantom.contains(&i) {
-                out.push_str("<tr><th>");
-                out.push_str(&esc(&th));
-                out.push_str("</th><td><span class=\"wsx-muted\">固件虚报（幽灵槽位 · 无 SPD 数据）</span></td></tr>\n");
                 continue;
             }
             let mut td = String::new();
@@ -855,8 +853,9 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         out.push_str("</td></tr>\n");
     }
     // 提示行（通道 / 容量口径）：与 GUI 面板共用 `winsuitex_core::memory_channels`，
-    // 单一真源避免两端漂移。无固件虚报时保持原样——通道提示、容量口径提示各一行；
-    // 二者同源（都源于幽灵槽）时合并成一行，与 GUI 面板收敛口径一致（Z.W. 2026-10-14）。
+    // 单一真源避免两端漂移。⚠️ 只在无任何固件虚报的干净机器上、且确有建议时出现；
+    // 幽灵槽场景已由「插槽占用」行的"（含 N 固件虚报）"一句带过，不再单列提示段落，
+    // 与 GUI 面板收敛口径一致，避免信息过载（Z.W. 2026-10-14）。
     let os_total = total.as_ref().map_or(0, |t| t.get());
     if phantom.is_empty() {
         if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
@@ -870,28 +869,6 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         {
             row(out, "容量口径提示", &esc(&msg));
         }
-    } else {
-        let channel_tail = winsuitex_core::memory_channels::memory_channel_advice(
-            sticks,
-            total.as_ref().map(|t| t.get()),
-        )
-        .map(|msg| {
-            msg.split_once('→')
-                .map(|(_, tail)| format!(" →{}", tail.trim_start()))
-                .unwrap_or_default()
-        })
-        .unwrap_or_default();
-        row(
-            out,
-            "提示",
-            &esc(&format!(
-                "固件虚报 {} 个幽灵槽位（无 SPD 数据）；已按 OS 总容量（{} MiB）自动剔除，真实 {} 条生效{}。CPU-Z / HWiNFO 等经 SPD 直读工具口径一致。",
-                phantom.len(),
-                os_total,
-                real,
-                channel_tail,
-            )),
-        );
     }
     out.push_str("</table></section>\n");
 }
@@ -1175,6 +1152,13 @@ fn disk_section(hw: &HardwareInfo, out: &mut String) {
         if let Some(f) = d.firmware.as_deref().filter(|f| !f.trim().is_empty()) {
             td.push_str("<br><span class=\"wsx-mono\">固件：");
             td.push_str(&esc(f));
+            td.push_str("</span>");
+        }
+        // 分区格式（GPT/MBR，per-disk）：与文件系统（NTFS 等，per-volume）是两回事，
+        // 用户要的"分区格式"通常指这个；读不到就留白，不编造。
+        if let Some(ps) = d.partition_style.as_deref() {
+            td.push_str("<br><span class=\"wsx-mono\">分区格式：");
+            td.push_str(&esc(ps));
             td.push_str("</span>");
         }
         // 存储后端告警：盘位于 RAID / Storage Spaces / 虚拟磁盘后时，完整 SMART 需厂商工具。
@@ -3250,9 +3234,10 @@ mod tests {
     }
 
     #[test]
-    fn memory_phantom_hints_merge_into_one_row() {
-        // 幽灵槽场景：报告应与 GUI 面板一致，把「标题小字 + 通道提示 + 容量口径提示」
-        // 三段同源提示合并成一条「提示」行，不再重复罗嗦（Z.W. 2026-10-14 收敛）。
+    fn memory_section_hides_phantom_slots_and_strips_clutter() {
+        // 幽灵槽场景：报告应与 GUI 面板一致，整条剔除幽灵槽、只展示真实生效的内存条，
+        // 且不再单列冗长提示段落——信息收敛避免"看着头大"（Z.W. 2026-10-14）。
+        // 仅由「插槽占用」行的"（含 N 固件虚报）"一句带过。
         let mut hw = base_hw();
         hw.memory.total_mb = Some(MebiBytes::new(32768));
         hw.memory.sticks.clear();
@@ -3279,17 +3264,48 @@ mod tests {
             speed_mhz: None,
         });
         let html = build_html(&hw, &[]);
+        // 不应有任何提示行（提示 / 通道提示 / 容量口径提示）。
         assert!(
             !html.contains("通道提示"),
-            "合并后不应有独立通道提示行: {html}"
+            "幽灵槽场景不应有通道提示行: {html}"
         );
         assert!(
             !html.contains("容量口径提示"),
-            "合并后不应有独立容量口径提示行: {html}"
+            "幽灵槽场景不应有容量口径提示行: {html}"
         );
         assert!(
-            html.contains("提示") && html.contains("幽灵槽位") && html.contains("CPU-Z"),
-            "应有一条合并「提示」行点名幽灵槽位并与 SPD 直读工具口径一致: {html}"
+            !html.contains("幽灵槽位"),
+            "幽灵槽场景不应再单列提示段落: {html}"
+        );
+        // 插槽占用应一句带过虚报数量。
+        assert!(html.contains("固件虚报"), "插槽占用应点出虚报: {html}");
+        // 真实条（Kingston）仍在；幽灵槽（CHANNEL B）整条剔除，不应出现其标识。
+        assert!(html.contains("Kingston"), "真实条应保留: {html}");
+        assert!(
+            !html.contains("CHANNEL B"),
+            "幽灵槽位不应出现在报告中: {html}"
+        );
+    }
+
+    #[test]
+    fn disk_section_shows_partition_style() {
+        // 分区格式（GPT/MBR，per-disk）应出现在硬盘段；与文件系统（NTFS，per-volume）是两回事。
+        // 读不到分区格式（非提权/IOCTL 被拒）时不应出现该字段，诚实留白。
+        let mut hw = base_hw();
+        hw.disks.clear();
+        hw.disks.push(PhysicalDisk {
+            index: 0,
+            model: Some("Samsung SSD 980".into()),
+            iface: Some("NVMe".into()),
+            media: Some("SSD".into()),
+            size_bytes: Some(1_000_000_000_000),
+            partition_style: Some("GPT".into()),
+            ..Default::default()
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            html.contains("分区格式：GPT"),
+            "硬盘段应显示分区格式 GPT: {html}"
         );
     }
 

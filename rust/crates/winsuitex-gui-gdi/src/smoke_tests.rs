@@ -688,6 +688,52 @@ fn hw_disk_rows_show_partition_filesystem() {
     );
 }
 
+/// 分区表类型（GPT/MBR，per-disk）应显示在硬盘行；与文件系统（NTFS，per-volume）是两回事。
+/// 读不到分区格式（非提权/IOCTL 被拒）的盘不应显示该 token，诚实留白。
+#[test]
+fn hw_disk_rows_show_partition_style() {
+    let r = CollectResult {
+        info: HardwareInfo {
+            disks: vec![
+                PhysicalDisk {
+                    index: 0,
+                    model: Some("SSD-A".into()),
+                    partition_style: Some("GPT".into()),
+                    ..Default::default()
+                },
+                PhysicalDisk {
+                    index: 1,
+                    model: Some("SSD-B".into()),
+                    partition_style: Some("MBR".into()),
+                    ..Default::default()
+                },
+                PhysicalDisk {
+                    index: 2,
+                    model: Some("SSD-C".into()),
+                    ..Default::default() // 读不到分区格式 → 不加
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let sections = crate::pages::build_hw_sections(&r);
+    let disk_sec = sections
+        .iter()
+        .find(|s| s.title == "硬盘")
+        .expect("硬件页应有「硬盘」分组");
+    let (k0, v0) = &disk_sec.rows[0];
+    assert_eq!(k0, "硬盘#0");
+    assert!(v0.contains("GPT"), "应显示分区表类型 GPT: {v0}");
+    let (_, v1) = &disk_sec.rows[1];
+    assert!(v1.contains("MBR"), "应显示分区表类型 MBR: {v1}");
+    let (_, v2) = &disk_sec.rows[2];
+    assert!(
+        !v2.contains("GPT") && !v2.contains("MBR"),
+        "读不到分区格式不应显示: {v2}"
+    );
+}
+
 /// 单盘快照：`smart=false` 时 `smart=None`（无徽标形态，值列不收窄）。
 fn disk_snapshot(model: &str, smart: bool) -> CollectResult {
     CollectResult {
