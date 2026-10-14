@@ -751,9 +751,14 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         winsuitex_core::memory_channels::phantom_slot_indices(sticks, total.map(|t| t.get()));
     // 槽位占用汇总：SMBIOS 只枚举到部分槽时（如 24 槽机器只报出 8 根），
     // 这一行让"各槽合计与总计对不上"一眼可见，不必读者自己数行数。
+    // `populated` / `real` 提到 if 外，供下方「提示」合并行复用（避免作用域不足）。
+    let populated = if sticks.is_empty() {
+        0
+    } else {
+        sticks.iter().filter(|m| m.is_populated()).count()
+    };
+    let real = populated.saturating_sub(phantom.len());
     if !sticks.is_empty() {
-        let populated = sticks.iter().filter(|m| m.is_populated()).count();
-        let real = populated.saturating_sub(phantom.len());
         let txt = if phantom.is_empty() {
             format!("{real} / {} 槽已插", sticks.len())
         } else {
@@ -849,23 +854,44 @@ fn memory_section(hw: &HardwareInfo, out: &mut String) {
         out.push_str(&td);
         out.push_str("</td></tr>\n");
     }
-    // 通道提示（单一真源见 `winsuitex_core::memory_channels::memory_channel_advice`）：
-    // 涵盖三档——仅 1 条 / 奇数条(flex) / 通道分布不均，并感知固件幽灵槽
-    // （SMBIOS 把空槽虚报成满容量、把真实单通道完全掩盖，见 007 真机 A/B 两通道"都占满"
-    // 却只 1 条生效）。与 GUI 面板同一函数，避免两端漂移。判定不出返回 None → 不加行。
-    if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
-        sticks,
-        total.as_ref().map(|t| t.get()),
-    ) {
-        row(out, "通道提示", &esc(&msg));
-    }
-    // 容量口径交叉校验：OS 总计 与 SMBIOS 各实插槽位容量之和 的差异，由 core 单一真源判定
-    // （阈值与文案同 GUI 面板，避免两端漂移；>10% 会点名「固件虚报/幽灵槽位」）。
-    if let Some(msg) = winsuitex_core::memory_channels::memory_capacity_deviation_warning(
-        sticks,
-        total.as_ref().map_or(0, |t| t.get()),
-    ) {
-        row(out, "容量口径提示", &esc(&msg));
+    // 提示行（通道 / 容量口径）：与 GUI 面板共用 `winsuitex_core::memory_channels`，
+    // 单一真源避免两端漂移。无固件虚报时保持原样——通道提示、容量口径提示各一行；
+    // 二者同源（都源于幽灵槽）时合并成一行，与 GUI 面板收敛口径一致（Z.W. 2026-10-14）。
+    let os_total = total.as_ref().map_or(0, |t| t.get());
+    if phantom.is_empty() {
+        if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
+            sticks,
+            total.as_ref().map(|t| t.get()),
+        ) {
+            row(out, "通道提示", &esc(&msg));
+        }
+        if let Some(msg) =
+            winsuitex_core::memory_channels::memory_capacity_deviation_warning(sticks, os_total)
+        {
+            row(out, "容量口径提示", &esc(&msg));
+        }
+    } else {
+        let channel_tail = winsuitex_core::memory_channels::memory_channel_advice(
+            sticks,
+            total.as_ref().map(|t| t.get()),
+        )
+        .map(|msg| {
+            msg.split_once('→')
+                .map(|(_, tail)| format!(" →{}", tail.trim_start()))
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+        row(
+            out,
+            "提示",
+            &esc(&format!(
+                "固件虚报 {} 个幽灵槽位（无 SPD 数据）；已按 OS 总容量（{} MiB）自动剔除，真实 {} 条生效{}。CPU-Z / HWiNFO 等经 SPD 直读工具口径一致。",
+                phantom.len(),
+                os_total,
+                real,
+                channel_tail,
+            )),
+        );
     }
     out.push_str("</table></section>\n");
 }
@@ -3220,6 +3246,50 @@ mod tests {
         assert!(
             !ok_html.contains("容量口径提示"),
             "内存口径一致不应提示: {ok_html}"
+        );
+    }
+
+    #[test]
+    fn memory_phantom_hints_merge_into_one_row() {
+        // 幽灵槽场景：报告应与 GUI 面板一致，把「标题小字 + 通道提示 + 容量口径提示」
+        // 三段同源提示合并成一条「提示」行，不再重复罗嗦（Z.W. 2026-10-14 收敛）。
+        let mut hw = base_hw();
+        hw.memory.total_mb = Some(MebiBytes::new(32768));
+        hw.memory.sticks.clear();
+        // 真条：Kingston 全 SPD。
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM 0".into()),
+            bank: Some("P0 CHANNEL A".into()),
+            serial: Some("S1".into()),
+            part_no: Some("P1".into()),
+            vendor: Some("Kingston".into()),
+            mem_type: Some("DDR5".into()),
+            capacity_mb: Some(MebiBytes::new(32768)),
+            speed_mhz: Some(6000),
+        });
+        // 幽灵槽：满容量、无 SPD 元数据 → 被 phantom_slot_indices 识别。
+        hw.memory.sticks.push(MemStick {
+            locator: Some("DIMM 0".into()),
+            bank: Some("P0 CHANNEL B".into()),
+            serial: None,
+            part_no: None,
+            vendor: None,
+            mem_type: None,
+            capacity_mb: Some(MebiBytes::new(32768)),
+            speed_mhz: None,
+        });
+        let html = build_html(&hw, &[]);
+        assert!(
+            !html.contains("通道提示"),
+            "合并后不应有独立通道提示行: {html}"
+        );
+        assert!(
+            !html.contains("容量口径提示"),
+            "合并后不应有独立容量口径提示行: {html}"
+        );
+        assert!(
+            html.contains("提示") && html.contains("幽灵槽位") && html.contains("CPU-Z"),
+            "应有一条合并「提示」行点名幽灵槽位并与 SPD 直读工具口径一致: {html}"
         );
     }
 

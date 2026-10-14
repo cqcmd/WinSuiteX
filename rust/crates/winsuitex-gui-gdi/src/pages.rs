@@ -126,7 +126,7 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
 /// 3. 描边画在内缩 `SHADOW_PAD` 的 body 上，与 `SetWindowRgn` 裁出的窗口
 ///    圆角**不同心**，窗口真实边缘没有任何描边——"圆角是虚的"。
 ///
-/// 现在的定案：**窗口 = 内容矩形本身**。全窗铺 `C_BG`，贴边画一圈
+/// 现在的定案：**窗口 = 内容矩形本身**。全窗铺 `C_GRAD_BOT`，贴边画一圈
 /// `C_WIN_BORDER`（中深灰，任何壁纸下都可见），圆角交给 `SetWindowRgn`。
 /// 桌面阴影由 Windows 11 DWM 对圆角窗口自动补（`WS_POPUP` + region 圆角
 /// 在 Win11 会走系统圆角阴影路径；Win10 无阴影但浅灰描边足够定义轮廓）。
@@ -152,7 +152,7 @@ pub fn draw_window_frame(hdc: HDC, w: i32, h: i32) {
 // 页签条
 // ============================================================
 
-/// 三个页签（硬件配置 / 右键增强 / 磁盘信息）。
+/// 四个页签（硬件配置 / 右键增强 / 磁盘信息 / 调试）。
 pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
     let pad = body_pad();
     let top = pad + scale(TITLE_H);
@@ -160,7 +160,7 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
     // 页签条不铺底色，`bar` 只用于取左右边界（见 `tab_at` 的同源约定）。
     // 页签条不铺底色，直接坐在渐变上（C++ 版同）——
     // 铺实色条会在渐变中间横切一刀，非常显眼。
-    let names = ["硬件配置", "右键增强", "磁盘信息"];
+    let names = ["硬件配置", "右键增强", "磁盘信息", "调试"];
     for (i, n) in names.iter().enumerate() {
         let x = content_left() + scale(MARGIN) + scale(TAB_W) * i as i32;
         let r = RECT {
@@ -212,7 +212,7 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
 /// 命中测试：页签区返回页签索引，否则 -1。
 pub fn tab_at(x: i32) -> i32 {
     let x0 = content_left() + scale(MARGIN);
-    for i in 0..3 {
+    for i in 0..4 {
         let a = x0 + scale(TAB_W) * i;
         let b = a + scale(TAB_W);
         if x >= a && x < b {
@@ -248,6 +248,7 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
         "页面仅展示常规信息，完整明细请点击右上角「导出详细报告」",
         menu_hint,
         "选中行查看详情，插入新盘后可点刷新",
+        "调试参数实时生效，试出满意值后告诉我固化回 theme.rs",
     ];
     let hint = hints[cur_tab() as usize % hints.len()];
     let hr = RECT {
@@ -771,48 +772,56 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             let n = empty_slots.len();
             rows.push(("空槽".into(), join_parts(&[format!("{n} 条未安装"), locs])));
         }
-        // 通道提示：与 HTML 报告**同一个判定函数**（`winsuitex_core::memory_channels`），
-        // 避免两端各写一套而漂移。现场维护时面板上看一眼就知道是不是单通道，
-        // 不必导出报告——双路各插 1 条（都在 Channel 0）这种"条数是偶数、实际单通道"
-        // 的情况，光看"已插 2 / 共 16 插槽"是看不出来的（Z.W. 华为真机）。
-        // 同时感知固件幽灵槽（见 007 真机：A/B 两通道"都占满"却只 1 条生效，原判定
-        // 会被掩盖；`memory_channel_advice` 按 OS 总容量排除无 SPD 幽灵条后正确报单通道）。
-        // 判定不出来返回 None → 不加行（诚实留白，不编造）。
-        if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
-            &info.memory.sticks,
-            info.memory.total_mb.map(|m| m.get()),
-        ) {
-            rows.push(("通道提示".into(), msg));
-        }
-        // 容量口径提示：与 HTML 报告**同一个判定函数**（`winsuitex_core::memory_channels`），
-        // 避免两端漂移。点名"固件虚报/幽灵槽位"，让技师一眼看懂为何槽位数对不上，
-        // 不误以为是采集 bug。OS 未报总量（total_mb 为 None）时不提示。
-        if let Some(msg) = winsuitex_core::memory_channels::memory_capacity_deviation_warning(
-            &info.memory.sticks,
-            info.memory.total_mb.map_or(0, |m| m.get()),
-        ) {
-            rows.push(("容量口径提示".into(), msg));
-        }
-        // 内存节标题小字说明：仅在出现固件虚报（幽灵槽位）时显示，解释口径依据——
-        // SMBIOS 把空槽虚报成已插满容量、却无 SPD 数据，导致"显示 N 条"而 OS / SPD 直读工具
-        // 只见真实条数；我们按 OS 总容量交叉校验自动剔除幽灵条，与 CPU-Z / HWiNFO 等口径一致。
-        let mem_note = if phantom.is_empty() {
-            None
+        // 提示行（通道 / 容量口径）：与 HTML 报告共用 `winsuitex_core::memory_channels`，
+        // 单一真源避免两端漂移。判定不出来返回 None → 不加行（诚实留白，不编造）。
+        // 无固件虚报时保持原样——通道提示、容量口径提示各一行；二者同源（都源于幽灵槽）
+        // 时合并成一行，避免重复罗嗦（Z.W. 2026-10-14 现场对比 C++ 截图后要求收敛）。
+        let os_total = info.memory.total_mb.map_or(0, |m| m.get());
+        if phantom.is_empty() {
+            if let Some(msg) = winsuitex_core::memory_channels::memory_channel_advice(
+                &info.memory.sticks,
+                info.memory.total_mb.map(|m| m.get()),
+            ) {
+                rows.push(("通道提示".into(), msg));
+            }
+            if let Some(msg) = winsuitex_core::memory_channels::memory_capacity_deviation_warning(
+                &info.memory.sticks,
+                os_total,
+            ) {
+                rows.push(("容量口径提示".into(), msg));
+            }
         } else {
-            Some(format!(
-                "SMBIOS 报 {} 槽已插、含 {} 个固件虚报的幽灵槽位（无 SPD 数据）；已按 OS 总容量自动剔除，真实仅 {} 条生效。CPU-Z / HWiNFO 等经 SPD 直读工具口径一致。",
-                populated,
-                phantom.len(),
-                real_pop
-            ))
-        };
+            // 幽灵槽场景：标题小字说明 + 通道提示 + 容量口径提示三段同源，合并为一条。
+            // 取通道建议里 "→" 之后的因果/建议部分（如"单通道…建议补条组双通道"），
+            // 与前面"已按 OS 总容量剔除"互补、不重复；再点名与 SPD 直读工具口径一致。
+            let channel_tail = winsuitex_core::memory_channels::memory_channel_advice(
+                &info.memory.sticks,
+                info.memory.total_mb.map(|m| m.get()),
+            )
+            .map(|msg| {
+                msg.split_once('→')
+                    .map(|(_, tail)| format!(" →{}", tail.trim_start()))
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+            rows.push((
+                "提示".into(),
+                format!(
+                    "固件虚报 {} 个幽灵槽位（无 SPD 数据）；已按 OS 总容量（{} MiB）自动剔除，真实 {} 条生效{}。CPU-Z / HWiNFO 等经 SPD 直读工具口径一致。",
+                    phantom.len(),
+                    os_total,
+                    real_pop,
+                    channel_tail,
+                ),
+            ));
+        }
         out.push(Section {
             icon: HwIcon::Mem,
             title: "内存",
             rows,
             health: Vec::new(),
             value_colors: Vec::new(),
-            note: mem_note,
+            note: None,
         });
     }
 
@@ -1067,8 +1076,8 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
         hdc,
         &card,
         scale(CARD_RADIUS),
-        C_GLASS_TINT,
-        0.22,
+        tint_color(),
+        glass_alpha(),
         scroll,
         h,
     );
@@ -1154,7 +1163,15 @@ pub fn draw_hw_header(hdc: HDC, w: i32, h: i32, f_sec: HFONT, f_body: HFONT) {
     // 打底覆盖到正文卡顶（hdr.bottom + 10 窄缝），盖掉穿缝 + 透玻璃渗出的滚动内容。
     mask_header_gap(hdc, w, h, hdr.bottom + scale(10));
     // 头部玻璃卡：渐变上叠深 navy 0.22，与正文卡同一套玻璃主题。
-    fill_glass_round(hdc, &hdr, scale(CARD_RADIUS), C_GLASS_TINT, 0.22, 0, h);
+    fill_glass_round(
+        hdc,
+        &hdr,
+        scale(CARD_RADIUS),
+        tint_color(),
+        glass_alpha(),
+        0,
+        h,
+    );
 
     let pad = scale(PAD_IN);
     let th = scale(26);
@@ -1193,7 +1210,7 @@ pub fn draw_hw_header(hdc: HDC, w: i32, h: i32, f_sec: HFONT, f_body: HFONT) {
 ///
 /// C++ 版硬件页没有彩色方瓦片——它是**线性小图标 + 一条比卡片底略亮的带**，
 /// 靠"亮一档"而不是"色块"来分层。这里同样处理：带子用玻璃混合画，
-/// 图标直接用分组强调色（[`C_ACCENT`]）描边，不垫底色。
+/// 图标直接用分组强调色（[`C_ACCENT_SOFT`]）描边，不垫底色。
 fn section(c: &SecCtx, y: i32, icon: HwIcon, title: &str) -> i32 {
     let SecCtx {
         hdc,
@@ -1249,7 +1266,7 @@ fn accent_of(icon: HwIcon) -> Color {
     C_ACCENT_SOFT[hw_accent_idx(icon)]
 }
 
-/// 把 `HwIcon` 映射到 `C_ACCENT` / `C_ACCENT_SOFT` 的下标（顺序与枚举声明一致）。
+/// 把 `HwIcon` 映射到 `C_ACCENT_SOFT` / `C_ACCENT_SOFT` 的下标（顺序与枚举声明一致）。
 fn hw_accent_idx(icon: HwIcon) -> usize {
     match icon {
         HwIcon::Os => 0,
@@ -1839,12 +1856,24 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
     y
 }
 
-/// 玻璃卡（`tint` 在渐变上叠 `alpha` 的混合色）+ 一圈叠白细描边。
+/// 玻璃卡（`tint_color()` 在渐变上叠 `glass_alpha() + extra_alpha` 的混合色）
+/// + 一圈叠白细描边。
 ///
-/// 磁盘页表格容器用 `C_GLASS_TINT` 0.22（与硬件页大卡同档，压暗让白字清楚），
-/// 详情卡用 0.30（更暗一档，表示"这是选中项的展开"）。
-fn card_bg(hdc: HDC, r: &RECT, tint: Color, alpha: f32, scroll: i32, win_h: i32) {
-    fill_glass_round(hdc, r, scale(CARD_RADIUS), tint, alpha, scroll, win_h);
+/// tint 色与透明度都读调试全局量（见 `theme::tint_color` / `theme::glass_alpha`），
+/// 「调试」页滑杆调节时全窗口联动；`extra_alpha` 是**相对增量**——
+/// 磁盘页表格容器传 0（与硬件页大卡同档，压暗让白字清楚），
+/// 详情卡传 0.08（更暗一档，表示"这是选中项的展开"），
+/// 滑杆调节时两者的明暗关系保持不变。
+fn card_bg(hdc: HDC, r: &RECT, scroll: i32, win_h: i32, extra_alpha: f32) {
+    fill_glass_round(
+        hdc,
+        r,
+        scale(CARD_RADIUS),
+        tint_color(),
+        glass_alpha() + extra_alpha,
+        scroll,
+        win_h,
+    );
     stroke_round(
         hdc,
         r,
@@ -1921,10 +1950,9 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             right,
             bottom: table_bottom,
         },
-        C_GLASS_TINT,
-        0.22,
         scroll,
         h,
+        0.0,
     );
     for (i, c) in cols.iter().enumerate() {
         // ⚠️ 表头对齐规则（第二十七轮 Z.W. 定案）：
@@ -2159,7 +2187,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             right,
             bottom: card_bottom,
         };
-        card_bg(hdc, &dr, C_GLASS_TINT, 0.30, scroll, h);
+        card_bg(hdc, &dr, scroll, h, 0.08);
         let mut ly = y + scale(8);
         for (l, col) in &lines {
             let lr = RECT {
@@ -2229,6 +2257,524 @@ fn used_color(pct: i32) -> Color {
     }
 }
 
+// ============================================================
+// 调试页（临时控件：玻璃透明度 / 叠色深浅）
+// ============================================================
+//
+// ⚠️ 这是**临时调试设施**，不是设计定案：Z.W. 用它实时试参
+// （滑杆拖动 / 输入框键入 0-100），全窗口玻璃卡经
+// `theme::glass_alpha()` / `theme::tint_color()` 联动刷新。
+// 试出满意组合后把数值固化回 `theme.rs` 常量，本页即可删除。
+
+thread_local! {
+    /// 两个滑杆**轨道**矩形（绘制时写、命中/取值时读）。
+    static SLIDER_RECS: std::cell::RefCell<Vec<RECT>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// 两个输入框矩形。
+    static INPUT_RECS: std::cell::RefCell<Vec<RECT>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// 两个重置按钮矩形。
+    static RESET_RECS: std::cell::RefCell<Vec<RECT>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// 输入框文本缓冲（聚焦时键盘输入落在这里，失焦后显示回真实值）。
+    static DEBUG_INPUT: std::cell::RefCell<[String; 2]> =
+        const { std::cell::RefCell::new([String::new(), String::new()]) };
+    /// 当前聚焦的输入框：0=无 / 1=透明度 / 2=深浅。
+    static DEBUG_FOCUS: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+    /// 正在拖动的滑杆：-1=无 / 0=透明度 / 1=深浅。
+    static DEBUG_DRAG: std::cell::Cell<i32> = const { std::cell::Cell::new(-1) };
+    /// 悬停的重置按钮索引：-1=无。
+    static DEBUG_HOVER_RESET: std::cell::Cell<i32> = const { std::cell::Cell::new(-1) };
+}
+
+/// 调试控件组数（透明度 / 深浅）。
+const DEBUG_GROUPS: usize = 2;
+
+/// 把控件矩形写进 thread_local 缓存（越界自动增长，与 `switch_at` 同源）。
+fn cache_debug_rect(
+    cell: &'static std::thread::LocalKey<std::cell::RefCell<Vec<RECT>>>,
+    slot: usize,
+    r: RECT,
+) {
+    cell.with(|v| {
+        let mut v = v.borrow_mut();
+        if v.len() <= slot {
+            v.resize(slot + 1, RECT::default());
+        }
+        v[slot] = r;
+    });
+}
+
+/// 取某组当前值（百分比 0-100）。
+fn debug_pct(i: usize) -> u32 {
+    match i {
+        0 => (crate::theme::glass_alpha() * 100.0).round() as u32,
+        _ => crate::theme::tint_depth(),
+    }
+}
+
+/// 把百分比写进主题全局量（调试页唯一的效果出口）。
+fn debug_apply_pct(i: usize, pct: u32) {
+    match i {
+        0 => crate::theme::set_glass_alpha(pct),
+        _ => crate::theme::set_tint_depth(pct),
+    }
+}
+
+/// 输入框显示文本：聚焦且缓冲非空时显示缓冲（用户正在键入），否则显示真实值。
+pub fn debug_input_text(i: usize) -> String {
+    let focused = DEBUG_FOCUS.with(|f| f.get()) == i as i32 + 1;
+    if focused {
+        DEBUG_INPUT.with(|b| {
+            let s = &b.borrow()[i];
+            if s.is_empty() {
+                debug_pct(i).to_string()
+            } else {
+                s.clone()
+            }
+        })
+    } else {
+        debug_pct(i).to_string()
+    }
+}
+
+/// 聚焦输入框时把缓冲同步为当前真实值（一点开就看到现行参数）。
+pub fn debug_sync_input(i: usize) {
+    DEBUG_INPUT.with(|b| b.borrow_mut()[i] = debug_pct(i).to_string());
+}
+
+/// 键盘输入一位数字（0-9，最多 3 位），实时 clamp 到 0-100 并生效。
+pub fn debug_push_digit(d: u8) {
+    let f = DEBUG_FOCUS.with(|c| c.get());
+    if f <= 0 {
+        return;
+    }
+    let i = f as usize - 1;
+    DEBUG_INPUT.with(|b| {
+        let mut v = b.borrow_mut();
+        if v[i].len() < 3 {
+            v[i].push((b'0' + d.min(9)) as char);
+        }
+        let pct = v[i].parse::<u32>().unwrap_or(0).min(100);
+        debug_apply_pct(i, pct);
+    });
+}
+
+/// 退格删除一位，实时生效。
+pub fn debug_backspace() {
+    let f = DEBUG_FOCUS.with(|c| c.get());
+    if f <= 0 {
+        return;
+    }
+    let i = f as usize - 1;
+    DEBUG_INPUT.with(|b| {
+        let mut v = b.borrow_mut();
+        v[i].pop();
+        let pct = v[i].parse::<u32>().unwrap_or(0).min(100);
+        debug_apply_pct(i, pct);
+    });
+}
+
+/// 滑杆点击/拖动定位：按 x 在轨道内的比例算百分比并生效（同步输入框缓冲）。
+pub fn debug_apply_from_x(i: usize, x: i32) {
+    SLIDER_RECS.with(|v| {
+        if let Some(r) = v.borrow().get(i) {
+            let w = (r.right - r.left).max(1);
+            let pct = (x - r.left).clamp(0, w) as u32 * 100 / w as u32;
+            debug_apply_pct(i, pct);
+        }
+    });
+    debug_sync_input(i);
+}
+
+/// 单组重置到**主题默认**值（玻璃 22% / 深浅 100%）。
+pub fn debug_reset(i: usize) {
+    match i {
+        0 => crate::theme::set_glass_alpha(22),
+        _ => crate::theme::set_tint_depth(100),
+    }
+    debug_sync_input(i);
+}
+
+/// 当前聚焦的输入框（0=无 / 1=透明度 / 2=深浅）。
+pub fn debug_focus() -> i32 {
+    DEBUG_FOCUS.with(|c| c.get())
+}
+
+/// 设置聚焦的输入框（0=失焦）。
+pub fn set_debug_focus(v: i32) {
+    DEBUG_FOCUS.with(|c| c.set(v));
+}
+
+/// 是否正在拖动滑杆。
+pub fn debug_dragging() -> bool {
+    DEBUG_DRAG.with(|c| c.get()) >= 0
+}
+
+/// 正在拖动的滑杆索引（未拖动时返回 0，调用前先判 `debug_dragging`）。
+pub fn debug_drag_idx() -> usize {
+    DEBUG_DRAG.with(|c| c.get()).max(0) as usize
+}
+
+/// 设置/清除拖动中的滑杆（-1=结束拖动）。
+pub fn set_debug_drag(v: i32) {
+    DEBUG_DRAG.with(|c| c.set(v));
+}
+
+/// 设置悬停的重置按钮索引（-1=无）。
+pub fn set_debug_hover_reset(v: i32) {
+    DEBUG_HOVER_RESET.with(|c| c.set(v));
+}
+
+/// 悬停的重置按钮索引（-1=无）。
+pub fn debug_hover_reset() -> i32 {
+    DEBUG_HOVER_RESET.with(|c| c.get())
+}
+
+/// 命中：滑杆（轨道上下各扩 10px 宽容区；行高 30，不碰相邻行）。
+pub fn debug_slider_at(x: i32, y: i32) -> Option<usize> {
+    let m = scale(10);
+    SLIDER_RECS.with(|v| {
+        v.borrow().iter().position(|r| {
+            r.right != 0 && x >= r.left - m && x < r.right + m && y >= r.top - m && y < r.bottom + m
+        })
+    })
+}
+
+/// 命中：输入框。
+pub fn debug_input_at(x: i32, y: i32) -> Option<usize> {
+    INPUT_RECS.with(|v| {
+        v.borrow()
+            .iter()
+            .position(|r| r.right != 0 && x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+    })
+}
+
+/// 命中：重置按钮。
+pub fn debug_reset_at(x: i32, y: i32) -> Option<usize> {
+    RESET_RECS.with(|v| {
+        v.borrow()
+            .iter()
+            .position(|r| r.right != 0 && x >= r.left && x < r.right && y >= r.top && y < r.bottom)
+    })
+}
+
+/// 「调试」页：两个临时控件组（玻璃透明度 / 叠色深浅）。
+///
+/// 布局预算与绘制趟走同一套增量（组高 = 标题 26 + 滑杆 30 + 输入 30 + 说明 2×18），
+/// 卡底先画、内容后画，与硬件页/磁盘页同构。返回内容底边（供滚动钳制）。
+pub fn draw_debug_page(ctx: &PageCtx<'_>) -> i32 {
+    let PageCtx {
+        hdc,
+        w,
+        h,
+        f_sec,
+        f_body,
+        f_sub,
+        f_tiny,
+        scroll,
+        ..
+    } = *ctx;
+    let (left, right) = hw_card_x(w);
+    let pad = scale(PAD_IN);
+    let top = content_top() + scale(PAD_IN);
+
+    // —— 布局预算（固定内容，纯算术）——
+    let title_h = scale(26);
+    let slider_h = scale(30);
+    let input_h = scale(30);
+    let note_h = scale(18);
+    let grp_h = title_h + slider_h + input_h + note_h * 2;
+    let grp_gap = scale(20);
+    let card_h = pad * 2
+        + scale(30)
+        + note_h * 2
+        + scale(16)
+        + scale(16)
+        + grp_h * DEBUG_GROUPS as i32
+        + grp_gap * (DEBUG_GROUPS as i32 - 1)
+        + scale(28);
+    let bottom = top + card_h;
+    card_bg(
+        hdc,
+        &RECT {
+            left,
+            top,
+            right,
+            bottom,
+        },
+        scroll,
+        h,
+        0.0,
+    );
+
+    let inner_l = left + pad;
+    let inner_r = right - pad;
+    let mut y = top + pad;
+
+    // 页标题
+    text(
+        hdc,
+        &RECT {
+            left: inner_l,
+            top: y,
+            right: inner_r,
+            bottom: y + scale(30),
+        },
+        "主题调试（临时控件）",
+        f_sec,
+        C_ON_GRAD,
+        false,
+    );
+    y += scale(30);
+    // 说明两行（tiny 弱对比色）
+    for ln in [
+        "拖动滑杆，或点输入框直接键入 0-100 的数值——全窗口玻璃卡实时预览。",
+        "试出满意组合后告诉我，我把数值固化回 theme.rs，本页即可删除。",
+    ] {
+        text(
+            hdc,
+            &RECT {
+                left: inner_l,
+                top: y,
+                right: inner_r,
+                bottom: y + note_h,
+            },
+            ln,
+            f_tiny,
+            C_ON_GRAD_DIM,
+            false,
+        );
+        y += note_h;
+    }
+    y += scale(16);
+
+    let groups: [(&str, &str); DEBUG_GROUPS] = [
+        (
+            "玻璃透明度",
+            "控制 tint 叠层不透明度。0=全透出渐变，100=全实。默认 22。",
+        ),
+        (
+            "叠色深浅",
+            "tint 色相位置。100=深海军蓝（最暗），0=品牌紫（最亮）。默认 100。",
+        ),
+    ];
+    for (i, (label, note)) in groups.iter().enumerate() {
+        if i > 0 {
+            y += grp_gap;
+        }
+        y = debug_group(
+            hdc, inner_l, inner_r, y, scroll, h, i, label, note, f_sec, f_body, f_sub, f_tiny,
+            title_h, slider_h, input_h, note_h,
+        );
+    }
+
+    // 当前生效值（hex 直读 tint_color()，用户可抄走去固化）
+    let tc = crate::theme::tint_color().0;
+    let cur = format!(
+        "当前生效：alpha = {:.2}　tint = #{:02X}{:02X}{:02X}　（「重置」回默认 22% / 100%）",
+        crate::theme::glass_alpha(),
+        (tc >> 16) & 0xFF,
+        (tc >> 8) & 0xFF,
+        tc & 0xFF,
+    );
+    text(
+        hdc,
+        &RECT {
+            left: inner_l,
+            top: y + scale(8),
+            right: inner_r,
+            bottom: y + scale(8) + scale(28),
+        },
+        &cur,
+        f_tiny,
+        C_ON_GRAD_DIM,
+        false,
+    );
+
+    bottom
+}
+
+/// 单个调试控件组：标签 + 实时大数值 + 滑杆 + 输入框 + 重置 + 说明。
+/// 控件矩形写入命中缓存（`SLIDER_RECS` / `INPUT_RECS` / `RESET_RECS`）。
+#[allow(clippy::too_many_arguments)]
+fn debug_group(
+    hdc: HDC,
+    inner_l: i32,
+    inner_r: i32,
+    mut y: i32,
+    scroll: i32,
+    win_h: i32,
+    idx: usize,
+    label: &str,
+    note: &str,
+    f_sec: HFONT,
+    f_body: HFONT,
+    f_sub: HFONT,
+    f_tiny: HFONT,
+    title_h: i32,
+    slider_h: i32,
+    input_h: i32,
+    note_h: i32,
+) -> i32 {
+    let focus = DEBUG_FOCUS.with(|f| f.get()) == idx as i32 + 1;
+    let dragging = DEBUG_DRAG.with(|d| d.get()) == idx as i32;
+    let pct = debug_pct(idx);
+
+    // 标题行：左标签（白）+ 右实时数值（大号白字——"实时显示当前数值"）
+    text(
+        hdc,
+        &RECT {
+            left: inner_l,
+            top: y,
+            right: inner_l + scale(200),
+            bottom: y + title_h,
+        },
+        label,
+        f_sec,
+        C_ON_GRAD,
+        false,
+    );
+    text(
+        hdc,
+        &RECT {
+            left: inner_r - scale(72),
+            top: y,
+            right: inner_r,
+            bottom: y + title_h,
+        },
+        &format!("{pct}%"),
+        f_sec,
+        C_ON_GRAD,
+        true,
+    );
+
+    // —— 滑杆行：轨道（叠白 10% 玻璃）+ 靛蓝填充 + AA 白滑块 ——
+    y += title_h;
+    let track_h = scale(8);
+    let track = RECT {
+        left: inner_l,
+        top: y + (slider_h - track_h) / 2,
+        right: inner_r,
+        bottom: y + (slider_h + track_h) / 2,
+    };
+    cache_debug_rect(&SLIDER_RECS, idx, track);
+    let grad = grad_at(track.top - scroll, win_h);
+    let track_c = over(grad, C_WHITE, 0.10);
+    fill_round(hdc, &track, track_h / 2, track_c);
+    // 填充（品牌靛蓝）：从左缘到滑块中心
+    let knob_d = if dragging { scale(20) } else { scale(18) };
+    let cx = track.left + (track.right - track.left) * pct as i32 / 100;
+    fill_round(
+        hdc,
+        &RECT {
+            left: track.left,
+            top: track.top,
+            right: cx.max(track.left + knob_d / 2),
+            bottom: track.bottom,
+        },
+        track_h / 2,
+        C_BTN,
+    );
+    // 滑块：AA 白圆（bg 传轨道色，圆角外无缝融进轨道）
+    let mid = (track.top + track.bottom) / 2;
+    aa_round(
+        hdc,
+        &RECT {
+            left: cx - knob_d / 2,
+            top: mid - knob_d / 2,
+            right: cx + knob_d / 2,
+            bottom: mid + knob_d / 2,
+        },
+        knob_d / 2,
+        C_WHITE,
+        track_c,
+    );
+
+    // —— 输入行：输入框 + % 后缀 + 重置按钮 ——
+    y += slider_h;
+    let ib = RECT {
+        left: inner_l,
+        top: y,
+        right: inner_l + scale(72),
+        bottom: y + input_h - scale(2),
+    };
+    cache_debug_rect(&INPUT_RECS, idx, ib);
+    let igrad = grad_at(ib.top - scroll, win_h);
+    fill_round(hdc, &ib, scale(6), over(igrad, C_WHITE, 0.10));
+    // 输入框状态齐全：聚焦=靛蓝 2px 粗描边，未聚焦=叠白 1px 细描边
+    if focus {
+        stroke_round(hdc, &ib, scale(6), C_BTN, scale(2));
+    } else {
+        stroke_round(hdc, &ib, scale(6), over(igrad, C_WHITE, 0.30), scale(1));
+    }
+    text(
+        hdc,
+        &RECT {
+            left: ib.left + scale(8),
+            top: ib.top,
+            right: ib.right - scale(4),
+            bottom: ib.bottom,
+        },
+        &debug_input_text(idx),
+        f_body,
+        C_ON_GRAD,
+        false,
+    );
+    text(
+        hdc,
+        &RECT {
+            left: ib.right + scale(4),
+            top: y,
+            right: ib.right + scale(24),
+            bottom: ib.bottom,
+        },
+        "%",
+        f_sub,
+        C_ON_GRAD_DIM,
+        false,
+    );
+    // 重置按钮（右对齐，hover 提亮——`button` 第二色）
+    let rb_w = scale(48);
+    let rb = RECT {
+        left: inner_r - rb_w,
+        top: y,
+        right: inner_r,
+        bottom: ib.bottom,
+    };
+    cache_debug_rect(&RESET_RECS, idx, rb);
+    button(
+        hdc,
+        &rb,
+        "重置",
+        false,
+        DEBUG_HOVER_RESET.with(|c| c.get()) == idx as i32,
+        f_tiny,
+    );
+
+    // —— 说明行（tiny 弱对比，最多画 2 行）——
+    y += input_h;
+    let lines = wrap_value(hdc, f_tiny, note, inner_r - inner_l);
+    for ln in lines.iter().take(2) {
+        text(
+            hdc,
+            &RECT {
+                left: inner_l,
+                top: y,
+                right: inner_r,
+                bottom: y + note_h,
+            },
+            ln,
+            f_tiny,
+            C_ON_GRAD_DIM,
+            false,
+        );
+        y += note_h;
+    }
+
+    y
+}
+
 /// 硬件页磁盘行右侧的 SMART 健康预警小条：实色圆角 + 反色状态词。
 ///
 /// 与磁盘页详情卡**同款色语义**（`smart_color`/`smart_label`），但形态是"徽标"而非
@@ -2251,6 +2797,8 @@ fn draw_disk_health_badge(
     };
     fill_round(hdc, &r, scale(6), smart_color(&st));
     let tcol = match st {
+        // 危险红底上的字色走皮肤 on_error：深色皮肤=白，浅色皮肤=深字，
+        // 保证任何红底下都可读（C 皮肤的红是浅红 #f87171，白字会糊）。
         winsuitex_core::model::HealthStatus::Critical => C_WHITE,
         _ => C_BTN_WHITE_TEXT,
     };
@@ -2276,7 +2824,15 @@ pub fn draw_disk_header(hdc: HDC, w: i32, h: i32, f_body: HFONT, n: usize) {
         right,
         bottom,
     };
-    fill_glass_round(hdc, &band, scale(CARD_RADIUS), C_GLASS_TINT, 0.22, 0, h);
+    fill_glass_round(
+        hdc,
+        &band,
+        scale(CARD_RADIUS),
+        tint_color(),
+        glass_alpha(),
+        0,
+        h,
+    );
 
     let th = scale(26);
     let t = RECT {
@@ -2537,7 +3093,9 @@ mod hw_vendor_zh_tests {
     //! 输入命中同一规范条目。
 
     use super::{build_hw_sections, Section};
-    use winsuitex_core::model::{BoardInfo, GpuKind, HardwareInfo, MemStick, MemoryInfo, MebiBytes};
+    use winsuitex_core::model::{
+        BoardInfo, GpuKind, HardwareInfo, MebiBytes, MemStick, MemoryInfo,
+    };
     use winsuitex_core::CollectResult;
 
     fn stick(locator: &str, vendor: Option<&str>) -> MemStick {
@@ -2843,9 +3401,10 @@ mod hw_vendor_zh_tests {
     }
 
     #[test]
-    fn memory_section_shows_phantom_note_when_firmware_lies() {
+    fn memory_section_consolidates_phantom_hints_into_one_row() {
         // 007 真机形态：SMBIOS 报 2 槽已插（各 32G），但其中 1 条是固件虚报的幽灵槽位
-        // （无 SPD 数据），OS 总容量只见 32G。面板应在内存节标题下加一句小字说明口径。
+        // （无 SPD 数据），OS 总容量只见 32G。面板应把"标题小字 + 通道提示 + 容量口径提示"
+        // 三段同源提示合并成一条「提示」行，不再重复罗嗦（Z.W. 2026-10-14 要求收敛）。
         let mut real = stick("DIMM 0", Some("Corsair"));
         real.capacity_mb = Some(MebiBytes::new(32768));
         let mut ghost = stick("DIMM 1", None);
@@ -2868,21 +3427,47 @@ mod hw_vendor_zh_tests {
         };
         let sections = build_hw_sections(&r);
         let s = find(&sections, "内存");
-        let note = s.note.as_deref().expect("幽灵槽位存在时应有口径说明");
-        assert!(note.contains("幽灵槽位"), "说明应点名幽灵槽位: {note}");
-        assert!(note.contains("1 个"), "应说明虚报数量: {note}");
-        assert!(note.contains("CPU-Z"), "应点出与 SPD 直读工具口径一致: {note}");
+        // 合并后不应再有分开的「通道提示」「容量口径提示」两行。
+        assert!(
+            !s.rows.iter().any(|(k, _)| k == "通道提示"),
+            "合并后不应有独立通道提示行"
+        );
+        assert!(
+            !s.rows.iter().any(|(k, _)| k == "容量口径提示"),
+            "合并后不应有独立容量口径提示行"
+        );
+        let hint = s
+            .rows
+            .iter()
+            .find(|(k, _)| k == "提示")
+            .map(|(_, v)| v)
+            .expect("幽灵槽位存在时应有一条合并「提示」行");
+        assert!(hint.contains("幽灵槽位"), "提示应点名幽灵槽位: {hint}");
+        assert!(hint.contains("1 个"), "应说明虚报数量: {hint}");
+        assert!(hint.contains("单通道"), "应保留通道建议: {hint}");
+        assert!(
+            hint.contains("CPU-Z"),
+            "应点出与 SPD 直读工具口径一致: {hint}"
+        );
     }
 
     #[test]
-    fn memory_section_has_no_note_on_clean_machine() {
-        // 正常机器（双通道 2 条真条）不应出现小字说明，避免无谓干扰。
-        let r = res(BoardInfo::default(), vec![
-            stick("DIMM 0", Some("Corsair")),
-            stick("DIMM 1", Some("Corsair")),
-        ]);
+    fn memory_section_has_no_hint_rows_on_clean_machine() {
+        // 正常机器（双通道 2 条真条）不应出现任何提示行，避免无谓干扰。
+        let r = res(
+            BoardInfo::default(),
+            vec![
+                stick("DIMM 0", Some("Corsair")),
+                stick("DIMM 1", Some("Corsair")),
+            ],
+        );
         let sections = build_hw_sections(&r);
         let s = find(&sections, "内存");
+        let hint_keys: [&str; 3] = ["提示", "通道提示", "容量口径提示"];
+        assert!(
+            !s.rows.iter().any(|(k, _)| hint_keys.contains(&k.as_str())),
+            "无幽灵槽位时不应有提示行"
+        );
         assert!(s.note.is_none(), "无幽灵槽位时不应有小字说明");
     }
 }
