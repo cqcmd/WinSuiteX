@@ -1921,6 +1921,9 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         "盘符",
         "磁盘",
         "文件系统",
+        // 分区格式（GPT/MBR，per-disk）：与文件系统（NTFS，per-volume）是两回事，
+        // 用户要的"分区格式"通常指这个；并列显示更清晰（Z.W. 2026-10-14）。
+        "分区格式",
         "簇大小",
         "类型",
         "总容量",
@@ -1929,15 +1932,15 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
     ];
     // 列宽按可用宽度**按权重分配**，不能写死 78px：
     // 多列时 ×78 会超出窄窗口，末列被右边框裁掉。
-    // 权重按内容长度给：盘符/磁盘/簇大小/已用% 是短值，类型/容量是长值。
+    // 权重按内容长度给：盘符/磁盘/簇大小/已用%/分区格式 是短值，类型/容量是长值。
     // 盘符列权重从 6 提到 8：左端要给"分区类型图标(16) + 间距"让位（第九轮新增）。
     let table_w = (right - left - scale(20)).max(scale(200));
-    let weights = [8i32, 7, 10, 8, 12, 13, 12, 6];
+    let weights = [8i32, 7, 10, 6, 8, 12, 13, 12, 6];
     let total_w: i32 = weights.iter().sum();
     let rowh = scale(34);
-    // 列边界数组：**长度必须是列数 + 1**（9 而不是 8）——
-    // 每列要取 `col_x[i]` 与 `col_x[i + 1]`，末列 i=7 时会访问 `col_x[8]`。
-    const NCOL: usize = 8;
+    // 列边界数组：**长度必须是列数 + 1**（10 而不是 9）——
+    // 每列要取 `col_x[i]` 与 `col_x[i + 1]`，末列 i=8 时会访问 `col_x[9]`。
+    const NCOL: usize = 9;
     let mut col_x = [0i32; NCOL + 1];
     {
         let mut acc = 0;
@@ -1969,7 +1972,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         //   表头左边不留空档。二十五轮曾把表头对齐到盘符文字(+20)，真机反馈
         //   "表头左边空了一截"（图标列上方没字），资源管理器同款做法是表头
         //   顶到图标列头，故回移。
-        // - 数值列（总容量/可用，index≥5）右对齐，与内容行的 `numeric` 一致。
+        // - 数值列（总容量/可用，index≥6）右对齐，与内容行的 `numeric` 一致。
         let c_left = if i == 0 {
             col_x[0] + scale(2)
         } else {
@@ -1981,7 +1984,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             right: col_x[i + 1],
             bottom: y + rowh,
         };
-        let numeric = i >= 5;
+        let numeric = i >= 6;
         text(hdc, &cr, c, f_tiny, C_ON_GRAD_DIM, numeric);
     }
     y += rowh + scale(4);
@@ -2043,6 +2046,12 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             v.disk_index
                 .map_or_else(|| "-".to_string(), |d| format!("PD{d}")),
             v.fs_name.clone().unwrap_or_else(|| "-".into()),
+            // 分区格式（GPT/MBR，per-disk）：按 `disk_index` 关联物理盘取；
+            // 读不到 / 网络盘无盘号 → "-" 留白，与文件系统（NTFS，per-volume）并列更清晰。
+            v.disk_index
+                .and_then(|di| r.info.disks.iter().find(|d| d.index == di))
+                .and_then(|d| d.partition_style.clone())
+                .unwrap_or_else(|| "-".into()),
             // 簇大小 0 表示没读到（网络盘常见），显示 "-" 而不是 "0 KB"。
             fmt_cluster(v.cluster_bytes),
             v.type_name.clone().unwrap_or_else(|| "-".into()),
@@ -2065,10 +2074,10 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             };
             // 容量三列（总容量/可用/已用%）右对齐，扫数字比扫字段名快。
             // 已用% 非选中行按阈值上色（满盘红 / 偏满橙），一眼看出哪块盘快满了。
-            let numeric = j >= 5;
+            let numeric = j >= 6;
             let fg = if selected {
                 C_SEL_ROW_TEXT
-            } else if j == 7 {
+            } else if j == 8 {
                 used_col
             } else {
                 C_ON_GRAD

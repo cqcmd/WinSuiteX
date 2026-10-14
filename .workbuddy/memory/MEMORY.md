@@ -49,7 +49,7 @@
 - **⚠️ 量高/绘制双趟同宽（第三十一轮，勿回退）**：凡给某类行加**值列右侧预留**（如硬盘健康徽标收窄 `DISK_BADGE_RESERVE=64`），量高趟必须同步用同一收窄宽折行——否则长值行"量 1 行画 2 行"→总高量矮→滚动到底最后一组被裁、截图长图同步裁尾。回归：`hw_measure_height_accounts_badge_narrowed_wrapping`（有/无徽标两形态总高必须不同；口径助手 `#[cfg(test)] hw_value_widths`）。以后再给行加右侧预留（速率/温度色等）必须同步改量高趟。
 
 ## 磁盘页
-- 7 列（盘符/磁盘/文件系统/簇大小/类型/总容量/可用），列宽按权重，`col_x` 长度 NCOL+1。表头首列顶格 `col_x[0]+scale(2)`（与分区图标左缘齐平，第二十七轮"表头左边空档"定案）、`numeric=i>=5` 右对齐。
+- 9 列（盘符/磁盘/文件系统/分区格式/簇大小/类型/总容量/可用/已用%），列宽按权重，`col_x` 长度 NCOL+1。表头首列顶格 `col_x[0]+scale(2)`（与分区图标左缘齐平，第二十七轮"表头左边空档"定案），数值列 `numeric=i>=6` 右对齐（总容量/可用/已用%）。2026-10-14 新增「分区格式」列：GPT/MBR（per-disk），经 `v.disk_index` 关联 `disks[index].partition_style` 取，读不到留 "-"；与文件系统（NTFS，per-volume）并列区分，勿混淆。
 - 选中分区详情卡 SMART 健康：经 `v.disk_index` 关联 `disks[i].smart`，取 health/temp/percent；拿不到写"未读取（可能需管理员）"。详情卡高 `scale(116)`。
 
 ## 报告（HTML 导出）
