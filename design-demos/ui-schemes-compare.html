@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WinSuiteX GUI · 5 套 UI 方案对比规范</title>
+<style>
+  :root {
+    --ink: #1f2430;
+    --ink2: #5a6272;
+    --ink3: #9aa3b2;
+    --line: #e4e7ee;
+    --page: #f6f7fa;
+    --card: #ffffff;
+    --brand: #4f46e5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--ink);
+    line-height: 1.65;
+    padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  /* ============ 页头 ============ */
+  .hero { margin-bottom: 40px; }
+  .hero .kicker {
+    display: inline-block; font-size: 12px; letter-spacing: 2px; color: var(--brand);
+    border: 1px solid var(--brand); border-radius: 999px; padding: 3px 12px; margin-bottom: 14px;
+  }
+  .hero h1 { font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+  .hero p { color: var(--ink2); max-width: 860px; font-size: 14px; }
+  .hero .note {
+    margin-top: 16px; background: #eef0fe; border-left: 3px solid var(--brand);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #3730a3;
+  }
+
+  /* ============ 总览对比表 ============ */
+  .overview { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 48px; }
+  .overview table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .overview th, .overview td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .overview th { background: #fafbfd; font-size: 12px; color: var(--ink2); font-weight: 600; white-space: nowrap; }
+  .overview tr:last-child td { border-bottom: none; }
+  .overview td:first-child { font-weight: 700; white-space: nowrap; }
+  .ov-swatches { display: flex; gap: 4px; }
+  .ov-swatches i { width: 18px; height: 18px; border-radius: 4px; display: block; border: 1px solid rgba(0,0,0,.08); }
+
+  /* ============ 方案区块 ============ */
+  .scheme { margin-bottom: 64px; }
+  .scheme-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .scheme-head .no {
+    font-size: 13px; font-weight: 700; color: #fff; background: var(--ink);
+    border-radius: 6px; padding: 2px 10px; letter-spacing: 1px;
+  }
+  .scheme-head h2 { font-size: 22px; font-weight: 700; }
+  .scheme-head .en { color: var(--ink3); font-size: 13px; letter-spacing: 1px; }
+  .scheme-tagline { color: var(--ink2); font-size: 14px; margin-bottom: 24px; max-width: 760px; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  .spec { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .spec h3 { font-size: 13px; color: var(--ink2); font-weight: 700; letter-spacing: 1px; margin: 18px 0 10px; }
+  .spec h3:first-child { margin-top: 0; }
+
+  .palette { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .swatch { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .swatch i { width: 34px; height: 34px; border-radius: 8px; flex: none; border: 1px solid rgba(0,0,0,.08); }
+  .swatch .nm { color: var(--ink2); }
+  .swatch .hex { font-family: Consolas, monospace; color: var(--ink); font-size: 12px; }
+
+  .spec table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .spec td { padding: 6px 0; border-bottom: 1px dashed var(--line); vertical-align: top; }
+  .spec td:first-child { color: var(--ink2); width: 96px; white-space: nowrap; }
+  .spec tr:last-child td { border-bottom: none; }
+
+  .comp-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .comp-row .lbl { font-size: 12px; color: var(--ink3); width: 64px; flex: none; }
+
+  /* ============ 窗口小样（每套主题变量驱动） ============ */
+  .mock-zone { position: sticky; top: 20px; }
+  .mock {
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+    box-shadow: 0 12px 40px rgba(20, 24, 52, .18);
+    border: 1px solid rgba(255,255,255,.14);
+  }
+  .mock-title {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 14px; height: 40px; font-size: 13px; font-weight: 700;
+  }
+  .mock-title .wb { display: flex; gap: 10px; font-weight: 400; opacity: .85; }
+  .mock-tabs { display: flex; padding: 0 14px; gap: 2px; height: 42px; align-items: flex-end; }
+  .mock-tabs span {
+    padding: 6px 14px; font-size: 12.5px; border-radius: 8px 8px 0 0; position: relative;
+  }
+  .mock-body { padding: 14px; }
+  .mock-card { border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .mock-sec { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; opacity: .9; }
+  .kv { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; gap: 12px; }
+  .kv .k { flex: none; opacity: .72; }
+  .kv .v { text-align: right; font-variant-numeric: tabular-nums; }
+  .mock-slider-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; }
+  .mock-slider-row .t { flex: 1; height: 6px; border-radius: 3px; position: relative; }
+  .mock-slider-row .t i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+  .mock-slider-row .t b { position: absolute; width: 14px; height: 14px; border-radius: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .mock-slider-row .n { font-family: Consolas, monospace; width: 40px; text-align: right; }
+  .mock-foot { text-align: center; font-size: 11px; padding: 8px; opacity: .8; }
+
+  .mock-btn { font-size: 12px; padding: 5px 14px; border-radius: 6px; display: inline-block; }
+  .mock-input { font-size: 12px; padding: 4px 10px; border-radius: 6px; width: 72px; font-family: Consolas, monospace; }
+  .mock-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+
+  /* —— 方案 A：深空玻璃 —— */
+  .sch-a { background: linear-gradient(180deg, #8751ee 0%, #2662eb 100%); color: #fff; }
+  .sch-a .mock-title { color: #fff; }
+  .sch-a .mock-tabs span { color: rgba(255,255,255,.62); }
+  .sch-a .mock-tabs .on { background: rgba(255,255,255,.14); color: #fff; }
+  .sch-a .mock-tabs .on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; background: #fff; border-radius: 2px; }
+  .sch-a .mock-card { background: rgba(20,24,52,.30); border: 1px solid rgba(255,255,255,.14); }
+  .sch-a .mock-slider-row .t { background: rgba(255,255,255,.14); }
+  .sch-a .mock-slider-row .t i { background: #4f46e5; width: 22%; }
+  .sch-a .mock-slider-row .t b { background: #fff; left: 22%; }
+  .sch-a .mock-input { background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.3); color: #fff; }
+  .sch-a .mock-btn { background: #4f46e5; color: #fff; }
+  .sch-a .mock-badge { background: #dff2e6; color: #15803d; }
+  .sch-a .mock-foot { background: #1b367a; color: rgba(255,255,255,.75); }
+
+  /* —— 方案 B：浅色精英 —— */
+  .sch-b { background: #f3f4f8; color: #1f2937; }
+  .sch-b .mock-title { background: #fff; color: #1f2937; border-bottom: 1px solid #e5e7eb; }
+  .sch-b .mock-tabs { background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .sch-b .mock-tabs span { color: #6b7280; }
+  .sch-b .mock-tabs .on { color: #4f46e5; font-weight: 700; }
+  .sch-b .mock-tabs .on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: #4f46e5; border-radius: 2px; }
+  .sch-b .mock-card { background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+  .sch-b .mock-sec { color: #6b7280; }
+  .sch-b .mock-slider-row .t { background: #e5e7eb; }
+  .sch-b .mock-slider-row .t i { background: #4f46e5; width: 22%; }
+  .sch-b .mock-slider-row .t b { background: #fff; border: 1px solid #c7cbd4; box-shadow: 0 1px 3px rgba(16,24,40,.2); left: 22%; }
+  .sch-b .mock-input { background: #fff; border: 1px solid #d1d5db; color: #1f2937; }
+  .sch-b .mock-btn { background: #4f46e5; color: #fff; }
+  .sch-b .mock-badge { background: #e7f6ed; color: #15803d; }
+  .sch-b .mock-foot { background: #fff; border-top: 1px solid #e5e7eb; color: #9ca3af; }
+
+  /* —— 方案 C：高对比暗色 —— */
+  .sch-c { background: #0e0f14; color: #f2f4f8; }
+  .sch-c .mock-title { border-bottom: 1px solid #262a38; }
+  .sch-c .mock-tabs { border-bottom: 1px solid #262a38; }
+  .sch-c .mock-tabs span { color: #6b7280; font-family: Consolas, monospace; text-transform: uppercase; letter-spacing: 1px; }
+  .sch-c .mock-tabs .on { color: #22d3ee; }
+  .sch-c .mock-tabs .on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: #22d3ee; }
+  .sch-c .mock-card { background: #171923; border: 1px solid #262a38; }
+  .sch-c .mock-sec { color: #22d3ee; font-family: Consolas, monospace; }
+  .sch-c .kv .v { font-family: Consolas, monospace; }
+  .sch-c .mock-slider-row .t { background: #262a38; border-radius: 0; height: 4px; }
+  .sch-c .mock-slider-row .t i { background: #22d3ee; width: 22%; border-radius: 0; }
+  .sch-c .mock-slider-row .t b { background: #0e0f14; border: 2px solid #22d3ee; border-radius: 2px; left: 22%; }
+  .sch-c .mock-input { background: #0e0f14; border: 1px solid #262a38; color: #22d3ee; }
+  .sch-c .mock-btn { background: #22d3ee; color: #0e0f14; font-weight: 700; }
+  .sch-c .mock-badge { background: transparent; color: #34d399; border: 1px solid #34d399; }
+  .sch-c .mock-foot { border-top: 1px solid #262a38; color: #6b7280; font-family: Consolas, monospace; }
+
+  /* —— 方案 D：暖纸护眼 —— */
+  .sch-d { background: #f7f3ec; color: #3d3929; }
+  .sch-d .mock-title { color: #3d3929; }
+  .sch-d .mock-tabs span { color: #a39b84; }
+  .sch-d .mock-tabs .on { background: #efe9db; color: #7c6f4a; font-weight: 700; }
+  .sch-d .mock-card { background: #fff; border: 1px solid #e8e2d6; }
+  .sch-d .mock-sec { color: #7c6f4a; }
+  .sch-d .mock-slider-row .t { background: #e8e2d6; height: 8px; }
+  .sch-d .mock-slider-row .t i { background: #7c6f4a; width: 22%; }
+  .sch-d .mock-slider-row .t b { background: #fff; border: 1px solid #7c6f4a; left: 22%; }
+  .sch-d .mock-input { background: #fbf9f4; border: 1px solid #d8d0bd; color: #3d3929; }
+  .sch-d .mock-btn { background: #7c6f4a; color: #fff; }
+  .sch-d .mock-badge { background: #eef3e2; color: #4d7c0f; }
+  .sch-d .mock-foot { border-top: 1px solid #e8e2d6; color: #a39b84; }
+
+  /* —— 方案 E：品牌靛蓝 —— */
+  .sch-e { background: #eef0f7; color: #1e1b4b; }
+  .sch-e .mock-title { background: #312e81; color: #fff; }
+  .sch-e .mock-tabs { background: #312e81; }
+  .sch-e .mock-tabs span { color: rgba(255,255,255,.6); }
+  .sch-e .mock-tabs .on { background: #4f46e5; color: #fff; font-weight: 700; }
+  .sch-e .mock-card { background: #fff; border: 1px solid #dcdff0; box-shadow: 0 1px 4px rgba(49,46,129,.08); }
+  .sch-e .mock-sec { color: #4f46e5; }
+  .sch-e .mock-slider-row .t { background: #dcdff0; }
+  .sch-e .mock-slider-row .t i { background: #4f46e5; width: 22%; }
+  .sch-e .mock-slider-row .t b { background: #fff; border: 2px solid #4f46e5; left: 22%; }
+  .sch-e .mock-input { background: #fff; border: 1px solid #c5c9e8; color: #1e1b4b; }
+  .sch-e .mock-btn { background: #4f46e5; color: #fff; }
+  .sch-e .mock-badge { background: #d1fae5; color: #059669; }
+  .sch-e .mock-foot { background: #312e81; color: rgba(255,255,255,.7); }
+
+  /* ============ 选择建议 ============ */
+  .reco { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  .reco h2 { font-size: 18px; margin-bottom: 14px; }
+  .reco ol { padding-left: 20px; font-size: 13.5px; color: var(--ink2); }
+  .reco li { margin-bottom: 10px; }
+  .reco b { color: var(--ink); }
+  .reco .flow {
+    margin-top: 16px; font-size: 13px; background: #fafbfd; border: 1px dashed var(--line);
+    border-radius: 8px; padding: 12px 16px; color: var(--ink2);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 页头 ================= -->
+  <div class="hero">
+    <span class="kicker">WinSuiteX GUI · 视觉方案选型</span>
+    <h1>5 套风格迥异的完整 UI 方案</h1>
+    <p>每套均包含统一的配色（具体色值）、字体体系、间距 / 圆角规范与基础组件样式（按钮、页签、输入框、滑杆、徽标、卡片，含全部交互状态），并附按该主题渲染的窗口小样。选定期后，我把对应规范落进 <code>theme.rs</code>。</p>
+    <div class="note">
+      玻璃观感参数（玻璃透明度 50%、叠色深 navy 全实）已在 <code>theme.rs</code> 中固化——经「调试」页试参后定稿，调试页已于 v0.4.5 移除。如需调整，直接改 <code>theme.rs</code> 的 <code>GLASS_ALPHA</code> 常量即可。
+    </div>
+  </div>
+
+  <!-- ================= 总览对比 ================= -->
+  <div class="overview">
+    <table>
+      <tr><th>方案</th><th>色板</th><th>气质</th><th>适用场景</th><th>白纸黑字对比度</th></tr>
+      <tr>
+        <td>A · 深空玻璃</td>
+        <td><div class="ov-swatches"><i style="background:#8751ee"></i><i style="background:#2662eb"></i><i style="background:#141834"></i><i style="background:#4f46e5"></i><i style="background:#34c759"></i></div></td>
+        <td>科技感、品牌感、通透层次</td>
+        <td>网吧 / 电竞酒店分发、要"产品感"</td>
+        <td>白字 6.7–7.5:1（深 navy 卡）</td>
+      </tr>
+      <tr>
+        <td>B · 浅色精英</td>
+        <td><div class="ov-swatches"><i style="background:#f3f4f8"></i><i style="background:#ffffff"></i><i style="background:#1f2937"></i><i style="background:#4f46e5"></i><i style="background:#15803d"></i></div></td>
+        <td>干净、系统工具、Win11 设置页风</td>
+        <td>白天亮环境、长时间信息浏览</td>
+        <td>深字 12:1+（白卡）</td>
+      </tr>
+      <tr>
+        <td>C · 高对比暗色</td>
+        <td><div class="ov-swatches"><i style="background:#0e0f14"></i><i style="background:#171923"></i><i style="background:#22d3ee"></i><i style="background:#a78bfa"></i><i style="background:#34d399"></i></div></td>
+        <td>极客、监控大屏、数字醒目</td>
+        <td>机房值守、夜间、盯参数</td>
+        <td>亮字 10:1+（近黑底）</td>
+      </tr>
+      <tr>
+        <td>D · 暖纸护眼</td>
+        <td><div class="ov-swatches"><i style="background:#f7f3ec"></i><i style="background:#ffffff"></i><i style="background:#3d3929"></i><i style="background:#7c6f4a"></i><i style="background:#4d7c0f"></i></div></td>
+        <td>温暖、安静、低刺激</td>
+        <td>长时间挂机监控、护眼优先</td>
+        <td>深字 10:1+（白卡）</td>
+      </tr>
+      <tr>
+        <td>E · 品牌靛蓝</td>
+        <td><div class="ov-swatches"><i style="background:#312e81"></i><i style="background:#eef0f7"></i><i style="background:#ffffff"></i><i style="background:#4f46e5"></i><i style="background:#059669"></i></div></td>
+        <td>商务、结构化、层级最强</td>
+        <td>给客户演示、强调品牌专业度</td>
+        <td>深字 12:1+（白卡）</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ================= 方案 A ================= -->
+  <section class="scheme">
+    <div class="scheme-head"><span class="no">方案 A</span><h2>深空玻璃</h2><span class="en">GLASS AURORA · 现行方向精修</span></div>
+    <p class="scheme-tagline">现行主题的精修版：紫蓝整窗渐变 + 深 navy 玻璃卡 + 柔彩图标。玻璃感靠逐行混合实现（GDI 无 alpha 通道），卡片"压暗不提亮"保证白字 6.7:1 以上。玻璃透明度已固化 50%、叠色深 navy 全实（v0.4.5）。</p>
+    <div class="cols">
+      <div class="spec">
+        <h3>配色</h3>
+        <div class="palette">
+          <div class="swatch"><i style="background:#8751ee"></i><span><span class="nm">渐变顶</span><br><span class="hex">#8751EE</span></span></div>
+          <div class="swatch"><i style="background:#2662eb"></i><span><span class="nm">渐变底</span><br><span class="hex">#2662EB</span></span></div>
+          <div class="swatch"><i style="background:#141834"></i><span><span class="nm">卡片 tint</span><br><span class="hex">#141834 @22%</span></span></div>
+          <div class="swatch"><i style="background:#1b367a"></i><span><span class="nm">底栏实色</span><br><span class="hex">#1B367A</span></span></div>
+          <div class="swatch"><i style="background:#ffffff"></i><span><span class="nm">主文字</span><br><span class="hex">#FFFFFF</span></span></div>
+          <div class="swatch"><i style="background:#e0d8fa"></i><span><span class="nm">次文字</span><br><span class="hex">#E0D8FA</span></span></div>
+          <div class="swatch"><i style="background:#4f46e5"></i><span><span class="nm">主按钮</span><br><span class="hex">#4F46E5</span></span></div>
+          <div class="swatch"><i style="background:#34c759"></i><span><span class="nm">成功 / 警告 / 错误</span><br><span class="hex">#34C759 / #FAAD14 / #FF4D4F</span></span></div>
+        </div>
+        <h3>字体</h3>
+        <table>
+          <tr><td>族</td><td>Microsoft YaHei（回退链：雅黑 → 雅黑 UI → Segoe UI → 系统默认）</td></tr>
+          <tr><td>层级</td><td>标题 16 Bold ｜ 正文 14 ｜ 字段 13 ｜ 小字 12</td></tr>
+        </table>
+        <h3>间距 / 圆角</h3>
+        <table>
+          <tr><td>栅格</td><td>8px 基准；窗口边距 24、卡内边距 16</td></tr>
+          <tr><td>圆角</td><td>窗口 12 ｜ 卡片 8 ｜ 按钮 6 ｜ 页签 8</td></tr>
+          <tr><td>行高</td><td>键值行 22 ｜ 分组节 30</td></tr>
+        </table>
+        <h3>组件</h3>
+        <div class="comp-row"><span class="lbl">按钮</span><span class="mock-btn sch-a" style="padding:5px 14px;border-radius:6px;background:#4f46e5;color:#fff">主色</span><span class="mock-btn sch-a" style="padding:5px 14px;border-radius:6px;background:#fff;color:#282446">白底</span></div>
+        <div class="comp-row"><span class="lbl">页签</span><span style="font-size:12px;color:#9aa3b2">选中 = 玻璃高亮底 + 白色下划线；未选中 = 白 62%</span></div>
+        <div class="comp-row"><span class="lbl">输入框</span><span class="mock-input sch-a">22</span><span style="font-size:12px;color:#9aa3b2">聚焦 = 靛蓝 2px 描边</span></div>
+        <div class="comp-row"><span class="lbl">滑杆</span><span style="font-size:12px;color:#9aa3b2">叠白 10% 轨道 + 靛蓝填充 + AA 白滑块</span></div>
+        <div class="comp-row"><span class="lbl">徽标</span><span class="mock-badge sch-a">健康</span><span style="font-size:12px;color:#9aa3b2">浅底深字；危险态红底白字</span></div>
+      </div>
+      <div class="mock-zone">
+        <div class="mock sch-a">
+          <div class="mock-title">WinSuiteX 硬件配置<span class="wb"><span>─</span><span>✕</span></span></div>
+          <div class="mock-tabs"><span class="on">硬件配置</span><span>右键增强</span><span>磁盘信息</span></div>
+          <div class="mock-body">
+            <div class="mock-card">
+              <div class="mock-sec">处理器</div>
+              <div class="kv"><span class="k">型号</span><span class="v">Intel Core i5-3570 @ 3.40GHz</span></div>
+              <div class="kv"><span class="k">规格</span><span class="v">4 核 / 4 线程 · 3400 MHz</span></div>
+              <div class="kv"><span class="k">主板</span><span class="v">Lenovo NOK（联想）</span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">硬盘</div>
+              <div class="kv"><span class="k">硬盘 #0</span><span class="v">SanDisk SSD PLUS 480GB　<span class="mock-badge sch-a">健康</span></span></div>
+              <div class="kv"><span class="k">硬盘 #1</span><span class="v">WDC WD10EZEX 1TB　<span class="mock-badge sch-a" style="background:#fff4e5;color:#b45309">预警</span></span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">内存</div>
+              <div class="kv"><span class="k">插槽</span><span class="v">1 / 4 槽已插（含 1 固件虚报）</span></div>
+              <div class="kv"><span class="k">内存 #0</span><span class="v">A-DATA 8GB DDR3-1600</span></div>
+            </div>
+          </div>
+          <div class="mock-foot">持玛多网络 / Z.W. · v0.3.8</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 B ================= -->
+  <section class="scheme">
+    <div class="scheme-head"><span class="no">方案 B</span><h2>浅色精英</h2><span class="en">FLUENT LIGHT</span></div>
+    <p class="scheme-tagline">类 Win11 设置页：浅灰底 + 纯白卡 + 深字。信息密度最高、白天亮环境最舒服，控件全部实色可预期。渐变退化为"顶部一条品牌色细带"，保留品牌识别又不抢内容。</p>
+    <div class="cols">
+      <div class="spec">
+        <h3>配色</h3>
+        <div class="palette">
+          <div class="swatch"><i style="background:#f3f4f8"></i><span><span class="nm">窗口底</span><br><span class="hex">#F3F4F8</span></span></div>
+          <div class="swatch"><i style="background:#ffffff"></i><span><span class="nm">卡片</span><br><span class="hex">#FFFFFF</span></span></div>
+          <div class="swatch"><i style="background:#1f2937"></i><span><span class="nm">主文字</span><br><span class="hex">#1F2937</span></span></div>
+          <div class="swatch"><i style="background:#9ca3af"></i><span><span class="nm">弱文字</span><br><span class="hex">#9CA3AF</span></span></div>
+          <div class="swatch"><i style="background:#4f46e5"></i><span><span class="nm">主色</span><br><span class="hex">#4F46E5</span></span></div>
+          <div class="swatch"><i style="background:#15803d"></i><span><span class="nm">成功 / 警告 / 错误</span><br><span class="hex">#15803D / #B45309 / #C0392B</span></span></div>
+        </div>
+        <h3>字体</h3>
+        <table>
+          <tr><td>族</td><td>Segoe UI（回退微软雅黑）</td></tr>
+          <tr><td>层级</td><td>标题 15 SemiBold ｜ 正文 13 ｜ 小字 12</td></tr>
+        </table>
+        <h3>间距 / 圆角</h3>
+        <table>
+          <tr><td>栅格</td><td>8px 基准；窗口边距 20、卡内边距 16</td></tr>
+          <tr><td>圆角</td><td>卡片 8 ｜ 按钮 6；卡片带 1px 描边 + 极轻投影</td></tr>
+          <tr><td>行高</td><td>键值行 24</td></tr>
+        </table>
+        <h3>组件</h3>
+        <div class="comp-row"><span class="lbl">按钮</span><span style="font-size:12px;padding:5px 14px;border-radius:6px;background:#4f46e5;color:#fff">主色</span><span style="font-size:12px;padding:5px 14px;border-radius:6px;background:#fff;color:#1f2937;border:1px solid #d1d5db">次色</span></div>
+        <div class="comp-row"><span class="lbl">页签</span><span style="font-size:12px;color:#9aa3b2">文字 + 底部 2px 靛蓝指示条（无底色）</span></div>
+        <div class="comp-row"><span class="lbl">输入框</span><span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#fff;border:1px solid #d1d5db;color:#1f2937;width:72px;font-family:Consolas,monospace">22</span><span style="font-size:12px;color:#9aa3b2">聚焦 = 靛蓝描边</span></div>
+        <div class="comp-row"><span class="lbl">滑杆</span><span style="font-size:12px;color:#9aa3b2">灰轨 + 靛蓝填充 + 白滑块（带 1px 边与投影）</span></div>
+        <div class="comp-row"><span class="lbl">徽标</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:#e7f6ed;color:#15803d">健康</span><span style="font-size:12px;color:#9aa3b2">浅底深字胶囊</span></div>
+      </div>
+      <div class="mock-zone">
+        <div class="mock sch-b">
+          <div class="mock-title">WinSuiteX 硬件配置<span class="wb"><span>─</span><span>✕</span></span></div>
+          <div class="mock-tabs"><span class="on">硬件配置</span><span>右键增强</span><span>磁盘信息</span></div>
+          <div class="mock-body">
+            <div class="mock-card">
+              <div class="mock-sec">处理器</div>
+              <div class="kv"><span class="k">型号</span><span class="v">Intel Core i5-3570 @ 3.40GHz</span></div>
+              <div class="kv"><span class="k">规格</span><span class="v">4 核 / 4 线程 · 3400 MHz</span></div>
+              <div class="kv"><span class="k">主板</span><span class="v">Lenovo NOK（联想）</span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">硬盘</div>
+              <div class="kv"><span class="k">硬盘 #0</span><span class="v">SanDisk SSD PLUS 480GB　<span class="mock-badge sch-b">健康</span></span></div>
+              <div class="kv"><span class="k">硬盘 #1</span><span class="v">WDC WD10EZEX 1TB　<span class="mock-badge sch-b" style="background:#fff4e5;color:#b45309">预警</span></span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">内存</div>
+              <div class="kv"><span class="k">插槽</span><span class="v">1 / 4 槽已插（含 1 固件虚报）</span></div>
+              <div class="kv"><span class="k">内存 #0</span><span class="v">A-DATA 8GB DDR3-1600</span></div>
+            </div>
+          </div>
+          <div class="mock-foot">持玛多网络 / Z.W. · v0.3.8</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 C ================= -->
+  <section class="scheme">
+    <div class="scheme-head"><span class="no">方案 C</span><h2>高对比暗色</h2><span class="en">TERMINAL DARK</span></div>
+    <p class="scheme-tagline">监控大屏 / 极客风：近黑底 + 高饱和大色块（青 / 紫），数值一律等宽字体，扫读速度最快。徽标改描边式（透明底 + 彩字 + 彩边），信息密度可以拉得很高而不糊。</p>
+    <div class="cols">
+      <div class="spec">
+        <h3>配色</h3>
+        <div class="palette">
+          <div class="swatch"><i style="background:#0e0f14"></i><span><span class="nm">窗口底</span><br><span class="hex">#0E0F14</span></span></div>
+          <div class="swatch"><i style="background:#171923"></i><span><span class="nm">卡片</span><br><span class="hex">#171923</span></span></div>
+          <div class="swatch"><i style="background:#f2f4f8"></i><span><span class="nm">主文字</span><br><span class="hex">#F2F4F8</span></span></div>
+          <div class="swatch"><i style="background:#22d3ee"></i><span><span class="nm">主色（青）</span><br><span class="hex">#22D3EE</span></span></div>
+          <div class="swatch"><i style="background:#a78bfa"></i><span><span class="nm">辅色（紫）</span><br><span class="hex">#A78BFA</span></span></div>
+          <div class="swatch"><i style="background:#34d399"></i><span><span class="nm">成功 / 警告 / 错误</span><br><span class="hex">#34D399 / #FBBF24 / #F87171</span></span></div>
+        </div>
+        <h3>字体</h3>
+        <table>
+          <tr><td>族</td><td>Segoe UI + Cascadia Code（数值 / 页签用等宽）</td></tr>
+          <tr><td>层级</td><td>标题 15 Bold ｜ 正文 13 ｜ 数值 mono 13</td></tr>
+        </table>
+        <h3>间距 / 圆角</h3>
+        <table>
+          <tr><td>栅格</td><td>8px 基准；窗口边距 16、卡内边距 14</td></tr>
+          <tr><td>圆角</td><td>卡片 6（硬朗）；滑杆 / 滑块用 0-2px 方角</td></tr>
+          <tr><td>行高</td><td>键值行 24</td></tr>
+        </table>
+        <h3>组件</h3>
+        <div class="comp-row"><span class="lbl">按钮</span><span style="font-size:12px;padding:5px 14px;border-radius:2px;background:#22d3ee;color:#0e0f14;font-weight:700">大色块</span></div>
+        <div class="comp-row"><span class="lbl">页签</span><span style="font-size:12px;color:#9aa3b2">等宽大写 + 选中底部青条</span></div>
+        <div class="comp-row"><span class="lbl">输入框</span><span style="font-size:12px;padding:4px 10px;border-radius:2px;background:#0e0f14;border:1px solid #262a38;color:#22d3ee;width:72px;font-family:Consolas,monospace">22</span></div>
+        <div class="comp-row"><span class="lbl">滑杆</span><span style="font-size:12px;color:#9aa3b2">深轨 + 青填充 + 方滑块（2px 青边）</span></div>
+        <div class="comp-row"><span class="lbl">徽标</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:transparent;color:#34d399;border:1px solid #34d399">健康</span><span style="font-size:12px;color:#9aa3b2">描边式</span></div>
+      </div>
+      <div class="mock-zone">
+        <div class="mock sch-c">
+          <div class="mock-title">WinSuiteX 硬件配置<span class="wb"><span>─</span><span>✕</span></span></div>
+          <div class="mock-tabs"><span class="on">HW</span><span>MENU</span><span>DISK</span><span>DEBUG</span></div>
+          <div class="mock-body">
+            <div class="mock-card">
+              <div class="mock-sec">// CPU</div>
+              <div class="kv"><span class="k">MODEL</span><span class="v">Intel Core i5-3570 @ 3.40GHz</span></div>
+              <div class="kv"><span class="k">SPEC</span><span class="v">4C / 4T · 3400 MHz</span></div>
+              <div class="kv"><span class="k">BOARD</span><span class="v">Lenovo NOK</span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">// DISK</div>
+              <div class="kv"><span class="k">DISK 0</span><span class="v">SanDisk SSD PLUS 480GB　<span class="mock-badge sch-c">OK</span></span></div>
+              <div class="kv"><span class="k">DISK 1</span><span class="v">WDC WD10EZEX 1TB　<span class="mock-badge sch-c" style="color:#fbbf24;border-color:#fbbf24">WARN</span></span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">// THEME</div>
+              <div class="mock-slider-row"><span>ALPHA</span><span class="t"><i></i><b></b></span><span class="n">22</span></div>
+              <div class="mock-slider-row"><span>DEPTH</span><span class="t"><i style="width:100%"></i><b style="left:100%"></b></span><span class="n">100</span></div>
+            </div>
+          </div>
+          <div class="mock-foot">chimaduo / Z.W. · v0.3.8</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 D ================= -->
+  <section class="scheme">
+    <div class="scheme-head"><span class="no">方案 D</span><h2>暖纸护眼</h2><span class="en">PAPER WARM</span></div>
+    <p class="scheme-tagline">米白暖底 + 低饱和平涂，无渐变、无高光、无强对比色，像一张 warm paper。行距放到 26、留白加大，长时间挂机值守眼睛最放松。状态色也全部降饱和（橄榄 / 赭 / 砖红）。</p>
+    <div class="cols">
+      <div class="spec">
+        <h3>配色</h3>
+        <div class="palette">
+          <div class="swatch"><i style="background:#f7f3ec"></i><span><span class="nm">窗口底</span><br><span class="hex">#F7F3EC</span></span></div>
+          <div class="swatch"><i style="background:#ffffff"></i><span><span class="nm">卡片</span><br><span class="hex">#FFFFFF</span></span></div>
+          <div class="swatch"><i style="background:#3d3929"></i><span><span class="nm">主文字</span><br><span class="hex">#3D3929</span></span></div>
+          <div class="swatch"><i style="background:#a39b84"></i><span><span class="nm">弱文字</span><br><span class="hex">#A39B84</span></span></div>
+          <div class="swatch"><i style="background:#7c6f4a"></i><span><span class="nm">主色（暖橄榄）</span><br><span class="hex">#7C6F4A</span></span></div>
+          <div class="swatch"><i style="background:#4d7c0f"></i><span><span class="nm">成功 / 警告 / 错误</span><br><span class="hex">#4D7C0F / #B45309 / #B91C1C</span></span></div>
+        </div>
+        <h3>字体</h3>
+        <table>
+          <tr><td>族</td><td>Microsoft YaHei（圆润亲和）</td></tr>
+          <tr><td>层级</td><td>标题 15 SemiBold ｜ 正文 13 ｜ 小字 12</td></tr>
+        </table>
+        <h3>间距 / 圆角</h3>
+        <table>
+          <tr><td>栅格</td><td>12px 基准（比其它套更松）；卡内边距 18</td></tr>
+          <tr><td>圆角</td><td>卡片 10（柔和）｜ 按钮 8</td></tr>
+          <tr><td>行高</td><td>键值行 26（松行距）</td></tr>
+        </table>
+        <h3>组件</h3>
+        <div class="comp-row"><span class="lbl">按钮</span><span style="font-size:12px;padding:5px 14px;border-radius:8px;background:#7c6f4a;color:#fff">平涂橄榄</span></div>
+        <div class="comp-row"><span class="lbl">页签</span><span style="font-size:12px;color:#9aa3b2">选中 = 暖底胶囊 + 橄榄粗字</span></div>
+        <div class="comp-row"><span class="lbl">输入框</span><span style="font-size:12px;padding:4px 10px;border-radius:8px;background:#fbf9f4;border:1px solid #d8d0bd;color:#3d3929;width:72px;font-family:Consolas,monospace">22</span></div>
+        <div class="comp-row"><span class="lbl">滑杆</span><span style="font-size:12px;color:#9aa3b2">暖灰轨 + 橄榄填充 + 圆滑块（8px 轨）</span></div>
+        <div class="comp-row"><span class="lbl">徽标</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:#eef3e2;color:#4d7c0f">健康</span></div>
+      </div>
+      <div class="mock-zone">
+        <div class="mock sch-d">
+          <div class="mock-title">WinSuiteX 硬件配置<span class="wb"><span>─</span><span>✕</span></span></div>
+          <div class="mock-tabs"><span class="on">硬件配置</span><span>右键增强</span><span>磁盘信息</span></div>
+          <div class="mock-body">
+            <div class="mock-card">
+              <div class="mock-sec">处理器</div>
+              <div class="kv"><span class="k">型号</span><span class="v">Intel Core i5-3570 @ 3.40GHz</span></div>
+              <div class="kv"><span class="k">规格</span><span class="v">4 核 / 4 线程 · 3400 MHz</span></div>
+              <div class="kv"><span class="k">主板</span><span class="v">Lenovo NOK（联想）</span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">硬盘</div>
+              <div class="kv"><span class="k">硬盘 #0</span><span class="v">SanDisk SSD PLUS 480GB　<span class="mock-badge sch-d">健康</span></span></div>
+              <div class="kv"><span class="k">硬盘 #1</span><span class="v">WDC WD10EZEX 1TB　<span class="mock-badge sch-d" style="background:#fdf3e3;color:#b45309">预警</span></span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">内存</div>
+              <div class="kv"><span class="k">插槽</span><span class="v">1 / 4 槽已插（含 1 固件虚报）</span></div>
+              <div class="kv"><span class="k">内存 #0</span><span class="v">A-DATA 8GB DDR3-1600</span></div>
+            </div>
+          </div>
+          <div class="mock-foot">持玛多网络 / Z.W. · v0.3.8</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 方案 E ================= -->
+  <section class="scheme">
+    <div class="scheme-head"><span class="no">方案 E</span><h2>品牌靛蓝</h2><span class="en">BUSINESS INDIGO</span></div>
+    <p class="scheme-tagline">商务工具风：深靛蓝页签/标题栏形成强"框感"，内容区浅底白卡，层级最鲜明。品牌色占据导航区、主色占据操作区，给客户演示时"看起来像正经商业软件"。</p>
+    <div class="cols">
+      <div class="spec">
+        <h3>配色</h3>
+        <div class="palette">
+          <div class="swatch"><i style="background:#312e81"></i><span><span class="nm">导航深靛</span><br><span class="hex">#312E81</span></span></div>
+          <div class="swatch"><i style="background:#eef0f7"></i><span><span class="nm">窗口底</span><br><span class="hex">#EEF0F7</span></span></div>
+          <div class="swatch"><i style="background:#ffffff"></i><span><span class="nm">卡片</span><br><span class="hex">#FFFFFF</span></span></div>
+          <div class="swatch"><i style="background:#1e1b4b"></i><span><span class="nm">主文字</span><br><span class="hex">#1E1B4B</span></span></div>
+          <div class="swatch"><i style="background:#4f46e5"></i><span><span class="nm">主色</span><br><span class="hex">#4F46E5</span></span></div>
+          <div class="swatch"><i style="background:#059669"></i><span><span class="nm">成功 / 警告 / 错误</span><br><span class="hex">#059669 / #D97706 / #DC2626</span></span></div>
+        </div>
+        <h3>字体</h3>
+        <table>
+          <tr><td>族</td><td>Segoe UI（回退微软雅黑）</td></tr>
+          <tr><td>层级</td><td>标题 15 SemiBold ｜ 正文 13 ｜ 小字 12</td></tr>
+        </table>
+        <h3>间距 / 圆角</h3>
+        <table>
+          <tr><td>栅格</td><td>8px 基准；窗口边距 20、卡内边距 16</td></tr>
+          <tr><td>圆角</td><td>卡片 8 ｜ 按钮 6；页签选中 = 靛蓝圆角块</td></tr>
+          <tr><td>行高</td><td>键值行 24</td></tr>
+        </table>
+        <h3>组件</h3>
+        <div class="comp-row"><span class="lbl">按钮</span><span style="font-size:12px;padding:5px 14px;border-radius:6px;background:#4f46e5;color:#fff">主色</span><span style="font-size:12px;padding:5px 14px;border-radius:6px;background:#fff;color:#1e1b4b;border:1px solid #c5c9e8">次色</span></div>
+        <div class="comp-row"><span class="lbl">页签</span><span style="font-size:12px;color:#9aa3b2">深靛蓝条上，选中 = 靛蓝底白字块</span></div>
+        <div class="comp-row"><span class="lbl">输入框</span><span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#fff;border:1px solid #c5c9e8;color:#1e1b4b;width:72px;font-family:Consolas,monospace">22</span></div>
+        <div class="comp-row"><span class="lbl">滑杆</span><span style="font-size:12px;color:#9aa3b2">浅灰轨 + 靛蓝填充 + 白滑块（2px 靛蓝边）</span></div>
+        <div class="comp-row"><span class="lbl">徽标</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:#d1fae5;color:#059669">健康</span></div>
+      </div>
+      <div class="mock-zone">
+        <div class="mock sch-e">
+          <div class="mock-title">WinSuiteX 硬件配置<span class="wb"><span>─</span><span>✕</span></span></div>
+          <div class="mock-tabs"><span class="on">硬件配置</span><span>右键增强</span><span>磁盘信息</span></div>
+          <div class="mock-body">
+            <div class="mock-card">
+              <div class="mock-sec">处理器</div>
+              <div class="kv"><span class="k">型号</span><span class="v">Intel Core i5-3570 @ 3.40GHz</span></div>
+              <div class="kv"><span class="k">规格</span><span class="v">4 核 / 4 线程 · 3400 MHz</span></div>
+              <div class="kv"><span class="k">主板</span><span class="v">Lenovo NOK（联想）</span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">硬盘</div>
+              <div class="kv"><span class="k">硬盘 #0</span><span class="v">SanDisk SSD PLUS 480GB　<span class="mock-badge sch-e">健康</span></span></div>
+              <div class="kv"><span class="k">硬盘 #1</span><span class="v">WDC WD10EZEX 1TB　<span class="mock-badge sch-e" style="background:#fef3c7;color:#d97706">预警</span></span></div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-sec">内存</div>
+              <div class="kv"><span class="k">插槽</span><span class="v">1 / 4 槽已插（含 1 固件虚报）</span></div>
+              <div class="kv"><span class="k">内存 #0</span><span class="v">A-DATA 8GB DDR3-1600</span></div>
+            </div>
+          </div>
+          <div class="mock-foot">持玛多网络 / Z.W. · v0.3.8</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 选择建议 ================= -->
+  <div class="reco">
+    <h2>怎么选（颜值的设计建议）</h2>
+    <ol>
+      <li><b>继续用 A（深空玻璃）</b>：如果品牌感和"通透科技感"是卖点——它已经是成品，玻璃透明度 50%、叠色深 navy 全实也最顺眼。网吧/电竞酒店场景下它和"电竞"气质最搭。</li>
+      <li><b>换 B（浅色精英）</b>：如果实际使用大多是白天、亮环境、长时间逐行看参数——浅底深字 12:1 对比度是五套里最省眼的，也最像"系统自带工具"，客户信任感强。</li>
+      <li><b>换 C（高对比暗色）</b>：如果主要在机房/夜间值守、要一眼扫到异常数值——等宽数字 + 高饱和大色块扫读最快，但白天强光下略刺眼。</li>
+      <li><b>换 D（暖纸护眼）</b>：如果这工具经常一挂几小时不动、护眼优先——五套里视觉疲劳最低，但"产品感"最弱。</li>
+      <li><b>换 E（品牌靛蓝）</b>：如果要拿去给客户/老板演示、要"正经商业软件"的面相——结构层级最强，品牌存在感最高。</li>
+    </ol>
+    <div class="flow">
+      落地流程：① 在这页对比小样 → ② 告诉我选哪套（或哪套的哪些元素混搭）→ ③ 我把对应规范写进 <code>theme.rs</code> / <code>draw.rs</code> / <code>pages.rs</code>，跑门禁后部署。玻璃观感参数已固化在 <code>theme.rs</code>（GLASS_ALPHA 常量），要调直接改它。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

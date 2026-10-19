@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinSuiteX 硬件报告 - WIM-20250421TVP</title>
+<style>
+:root{
+  --brand-from:#8751EE;
+  --brand-to:#2662EB;
+  --brand-solid:#5B3FC4;
+  --hair:#e4e4e7;
+  --hair-strong:#c9c9cf;
+  --ink:#1a1a1a;
+  --ink-2:#52525b;
+  --ink-3:#8a8a93;
+  --bg:#ffffff;
+  --bg-2:#fafafa;
+  --ok:#15803d;
+  --ok-bg:#e9f5ee;
+  --warn:#c2410c;
+  --warn-bg:#fdf0e7;
+  --off:#6b6b73;
+  --off-bg:#f0f0f2;
+  --sans:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+  --mono:Consolas,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg-2);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14.5px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wsx-shell{max-width:960px;margin:0 auto;background:var(--bg);min-height:100vh}
+
+/* ── 顶部品牌条：渐变仅出现于此 ── */
+.wsx-header{
+  background:linear-gradient(135deg,var(--brand-from),var(--brand-to));
+  color:#fff;
+  padding:38px 40px 34px;
+  position:relative;
+}
+.wsx-wordmark{
+  font-size:12px;letter-spacing:.42em;text-transform:uppercase;
+  font-weight:600;opacity:.9;margin-bottom:18px;
+}
+.wsx-machine{
+  font-size:42px;line-height:1.05;font-weight:700;letter-spacing:-.01em;
+  word-break:break-word;
+}
+.wsx-sub{
+  margin-top:10px;font-size:14px;opacity:.92;font-weight:400;
+}
+.wsx-meta{
+  margin-top:20px;display:flex;flex-wrap:wrap;gap:10px 26px;
+  font-size:12.5px;opacity:.92;
+}
+.wsx-meta span{display:inline-flex;align-items:baseline;gap:6px}
+.wsx-meta b{font-weight:600}
+.wsx-meta .k{opacity:.7}
+
+/* ── 正文区 ── */
+.wsx-body{padding:8px 40px 40px}
+
+/* ── 章节 ── */
+.wsx-section{
+  padding:30px 0 26px;
+  border-top:1px solid var(--hair);
+  break-inside:avoid;
+}
+.wsx-section:first-child{border-top:none;padding-top:36px}
+.wsx-sec-head{
+  display:flex;align-items:baseline;gap:16px;
+  margin-bottom:20px;
+  border-bottom:2px solid var(--brand-solid);
+  padding-bottom:8px;
+}
+.wsx-sec-num{
+  font-family:var(--mono);
+  font-size:30px;font-weight:300;line-height:1;
+  color:var(--brand-solid);
+  font-variant-numeric:tabular-nums;
+}
+.wsx-sec-title{
+  margin:0;font-size:21px;font-weight:600;letter-spacing:.01em;color:var(--ink);
+}
+
+/* ── 键值表 ── */
+.wsx-kv{width:100%;border-collapse:collapse;font-size:14.5px}
+.wsx-kv th{
+  text-align:left;vertical-align:top;
+  width:172px;padding:11px 18px 11px 0;
+  color:var(--ink-3);font-weight:500;font-size:13px;
+  border-bottom:1px solid var(--hair);
+  white-space:nowrap;
+}
+.wsx-kv td{
+  padding:11px 0;vertical-align:top;color:var(--ink);
+  border-bottom:1px solid var(--hair);
+}
+.wsx-kv tr:last-child th,.wsx-kv tr:last-child td{border-bottom:none}
+.wsx-kv .v-sub{color:var(--ink-2);font-size:13px;margin-top:2px}
+
+/* ── 等宽串 ── */
+.wsx-mono{
+  font-family:var(--mono);
+  font-size:12.5px;
+  color:var(--ink-2);
+  overflow-wrap:anywhere;
+  word-break:break-all;
+}
+.wsx-line{display:block}
+.wsx-line + .wsx-line{margin-top:3px}
+
+/* ── 标签 chip（音频等） ── */
+.wsx-tag{
+  display:inline-block;margin:2px 4px 2px 0;
+  padding:1px 8px;font-size:12px;line-height:1.7;
+  border:1px solid var(--hair-strong);color:var(--ink-2);
+  background:var(--bg-2);border-radius:2px;
+}
+
+/* ── 健康徽标 ── */
+.wsx-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:1px 9px 1px 7px;font-size:12px;line-height:1.8;
+  border-radius:2px;font-weight:500;white-space:nowrap;
+}
+.wsx-badge::before{content:"";width:7px;height:7px;display:inline-block}
+.wsx-badge-ok{background:var(--ok-bg);color:var(--ok)}
+.wsx-badge-ok::before{background:var(--ok);border-radius:50%}
+.wsx-badge-warn{background:var(--warn-bg);color:var(--warn)}
+.wsx-badge-warn::before{background:var(--warn)}
+/* 功能状态徽标 */
+.wsx-badge-off{background:var(--off-bg);color:var(--off)}
+.wsx-badge-off::before{background:var(--off);border-radius:50%}
+
+/* ── 警告框 ── */
+.wsx-warn{
+  border:1px solid #f0c9a8;
+  border-left:3px solid var(--warn);
+  background:var(--warn-bg);
+  color:#7a3207;
+  padding:12px 16px;
+  font-size:13px;
+  margin:4px 0 18px;
+  break-inside:avoid;
+}
+.wsx-warn b{color:var(--warn);font-weight:600}
+
+/* ── 宽表（分区）横向滚动 ── */
+.wsx-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wsx-wide{width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px}
+.wsx-wide th{
+  text-align:left;padding:9px 10px;
+  background:var(--bg-2);color:var(--ink-2);font-weight:600;
+  border-bottom:1px solid var(--hair-strong);font-size:12px;white-space:nowrap;
+}
+.wsx-wide td{
+  padding:9px 10px;vertical-align:top;
+  border-bottom:1px solid var(--hair);color:var(--ink);
+}
+.wsx-wide tr:last-child td{border-bottom:none}
+.wsx-wide .mono{font-size:12px;color:var(--ink-2)}
+
+/* ── 页脚 ── */
+.wsx-foot{
+  border-top:1px solid var(--hair);
+  padding:18px 40px 26px;
+  color:var(--ink-3);font-size:12px;text-align:center;letter-spacing:.02em;
+}
+
+/* ── 响应式 ── */
+@media (max-width:640px){
+  .wsx-header{padding:28px 20px 24px}
+  .wsx-machine{font-size:32px}
+  .wsx-body{padding:8px 20px 30px}
+  .wsx-foot{padding-left:20px;padding-right:20px}
+  .wsx-kv th{width:120px}
+}
+
+/* ── 打印 ── */
+@media print{
+  body{background:#fff;font-size:12px}
+  .wsx-shell{max-width:none;margin:0}
+  .wsx-header{background:var(--brand-solid);-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:24px 24px}
+  .wsx-body{padding:6px 24px 24px}
+  .wsx-section{break-inside:avoid;border-top-color:#bbb}
+  .wsx-sec-head{border-bottom-color:var(--brand-solid)}
+  .wsx-kv th,.wsx-kv td{border-bottom-color:#ddd}
+  .wsx-wide th{background:#f0f0f0}
+  .wsx-warn{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wsx-badge,.wsx-tag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wsx-table-scroll{overflow:visible}
+  .wsx-wide{min-width:0}
+  .wsx-foot{padding:14px 24px}
+}
+</style>
+</head>
+<body>
+<div class="wsx-shell">
+
+  <!-- 顶部品牌条：渐变仅出现于此 -->
+  <header class="wsx-header">
+    <div class="wsx-wordmark">WinSuiteX</div>
+    <div class="wsx-machine">WIM-20250421TVP</div>
+    <div class="wsx-sub">WinSuiteX 计算机硬件与系统报告 · Rust 版</div>
+    <div class="wsx-meta">
+      <span><span class="k">采集时间</span><b>2026-10-10 11:16:23</b></span>
+      <span><span class="k">开机时间</span><b>2026-10-10 10:23:51</b></span>
+      <span><span class="k">在线时长</span><b>约 52 分</b></span>
+    </div>
+  </header>
+
+  <div class="wsx-body">
+
+    <!-- 01 操作系统 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">01</span><h2 class="wsx-sec-title">操作系统</h2></header>
+      <table class="wsx-kv">
+        <tr><th>产品</th><td>Windows 11 Pro for Workstations</td></tr>
+        <tr><th>版本</th><td>23H2 (Build 22631)</td></tr>
+        <tr><th>架构</th><td>x64</td></tr>
+        <tr><th>开机时间</th><td>2026-10-10 10:23:51</td></tr>
+        <tr><th>在线时长</th><td>约 52 分</td></tr>
+      </table>
+    </section>
+
+    <!-- 02 计算机 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">02</span><h2 class="wsx-sec-title">计算机</h2></header>
+      <table class="wsx-kv">
+        <tr><th>名称</th><td>WIM-20250421TVP</td></tr>
+        <tr><th>当前用户</th><td>Administrator</td></tr>
+        <tr><th>采集时间</th><td>2026-10-10 11:16:23</td></tr>
+      </table>
+    </section>
+
+    <!-- 03 主板 / BIOS -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">03</span><h2 class="wsx-sec-title">主板 / BIOS</h2></header>
+      <table class="wsx-kv">
+        <tr><th>制造商</th><td>ASUS（华硕）</td></tr>
+        <tr><th>产品</th><td>P8H61-M PLUS V3</td></tr>
+        <tr><th>序列号</th><td><span class="wsx-mono">130107024105078</span></td></tr>
+        <tr><th>BIOS</th><td>American Megatrends（美商安迈） 1601 · 2015-09-14</td></tr>
+        <tr><th>芯片组</th><td>Intel(R) 6 Series/C200 Series Chipset</td></tr>
+      </table>
+    </section>
+
+    <!-- 04 处理器 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">04</span><h2 class="wsx-sec-title">处理器</h2></header>
+      <table class="wsx-kv">
+        <tr>
+          <th>#1 LGA1155</th>
+          <td>
+            Intel(R) Xeon(R) CPU E3-1230 V2 @ 3.30GHz
+            <span class="wsx-mono wsx-line">4 核 / 8 线程 · 3300 MHz</span>
+            <span class="wsx-mono wsx-line">Intel（英特尔）</span>
+          </td>
+        </tr>
+        <tr><th>代号</th><td>Ivy Bridge (Xeon)</td></tr>
+      </table>
+    </section>
+
+    <!-- 05 内存 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">05</span><h2 class="wsx-sec-title">内存</h2></header>
+      <table class="wsx-kv">
+        <tr><th>总计</th><td>16 GiB</td></tr>
+        <tr><th>插槽占用</th><td>2 / 2 槽已插</td></tr>
+        <tr>
+          <th>ChannelA-DIMM0</th>
+          <td>
+            8 GiB · DDR3 · 1600 MT/s (时钟 800 MHz)
+            <span class="wsx-mono wsx-line">Kingston（金士顿） 99P5471-033.A00LF</span>
+            <span class="wsx-mono wsx-line">序列号：8A2FBB7B</span>
+            <span class="wsx-mono wsx-line">BANK 0</span>
+          </td>
+        </tr>
+        <tr>
+          <th>ChannelB-DIMM0</th>
+          <td>
+            8 GiB · DDR3 · 1600 MT/s (时钟 800 MHz)
+            <span class="wsx-mono wsx-line">Kingston（金士顿） 99P5471-033.A00LF</span>
+            <span class="wsx-mono wsx-line">序列号：9D276250</span>
+            <span class="wsx-mono wsx-line">BANK 2</span>
+          </td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- 06 显卡 / 显示器 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">06</span><h2 class="wsx-sec-title">显卡 / 显示器</h2></header>
+      <table class="wsx-kv">
+        <tr><th>显卡 #1</th><td>NVIDIA GeForce GTX 650 · 984 MiB · <span class="wsx-mono">Zotac（索泰）</span></td></tr>
+        <tr>
+          <th>显示器 #1</th>
+          <td>
+            1920 × 1080 @ 144 Hz
+            <span class="wsx-mono wsx-line">AOC（冠捷） 3202（冠捷）</span>
+          </td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- 07 硬盘 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">07</span><h2 class="wsx-sec-title">硬盘</h2></header>
+
+      <div class="wsx-warn">
+        <b>SMART 警告</b> · PhysicalDrive0（SSDSC2BR960G7）健康状态为「警告」，检测到重映射 1 扇区，建议尽快备份数据并关注磁盘健康。
+      </div>
+
+      <table class="wsx-kv">
+        <tr>
+          <th>PhysicalDrive0</th>
+          <td>
+            SSDSC2BR960G7
+            <span class="wsx-mono wsx-line">SATA · SSD · 894.3 GiB</span>
+            <span class="wsx-mono wsx-line">序列号：PHDV830100BV960FGN</span>
+            <span class="wsx-mono wsx-line">固件：N2010112</span>
+            <span class="wsx-line"><span class="wsx-badge wsx-badge-warn">健康 警告</span></span>
+            <span class="wsx-mono wsx-line">通电 10653 小时（约 1 年 2 个月） · 通电 547 次 · 30°C · 重映射 1 扇区</span>
+          </td>
+        </tr>
+        <tr>
+          <th>PhysicalDrive1</th>
+          <td>
+            SSDSC2KG480G7K
+            <span class="wsx-mono wsx-line">SATA · SSD · 447.1 GiB</span>
+            <span class="wsx-mono wsx-line">序列号：BTYM916205DU480BGN</span>
+            <span class="wsx-mono wsx-line">固件：SCV1CS07</span>
+            <span class="wsx-line"><span class="wsx-badge wsx-badge-ok">健康 良好</span></span>
+            <span class="wsx-mono wsx-line">通电 41071 小时（约 4 年 8 个月） · 通电 812 次 · 31°C</span>
+          </td>
+        </tr>
+        <tr><th>总计</th><td>1.3 TiB</td></tr>
+      </table>
+    </section>
+
+    <!-- 08 网卡 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">08</span><h2 class="wsx-sec-title">网卡</h2></header>
+      <table class="wsx-kv">
+        <tr>
+          <th>#1</th>
+          <td>
+            Realtek PCIe GBE Family Controller（瑞昱）
+            <span class="wsx-mono wsx-line">状态: 已连接</span>
+            <span class="wsx-mono wsx-line">速率: 1 Gbps</span>
+            <span class="wsx-mono wsx-line">MAC 60-A4-4C-31-7C-4E</span>
+            <span class="wsx-mono wsx-line">IPv4 192.168.0.124, 192.168.10.124, 192.168.100.124</span>
+          </td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- 09 分区与簇大小 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">09</span><h2 class="wsx-sec-title">分区与簇大小</h2></header>
+      <div class="wsx-table-scroll">
+        <table class="wsx-wide">
+          <tr>
+            <th>盘符</th><th>物理磁盘</th><th>类型</th><th>文件系统</th><th>簇大小</th>
+            <th>总容量</th><th>已用</th><th>可用</th><th>序列号</th><th>卷标</th>
+          </tr>
+          <tr>
+            <td class="wsx-mono">C:</td><td class="wsx-mono">\\.\PhysicalDrive1</td><td>本地磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">4 KiB</td>
+            <td class="wsx-mono">80.0 GiB</td><td class="wsx-mono">65.9 GiB（82%）</td><td class="wsx-mono">14.1 GiB</td><td class="wsx-mono">BTYM916205DU480BGN</td><td class="wsx-mono">系统</td>
+          </tr>
+          <tr>
+            <td class="wsx-mono">D:</td><td class="wsx-mono">\\.\PhysicalDrive1</td><td>本地磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">4 KiB</td>
+            <td class="wsx-mono">367.1 GiB</td><td class="wsx-mono">102.1 GiB（28%）</td><td class="wsx-mono">265.0 GiB</td><td class="wsx-mono">BTYM916205DU480BGN</td><td class="wsx-mono">软件</td>
+          </tr>
+          <tr>
+            <td class="wsx-mono">E:</td><td class="wsx-mono">\\.\PhysicalDrive0</td><td>本地磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">4 KiB</td>
+            <td class="wsx-mono">894.3 GiB</td><td class="wsx-mono">638.8 GiB（71%）</td><td class="wsx-mono">255.4 GiB</td><td class="wsx-mono">PHDV830100BV960FGN</td><td class="wsx-mono">e</td>
+          </tr>
+          <tr>
+            <td class="wsx-mono">V:</td><td class="wsx-mono">-</td><td>网络磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">512 B</td>
+            <td class="wsx-mono">2.0 TiB</td><td class="wsx-mono">0 B（0%）</td><td class="wsx-mono">2.0 TiB</td><td class="wsx-mono">-</td><td class="wsx-mono">fnosWebDAV</td>
+          </tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- 10 音频设备 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">10</span><h2 class="wsx-sec-title">音频设备</h2></header>
+      <table class="wsx-kv">
+        <tr><th>#1</th><td>SOUNDPEATS GoFree 2 <span class="wsx-tag">蓝牙</span><span class="wsx-tag">未知</span></td></tr>
+        <tr><th>#2</th><td>SOUNDPEATS GoFree 2 Hands-Free <span class="wsx-tag">蓝牙</span><span class="wsx-tag">未知</span></td></tr>
+        <tr><th>#3</th><td>High Definition Audio 设备 <span class="wsx-tag">音箱</span></td></tr>
+        <tr><th>#4</th><td>NVIDIA High Definition Audio <span class="wsx-tag">音箱</span></td></tr>
+      </table>
+    </section>
+
+    <!-- 11 键盘 / 鼠标 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">11</span><h2 class="wsx-sec-title">键盘 / 鼠标</h2></header>
+      <table class="wsx-kv">
+        <tr>
+          <th>键盘</th>
+          <td>
+            A4Tech (09DA:FA90)
+            <span class="wsx-mono wsx-line">09DA:FA90</span>
+            <span class="wsx-mono wsx-line">A4Tech（双飞燕）</span>
+          </td>
+        </tr>
+        <tr>
+          <th>鼠标</th>
+          <td>
+            Logitech (046D:C077)
+            <span class="wsx-mono wsx-line">046D:C077</span>
+            <span class="wsx-mono wsx-line">Logitech（罗技）</span>
+          </td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- 12 WinSuiteX 功能状态 -->
+    <section class="wsx-section">
+      <header class="wsx-sec-head"><span class="wsx-sec-num">12</span><h2 class="wsx-sec-title">WinSuiteX 功能状态</h2></header>
+      <table class="wsx-kv">
+        <tr><th>计算机管理</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在「此电脑」右键菜单添加「计算机管理」，一键打开 compmgmt.msc</td></tr>
+        <tr><th>设备管理器</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 演示模块：在「此电脑」右键菜单添加「设备管理器」(devmgmt.msc)</td></tr>
+        <tr><th>显示/隐藏 系统文件</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹空白处右键一键切换「显示/隐藏 系统文件与扩展名」</td></tr>
+        <tr><th>命令提示符</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹或空白处右键一键打开命令提示符，并自动定位到当前文件夹</td></tr>
+        <tr><th>PowerShell</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹或空白处右键一键打开 PowerShell，并自动定位到当前文件夹</td></tr>
+      </table>
+    </section>
+
+  </div>
+
+  <footer class="wsx-foot">WinSuiteX · 重庆持玛多网络科技有限公司 · Z.W.</footer>
+
+</div>
+</body>
+</html>

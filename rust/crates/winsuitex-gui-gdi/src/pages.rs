@@ -1506,13 +1506,15 @@ fn feature_row(
         right,
         bottom: y + row_h,
     };
-    // 暗玻璃卡：渐变上叠暗色（C++ 版右键页是深色毛玻璃，白字）。
+    // 内容卡玻璃：与硬件页 / 磁盘页**统一**——深 navy tint 叠 `glass_alpha()`（固化 50%）。
+    // 曾单用 `C_GLASS_DARK`(64,60,96) @ 0.45（更浅、更紫），与别处内容卡不是一档；
+    // Z.W. 2026-10-19 指出"右键增强里好像不太一样"，遂收敛到同一档玻璃（白字对比度反而更高）。
     fill_glass_round(
         hdc,
         &card,
         scale(CARD_RADIUS),
-        C_GLASS_DARK,
-        0.45,
+        tint_color(),
+        glass_alpha(),
         scroll,
         win_h,
     );

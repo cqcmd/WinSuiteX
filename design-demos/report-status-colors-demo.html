@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinSuiteX 报告 · 状态色演示</title>
+<style>
+:root{--brand-a:#8751EE;--brand-b:#2662EB;--ink:#1f2937;--muted:#6b7280;--line:#e6e8ee;--card-bg:#fff;--page-bg:#f4f5f8;--accent:#8751EE;--ok-bg:#e7f6ed;--ok-fg:#15803d;--warn-bg:#fdecea;--warn-fg:#c0392b;--tag-bg:#eef1f6;--tag-fg:#4b5563;--foot:#9aa1ad}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 16px 40px;background:var(--page-bg);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;line-height:1.65;font-size:14px}
+.wsx-wrap{max-width:940px;margin:0 auto}
+.wsx-header{background:linear-gradient(110deg,var(--brand-a),var(--brand-b));border-radius:16px;padding:26px 28px;color:#fff;box-shadow:0 8px 24px rgba(38,98,235,.18)}
+.wsx-wordmark{font-size:13px;letter-spacing:2.5px;text-transform:uppercase;opacity:.85;margin-bottom:6px;font-weight:600}
+.wsx-header h1{margin:0;font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1.2}
+.wsx-sub{margin-top:6px;font-size:13px;opacity:.92}
+.wsx-card{background:var(--card-bg);border:1px solid var(--line);border-radius:14px;padding:18px 20px 20px;margin-top:18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.wsx-card-title{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.3px}
+.wsx-card-title .wsx-idx{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;background:var(--accent);border-radius:7px;color:#fff;padding:0;line-height:0;box-shadow:0 1px 2px rgba(135,81,238,.25)}
+.wsx-card-title .wsx-idx svg{width:17px;height:17px;display:block}
+.wsx-card-title .wsx-subtle{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:.5px}
+.wsx-kv{width:100%;border-collapse:collapse;font-size:14px}
+.wsx-kv th{text-align:left;vertical-align:top;width:40%;padding:9px 12px 9px 0;color:var(--muted);font-weight:400;border-bottom:1px solid #f1f3f6}
+.wsx-kv td{vertical-align:top;padding:9px 0;border-bottom:1px solid #f1f3f6;color:var(--ink)}
+.wsx-kv tr:last-child th,.wsx-kv tr:last-child td{border-bottom:none}
+.wsx-mono{font-family:Consolas,Menlo,monospace;font-size:13px;overflow-wrap:anywhere;word-break:break-word;color:#374151}
+/* 语义状态色（与正式报告完全一致） */
+.wsx-stat{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap;vertical-align:middle}
+.wsx-stat-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.wsx-stat-warn{background:#fff4e5;color:#b45309}
+.wsx-stat-crit{background:var(--warn-bg);color:var(--warn-fg)}
+.wsx-stat-unk{background:#eef1f6;color:#6b7280}
+.wsx-t-ok{color:#15803d}
+.wsx-t-warn{color:#b45309}
+.wsx-t-crit{color:#c0392b}
+.wsx-warnbox{background:#fff5f4;border:1px solid #f3c6c0;border-left:4px solid #e23b2e;color:#9a2c20;border-radius:12px;padding:12px 16px;margin-top:14px;font-size:13px;line-height:1.6}
+.wsx-warnbox .wsx-warn-title{font-weight:700;display:block;margin-bottom:2px}
+.wsx-foot{color:var(--foot);font-size:12px;text-align:center;margin-top:26px;letter-spacing:.3px}
+.legend{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wsx-wrap">
+  <header class="wsx-header">
+    <div class="wsx-wordmark">WinSuiteX</div>
+    <h1>状态色演示</h1>
+    <div class="wsx-sub">导出报告统一视觉风格 · 预警 / 状态语义色预览</div>
+  </header>
+
+  <div class="wsx-warnbox"><span class="wsx-warn-title">⚠ 未以管理员身份运行</span>NVMe SMART 寿命百分比 / 通电时长可能不完整，请以管理员身份重新运行。</div>
+
+  <section class="wsx-card">
+    <div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 11h18"/><circle cx="8" cy="14.5" r="0.9"/></svg></span>硬盘 SMART 健康 <span class="wsx-subtle">STORAGE</span></div>
+    <table class="wsx-kv">
+      <tr><th>PhysicalDrive0</th><td><span class="wsx-stat wsx-stat-ok">健康 良好（剩余 87%）</span></td></tr>
+      <tr><th>PhysicalDrive1</th><td><span class="wsx-stat wsx-stat-warn">健康 警告</span></td></tr>
+      <tr><th>PhysicalDrive2</th><td><span class="wsx-stat wsx-stat-crit">健康 严重</span></td></tr>
+      <tr><th>PhysicalDrive3</th><td><span class="wsx-stat wsx-stat-unk">健康 未知</span></td></tr>
+      <tr><th>PhysicalDrive4</th><td><span class="wsx-stat wsx-stat-unk">健康状态：不可用（需管理员权限）</span></td></tr>
+    </table>
+    <div class="legend">绿=正常 · 橙=注意 · 红=危险 · 灰=未知/无法判定</div>
+  </section>
+
+  <section class="wsx-card">
+    <div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="13" height="6" rx="1.5"/><path d="M16 11h4M16 13h4"/><path d="M6 9V7M9 9V7"/></svg></span>分区使用率 <span class="wsx-subtle">PARTITIONS</span></div>
+    <table class="wsx-kv">
+      <tr><th>已用（% 红/橙阈值）</th><td class="wsx-mono"><span class="wsx-stat wsx-stat-crit">931.0 GiB（95%）</span></td></tr>
+      <tr><th>已用（达注意线）</th><td class="wsx-mono"><span class="wsx-stat wsx-stat-warn">800.0 GiB（80%）</span></td></tr>
+      <tr><th>已用（正常）</th><td class="wsx-mono">400.0 GiB（40%）</td></tr>
+    </table>
+    <div class="legend">≥90% 红（危险） · ≥75% 橙（注意） · 其余正常</div>
+  </section>
+
+  <section class="wsx-card">
+    <div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="11" rx="1.5"/><circle cx="9" cy="10.5" r="3"/><circle cx="16" cy="10.5" r="2"/><path d="M4 16v3M9 16v3"/></svg></span>显卡温度 <span class="wsx-subtle">GPU</span></div>
+    <table class="wsx-kv">
+      <tr><th>状态</th><td class="wsx-mono"><span class="wsx-t-crit">温度 92°C</span> · 风扇 100% · 功耗 320W · 利用 99% · 显存 12288/12288 MB · 2500 MHz</td></tr>
+      <tr><th>状态</th><td class="wsx-mono"><span class="wsx-t-warn">温度 78°C</span> · 风扇 70% · 功耗 200W · 利用 80% · 显存 4096/12288 MB · 2400 MHz</td></tr>
+      <tr><th>状态</th><td class="wsx-mono">温度 55°C · 风扇 40% · 功耗 150W · 利用 30% · 显存 2048/12288 MB · 2500 MHz</td></tr>
+    </table>
+    <div class="legend">≥85°C 红（危险） · ≥75°C 橙（注意） · 其余中性</div>
+  </section>
+
+  <section class="wsx-card">
+    <div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></svg></span>功能状态 <span class="wsx-subtle">FEATURES</span></div>
+    <table class="wsx-kv">
+      <tr><th>右键菜单增强</th><td><span class="wsx-stat wsx-stat-ok">已启用</span> 右键扩展功能</td></tr>
+      <tr><th>硬件报告导出</th><td><span class="wsx-stat wsx-stat-unk">未启用</span> 导出详细报告</td></tr>
+    </table>
+  </section>
+
+  <div class="wsx-foot">WinSuiteX · 重庆持玛多网络科技有限公司 · Z.W.</div>
+</div>
+</body>
+</html>

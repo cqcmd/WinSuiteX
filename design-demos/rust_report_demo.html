@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinSuiteX 硬件报告 - PC-20260719YDFT</title>
+<style>
+:root{--brand-a:#8751EE;--brand-b:#2662EB;--ink:#1f2937;--muted:#6b7280;--line:#e6e8ee;--card-bg:#fff;--page-bg:#f4f5f8;--accent:#8751EE;--ok-bg:#e7f6ed;--ok-fg:#15803d;--off-bg:#f1f3f5;--off-fg:#6b7280;--warn-bg:#fdecea;--warn-fg:#c0392b;--tag-bg:#eef1f6;--tag-fg:#4b5563;--foot:#9aa1ad}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding:28px 16px 40px;background:var(--page-bg);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;line-height:1.65;font-size:14px}
+.wsx-wrap{max-width:940px;margin:0 auto}
+.wsx-header{background:linear-gradient(110deg,var(--brand-a),var(--brand-b));border-radius:16px;padding:26px 28px;color:#fff;box-shadow:0 8px 24px rgba(38,98,235,.18)}
+.wsx-wordmark{font-size:13px;letter-spacing:2.5px;text-transform:uppercase;opacity:.85;margin-bottom:6px;font-weight:600}
+.wsx-header h1{margin:0;font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1.2}
+.wsx-sub{margin-top:6px;font-size:13px;opacity:.92}
+.wsx-chips{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
+.wsx-chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:12px;padding:10px 14px;backdrop-filter:blur(2px);min-width:160px;flex:1 1 160px}
+.wsx-chip .c-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85;margin-bottom:3px}
+.wsx-chip .c-value{font-size:14px;font-weight:700;line-height:1.35;word-break:break-word}
+.wsx-chip .c-mono{font-family:Consolas,Menlo,monospace;font-size:13px}
+.wsx-card{background:var(--card-bg);border:1px solid var(--line);border-radius:14px;padding:18px 20px 20px;margin-top:18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.wsx-card-title{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.3px}
+.wsx-card-title .wsx-idx{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;background:var(--accent);border-radius:7px;color:#fff;padding:0;line-height:0;box-shadow:0 1px 2px rgba(135,81,238,.25)}
+.wsx-card-title .wsx-idx svg{width:17px;height:17px;display:block}
+.wsx-card-title .wsx-subtle{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:.5px}
+.wsx-kv{width:100%;border-collapse:collapse;font-size:14px}
+.wsx-kv th{text-align:left;vertical-align:top;width:40%;max-width:240px;padding:9px 12px 9px 0;color:var(--muted);font-weight:400;border-bottom:1px solid #f1f3f6}
+.wsx-kv td{vertical-align:top;padding:9px 0;border-bottom:1px solid #f1f3f6;color:var(--ink)}
+.wsx-kv tr:last-child th,.wsx-kv tr:last-child td{border-bottom:none}
+.wsx-mono{font-family:Consolas,Menlo,monospace;font-size:13px;overflow-wrap:anywhere;word-break:break-word;color:#374151}
+.wsx-muted{color:var(--muted)}
+.wsx-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wsx-dtable{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+.wsx-dtable thead th{text-align:left;padding:8px 10px;background:#f7f8fb;color:#475569;font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px;letter-spacing:.3px}
+.wsx-dtable td{padding:8px 10px;border-bottom:1px solid #f1f3f6;vertical-align:top;white-space:nowrap}
+.wsx-dtable tbody tr:last-child td{border-bottom:none}
+.wsx-dtable .wsx-mono{font-size:12px}
+.wsx-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap}
+.wsx-badge-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.wsx-badge-off{background:var(--off-bg);color:var(--off-fg)}
+.wsx-badge-warn{background:var(--warn-bg);color:var(--warn-fg)}
+.wsx-tag{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;background:var(--tag-bg);color:var(--tag-fg);margin:0 3px 3px 0}
+/* 语义状态色：胶囊徽标 .wsx-stat-* 与纯文字 .wsx-t-* 两套；正常=绿/注意=橙/危险=红/缺失=灰 */
+.wsx-stat{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap;vertical-align:middle}
+.wsx-stat-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.wsx-stat-warn{background:#fff4e5;color:#b45309}
+.wsx-stat-crit{background:#fdecea;color:#c0392b}
+.wsx-stat-unk{background:#eef1f6;color:#6b7280}
+.wsx-t-ok{color:#15803d}
+.wsx-t-warn{color:#b45309}
+.wsx-t-crit{color:#c0392b}
+/* 预警横幅：左侧红色强调条，明显区别于普通卡片 */
+.wsx-warnbox{background:#fff5f4;border:1px solid #f3c6c0;border-left:4px solid #e23b2e;color:#9a2c20;border-radius:12px;padding:12px 16px;margin-top:14px;font-size:13px;line-height:1.6}
+.wsx-warnbox .wsx-warn-title{font-weight:700;display:block;margin-bottom:2px}
+.wsx-warn{color:var(--warn-fg)}
+.wsx-foot{color:var(--foot);font-size:12px;text-align:center;margin-top:26px;letter-spacing:.3px}
+@media (max-width:768px){body{padding:16px 12px 26px}.wsx-wrap{max-width:100%}}
+@media (max-width:560px){.wsx-header{padding:18px 16px;border-radius:12px}.wsx-wordmark{font-size:12px;letter-spacing:2px}.wsx-header h1{font-size:22px}.wsx-sub{font-size:12px}.wsx-chips{gap:8px;margin-top:14px}.wsx-chip{flex:1 1 100%;min-width:0;padding:9px 12px}.wsx-card{padding:14px 14px 16px;margin-top:14px;border-radius:12px}.wsx-card-title{font-size:14px;gap:8px}.wsx-card-title .wsx-idx{width:26px;height:26px;flex-basis:26px;border-radius:6px}.wsx-card-title .wsx-idx svg{width:15px;height:15px}.wsx-kv{font-size:13px}.wsx-kv th{width:38%;padding:8px 8px 8px 0;font-size:13px}.wsx-kv td{padding:8px 0;font-size:13px}.wsx-mono{font-size:12px}.wsx-foot{margin-top:20px;font-size:11px}}
+@media (max-width:380px){.wsx-header h1{font-size:20px}.wsx-kv th{width:42%}.wsx-chip .c-value{font-size:13px}}</style>
+</head>
+<body>
+<div class="wsx-wrap">
+<header class="wsx-header">
+<div class="wsx-wordmark">WinSuiteX</div>
+<h1>PC-20260719YDFT</h1>
+<div class="wsx-sub">计算机硬件与系统报告 &middot; Rust 版</div>
+<div class="wsx-chips">
+<div class="wsx-chip"><div class="c-label">操作系统</div><div class="c-value">Windows 10 Pro</div></div>
+<div class="wsx-chip"><div class="c-label">处理器</div><div class="c-value">pc-q35-10.1</div></div>
+<div class="wsx-chip"><div class="c-label">内存总量</div><div class="c-value c-mono">16 GiB</div></div>
+</div>
+</header>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></span>操作系统 <span class="wsx-subtle">OPERATING SYSTEM</span></div><table class="wsx-kv">
+<tr><th>产品</th><td>Windows 10 Pro</td></tr>
+<tr><th>版本</th><td>22H2 (Build 19045)</td></tr>
+<tr><th>架构</th><td>x64</td></tr>
+<tr><th>开机时间</th><td>2026-09-20 09:15:08</td></tr>
+<tr><th>在线时长</th><td>约 20 天 5 小时</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6"/><path d="M12 16v4"/></svg></span>计算机 <span class="wsx-subtle">COMPUTER</span></div><table class="wsx-kv">
+<tr><th>名称</th><td>PC-20260719YDFT</td></tr>
+<tr><th>当前用户</th><td>Administrator</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><rect x="7" y="8" width="7" height="7" rx="0.5"/><path d="M16.5 9h2M16.5 12h2M16.5 15h2"/><circle cx="14" cy="15" r="0.8"/></svg></span>主板 / BIOS <span class="wsx-subtle">MOTHERBOARD</span></div><table class="wsx-kv">
+<tr><th>制造商</th><td>未知</td></tr>
+<tr><th>产品</th><td>未知</td></tr>
+<tr><th>序列号</th><td>-</td></tr>
+<tr><th>BIOS</th><td>Proxmox distribution of EDK II 4.2025.05-2 &middot; 2025-11-13</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg></span>处理器 <span class="wsx-subtle">PROCESSOR</span></div><table class="wsx-kv">
+<tr><th>#1 CPU 0</th><td>pc-q35-10.1<br><span class="wsx-mono">8 核 / 8 线程 &middot; 2000 MHz</span><br><span class="wsx-mono">QEMU</span></td></tr>
+<tr><th>代号</th><td>Broadwell-E (Xeon)</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="9" rx="1"/><path d="M7 16v3M11 16v3M15 16v3M19 16v3"/><path d="M9 7v9"/></svg></span>内存 <span class="wsx-subtle">MEMORY</span></div><table class="wsx-kv">
+<tr><th>总计</th><td>16 GiB</td></tr>
+<tr><th>插槽占用</th><td>1 / 1 槽已插</td></tr>
+<tr><th>DIMM 0</th><td>16 GiB<br><span class="wsx-mono">QEMU 未知</span><br>未知</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="11" rx="1.5"/><circle cx="9" cy="10.5" r="3"/><circle cx="16" cy="10.5" r="2"/><path d="M4 16v3M9 16v3"/></svg></span>显卡 / 显示器 <span class="wsx-subtle">GPU / DISPLAY</span></div><table class="wsx-kv">
+<tr><th>显卡 #1</th><td>Microsoft Basic Render Driver <span class="wsx-muted">[软件渲染器]</span></td></tr>
+<tr><th>显卡 #2</th><td>Microsoft Remote Display Adapter</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 11h18"/><circle cx="8" cy="14.5" r="0.9"/></svg></span>硬盘 <span class="wsx-subtle">STORAGE</span></div><table class="wsx-kv">
+<tr><th>PhysicalDrive0</th><td>QEMU QEMU HARDDISK<br><span class="wsx-mono">SAS &middot; SSD &middot; 100.0 GiB</span><br><span class="wsx-mono">序列号：该存储栈未透传</span><br><span class="wsx-mono">固件：2.5+</span><br><span class="wsx-stat wsx-stat-ok">健康 良好</span><span class="wsx-mono"> · 0°C · 通电时长:该存储栈未透传</span></td></tr>
+<tr><th>PhysicalDrive1</th><td>QEMU QEMU HARDDISK<br><span class="wsx-mono">SAS &middot; SSD &middot; 200.0 GiB</span><br><span class="wsx-mono">序列号：该存储栈未透传</span><br><span class="wsx-mono">固件：2.5+</span><br><span class="wsx-stat wsx-stat-ok">健康 良好</span><span class="wsx-mono"> · 0°C · 通电时长:该存储栈未透传</span></td></tr>
+<tr><th>总计</th><td>300.0 GiB</td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="13" height="6" rx="1.5"/><path d="M16 11h4M16 13h4"/><path d="M6 9V7M9 9V7"/></svg></span>网卡 <span class="wsx-subtle">NETWORK</span></div><table class="wsx-kv">
+<tr><th>#1</th><td>Red Hat VirtIO Ethernet Adapter<br>状态: 已连接<br>速率: 10 Gbps<br><span class="wsx-mono">MAC BC-24-11-6F-1F-DA</span><br><span class="wsx-mono">IPv4 192.168.10.233</span></td></tr>
+</table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 12V4M12 12h8"/></svg></span>分区与簇大小 <span class="wsx-subtle">PARTITIONS</span></div>
+<div class="wsx-table-scroll"><table class="wsx-dtable"><tr><th style="width:auto">盘符</th><th style="width:auto">物理磁盘</th><th style="width:auto">类型</th><th style="width:auto">文件系统</th><th style="width:auto">簇大小</th><th style="width:auto">总容量</th><th style="width:auto">已用</th><th style="width:auto">可用</th><th style="width:auto">序列号</th><th style="width:auto">卷标</th></tr>
+<tr><td class="wsx-mono">C:</td><td class="wsx-mono">\\.\PhysicalDrive0</td><td>本地磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">4 KiB</td><td class="wsx-mono">99.7 GiB</td><td class="wsx-mono">61.7 GiB（62%）</td><td class="wsx-mono">38.0 GiB</td><td class="wsx-mono">-</td><td class="wsx-mono">系统</td></tr>
+<tr><td class="wsx-mono">D:</td><td class="wsx-mono">\\.\PhysicalDrive1</td><td>本地磁盘</td><td class="wsx-mono">NTFS</td><td class="wsx-mono">4 KiB</td><td class="wsx-mono">200.0 GiB</td><td class="wsx-mono">76.8 GiB（38%）</td><td class="wsx-mono">123.2 GiB</td><td class="wsx-mono">-</td><td class="wsx-mono">-</td></tr>
+</div></table></section>
+<section class="wsx-card"><div class="wsx-card-title"><span class="wsx-idx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="16" cy="12" r="3"/></svg></span>WinSuiteX 功能状态 <span class="wsx-subtle">FEATURES</span></div><table class="wsx-kv">
+<tr><th>计算机管理</th><td><span class="wsx-badge wsx-badge-ok">已启用</span> 在“此电脑”右键菜单添加“计算机管理”，一键打开 compmgmt.msc</td></tr>
+<tr><th>设备管理器</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 演示模块：在“此电脑”右键菜单添加“设备管理器”(devmgmt.msc)</td></tr>
+<tr><th>显示/隐藏 系统文件</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹空白处右键一键切换“显示/隐藏 系统文件与扩展名”</td></tr>
+<tr><th>命令提示符</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹或空白处右键一键打开命令提示符，并自动定位到当前文件夹</td></tr>
+<tr><th>PowerShell</th><td><span class="wsx-badge wsx-badge-off">未启用</span> 在文件夹或空白处右键一键打开 PowerShell，并自动定位到当前文件夹</td></tr>
+</table></section>
+<div class="wsx-foot">WinSuiteX &middot; 重庆持玛多网络科技有限公司 &middot; Z.W.</div>
+</div>
+</body>
+</html>
