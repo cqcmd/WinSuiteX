@@ -714,6 +714,9 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         // 否则原样显示。索引 i 对应整条 sticks 数组（含空槽），用 disambiguated_slot_names 取。
         let slot_names =
             winsuitex_core::memory_channels::disambiguated_slot_names(&info.memory.sticks);
+        // 每根真实内存条独立成行，标签用「内存 #N」而非复用「插槽」——
+        // 否则汇总行(插槽)+每条明细行都叫"插槽"，一列三个"插槽"重复难读（Z.W. 2026-10-19）。
+        let mut shown = 0usize;
         for (i, s) in info
             .memory
             .sticks
@@ -730,6 +733,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             if phantom.contains(&i) {
                 continue;
             }
+            shown += 1;
             let cap = s.capacity_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
             let mut parts = vec![name, format!("{cap:.0} GiB")];
             if let Some(t) = s
@@ -754,7 +758,7 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             if let Some(v) = s.vendor.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
                 parts.push(brand_display_or(v));
             }
-            rows.push(("插槽".into(), join_parts(&parts)));
+            rows.push((format!("内存 #{shown}"), join_parts(&parts)));
         }
         // 空槽单独一行汇总，绝不逐条展开成 "0 GB · DDR? · 0 MHz · [Empty]"。
         if !empty_slots.is_empty() {
