@@ -1,0 +1,42 @@
+#pragma code_page(65001)
+
+// 必须手动定义：MSVC rc.exe 找不到 winver.h，否则会把字面 VS_VERSION_INFO
+// 当成【字符串名】而非 MAKEINTRESOURCE(1)，导致 GetFileVersionInfo 返回 1813、
+// Explorer 属性→详细信息 读不出版本。
+#define VS_VERSION_INFO 1
+#define IDI_APP_ICON 101
+
+IDI_APP_ICON ICON "app.ico"
+
+VS_VERSION_INFO VERSIONINFO
+// 第四段是 MMDD 日期戳（≤1231 恒 <65535）；完整「主.次.修订.日期戳(YYYYMMDD)」
+// 只放字符串。语义号（前三段）必须与 workspace Cargo.toml 的 version 一致——
+// build.rs 会 warning、`version_string_follows_four_segment_scheme` 测试会钉死。
+FILEVERSION 0,1,0,1019
+PRODUCTVERSION 0,1,0,1019
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "CompanyName", "重庆持玛多网络科技有限公司"
+            VALUE "FileDescription", "WinSuiteX 命令行采集/报告工具"
+            VALUE "FileVersion", "0.1.0.20261019"
+            VALUE "InternalName", "WinSuiteX.Cli"
+            VALUE "LegalCopyright", "持玛多网络 / Z.W."
+            VALUE "OriginalFilename", "winsuitex.exe"
+            VALUE "ProductName", "WinSuiteX"
+            VALUE "ProductVersion", "0.1.0.20261019"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END
+
+// 应用清单：命令行工具同样 asInvoker（不弹 UAC；SMART 等需管理员的能力已做优雅降级）。
+// 资源 ID 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID，类型 24 = RT_MANIFEST。
+1 24 "app.manifest"

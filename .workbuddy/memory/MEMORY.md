@@ -76,6 +76,8 @@
   （C++ 冻结，平时编译不再无参跑根 version_stamp）；发版才 `--set X.Y.Z`；禁用 `--bump patch`。
 - 面板底栏版权行（pages.rs:245）经 `env!("WSX_GUI_VERSION")` 显示完整 `主.次.修订.日期戳`（build.rs 从 app.rc 的 `VALUE "FileVersion"` 抽取注入），与文件属性版本号同源。
 - ⚠️ rc.exe 5 坑（勿回退）：① `#define VS_VERSION_INFO 1`（rc 找不到 winver.h 会把字面当字符串名→GetFileVersionInfo 返回 1813）；② 链 app.res 用 `CARGO_MANIFEST_DIR` 绝对路径；③ FILEVERSION 第四段禁放 YYYYMMDD（>65535 溢出），数字段用 `0,1,0,0` 占位、完整日期戳放字符串（version_stamp 写 MMDD 到数字段也安全）；④ 改 app.rc 后靠 build.rs `rerun-if-changed=app.rc` 强制重链；⑤ 嵌清单加 `cargo:rustc-link-arg=/MANIFEST:NO` 避免与链接器默认清单冲突。
+- **CLI exe 资源链**（2026-10-19 补，发布前检查发现）：`winsuitex-cli` crate 同样有 app.rc/app.manifest/app.ico/version.ini + build.rs `embed_resources()`（rc.exe 链 app.res，与 GUI 同五坑规避）+ `check_version_parity()`（version.ini 语义号 vs CARGO_PKG_VERSION 漂移→cargo:warning 不 fail）。**CLI 版本首发必须 `--set 0.1.0` 盖章**（日常 bump 会破坏与 workspace Cargo.toml 的 parity；`--version` 语义未动，仍是 CARGO_PKG_VERSION+构建日期）。`verify_gui_resource.py [路径]` 支持传任意 exe（默认 GUI），两个产物都该过。
+- **CHANGELOG/README 两线说明**（2026-10-19）：CHANGELOG.md 顶部有「Rust 重写线」章节（GUI 0.4.x + CLI 0.1.0.x，C++ v1.x 在下方标注冻结）；README 有兩线横幅。改版本/发版时同步维护，勿再让 Rust 线只活在 memory 日志里。
 
 ## Rust GUI 待办
 - 磁盘页"一键复制"；板载声卡芯片型号（ALC897 走 WMI）；内存类型枚举补 HBM/LPDDR5/HBM3；真机复验玻璃主题+frameless 交互+10 分组滚动。

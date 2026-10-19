@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""验证 winsuitex-gui-gdi.exe 真的嵌进了 图标 + 版本信息 + 清单（权威，非猜）。
+"""验证 WinSuiteX exe 真的嵌进了 图标 + 版本信息 + 清单（权威，非猜）。
+
+用法: python verify_gui_resource.py [exe路径]
+  默认查 rust\target\release\winsuitex-gui-gdi.exe；也可传任意 exe
+  （如 rust\target\release\winsuitex.exe 或 dist\ 下的副本）。
 
 - 版本信息：GetFileVersionInfoSizeW 返回 >0 且 GetLastError() != 1813
   （1813 = 资源类型找不到，即 VS_VERSION_INFO 被当成字符串名、Explorer 读不出版本）。
 - 图标 / 清单：LoadLibraryExW(LOAD_LIBRARY_AS_DATAFILE) + FindResourceW 确认存在。
 - 版本字符串：VerQueryValueW 取出 FileVersion / CompanyName 验证中文无乱码。
+
+两个产物都该过：GUI（winsuitex-gui-gdi.exe）与 CLI（winsuitex.exe）——
+「编译产物必须带图标 + 版权信息」对命令行工具一视同仁。
 """
 import ctypes
 import ctypes.wintypes as wt

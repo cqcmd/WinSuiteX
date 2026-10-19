@@ -3,6 +3,15 @@
 //! 存在的理由：真机排查时反复出现「我到底跑的是新 exe 还是旧 exe」的疑问，
 //! 而文件 mtime 在拷贝到客户机后会被改写，无法作为判据。有了编译时间戳，
 //! `--version` 一行输出即可确认。
+//!
+//! Windows 下另外用 MSVC `rc.exe`（非 MinGW windres）把图标 + 版本信息 +
+//! 应用清单嵌入 `winsuitex.exe`——遵循「编译产物必须带图标 + 版权信息」。
+//! 规避的 5 个坑与 `winsuitex-gui-gdi` 的 build.rs 相同，那边有详细注释：
+//! 1) `#define VS_VERSION_INFO 1`（否则 GetFileVersionInfo 返回 1813）；
+//! 2) 链 app.res 用 CARGO_MANIFEST_DIR 绝对路径（链接器 cwd 是 target/release/deps）；
+//! 3) FILEVERSION 第四段放 MMDD 而非 YYYYMMDD（16 位字溢出成乱码）；
+//! 4) 改 app.rc 靠 rerun-if-changed 强制重链；
+//! 5) 嵌清单加 /MANIFEST:NO 避免与链接器默认清单冲突。
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -10,12 +19,17 @@ fn main() {
     // 必须显式列出依赖范围：一旦 emit 了任何 rerun-if-changed，cargo 就只按这张
     // 清单判断是否需要重跑。只写 build.rs 的话，改了采集代码却不会重跑构建脚本
     // → 编译时间戳不更新 → 又变成"分不清新旧 exe"。这里把三个 crate 的源码目录
-    // 全列上，任何一处改动都会刷新时间戳。
+    // 全列上，任何一处改动都会刷新时间戳。资源文件同理——改了 app.rc 不重链，
+    // 文件属性里的版本就是旧的。
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=../winsuitex-core/src");
     println!("cargo:rerun-if-changed=../winsuitex-platform/src");
     println!("cargo:rerun-if-changed=../winsuitex-report/src");
+    println!("cargo:rerun-if-changed=app.rc");
+    println!("cargo:rerun-if-changed=app.ico");
+    println!("cargo:rerun-if-changed=app.manifest");
+    println!("cargo:rerun-if-changed=version.ini");
 
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -40,6 +54,78 @@ fn main() {
             format_ts(local)
         );
         println!("cargo:rustc-env=WSX_BUILD_DATE={}", format_date(local));
+    }
+
+    #[cfg(windows)]
+    embed_resources();
+    #[cfg(windows)]
+    check_version_parity();
+}
+
+/// 用 MSVC SDK 的 `rc.exe` 编译 app.rc → app.res 并链进 exe。
+/// rc.exe 找不到时只 warning 不失败——资源是加分项，采集功能才是本体。
+#[cfg(windows)]
+fn embed_resources() {
+    let candidates = [
+        "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\rc.exe",
+        "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\x64\\rc.exe",
+    ];
+    let rc = candidates
+        .iter()
+        .copied()
+        .find(|p| std::path::Path::new(*p).exists());
+    let Some(rc) = rc else {
+        println!("cargo:warning=rc.exe 未找到，跳过图标/清单嵌入（仅影响文件属性显示）");
+        return;
+    };
+
+    // 链接器在 target/release/deps 运行，必须用清单目录绝对路径。
+    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let res = std::path::Path::new(&dir).join("app.res");
+    let rcfile = std::path::Path::new(&dir).join("app.rc");
+
+    let ok = std::process::Command::new(rc)
+        .args([
+            "/r",
+            "/fo",
+            &res.to_string_lossy(),
+            &rcfile.to_string_lossy(),
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if ok {
+        println!("cargo:rustc-link-arg={}", res.to_string_lossy());
+        // 我们自己嵌了 RT_MANIFEST 资源，让链接器不要再生成默认清单（否则两份冲突）。
+        println!("cargo:rustc-link-arg=/MANIFEST:NO");
+    } else {
+        println!("cargo:warning=rc.exe 编译 app.rc 失败，跳过图标/清单嵌入");
+    }
+}
+
+/// version.ini 的前三段（语义号）必须与 workspace Cargo.toml 的 version 一致：
+/// `--version` 输出的是 `CARGO_PKG_VERSION + 构建日期`，而文件属性里的版本来自
+/// version.ini → app.rc。两者漂移的话，真机上「属性页一个版本、--version 一个版本」
+/// 会比没有版本更糟。这里提前 warning（不 fail：版本漂移不该阻断采集功能构建）。
+#[cfg(windows)]
+fn check_version_parity() {
+    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let ini = std::path::Path::new(&dir).join("version.ini");
+    let Some(ini_ver) = std::fs::read_to_string(&ini)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    else {
+        println!("cargo:warning=version.ini 缺失或为空，无法核对版本一致性");
+        return;
+    };
+    let pkg = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    if ini_ver != pkg {
+        println!(
+            "cargo:warning=version.ini({ini_ver}) 与 Cargo.toml({pkg}) 语义号不一致：\
+             --version 与文件属性会对不上，请同步两者（version_stamp --set {pkg}）"
+        );
     }
 }
 

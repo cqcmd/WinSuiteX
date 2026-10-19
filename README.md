@@ -8,7 +8,11 @@ Windows Windows 套件，纯 C++ / Win32 GDI 自绘，单 exe 双击即跑，无
 
 **📦 [下载最新版](https://github.com/cqcmd/WinSuiteX/releases/latest)**（解压后以管理员身份运行）
 
-当前版本：**v1.1.4.20260910**（v1.0.12 真机目测 hotfix：内存行间距 / 显示器加型号 / 音频同时显播放+录音）　※ 本地已构建；远程 Release 待网络恢复后发布
+> **⚠️ 两条产品线，版本号独立编排（2026-10 起）**：
+> - **C++ 版**（1.7.x 线）自 2026-09-26 起**冻结**，只作只读参照，不再更新；下方「当前版本」一行是它的最后状态。
+> - **Rust 线是当前主推**：面板 `winsuitex-gui-gdi.exe`（0.4.x 线，最新 **v0.4.8.20261019**）+ 命令行 `winsuitex.exe`（0.1.0.x 线，最新 **v0.1.0.20261019**），Rust workspace 五 crate，纯 Rust + GDI 自绘单 exe（零 dll、零 GPU）。Rust 线各轮变更见 [CHANGELOG](CHANGELOG.md) 顶部「Rust 重写线」。
+
+当前版本（C++ 冻结线最后状态）：**v1.1.4.20260910**（v1.0.12 真机目测 hotfix：内存行间距 / 显示器加型号 / 音频同时显播放+录音）　※ 本地已构建；远程 Release 待网络恢复后发布
 
 ## 功能
 
