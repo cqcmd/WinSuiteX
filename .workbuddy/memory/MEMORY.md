@@ -7,7 +7,8 @@
 ## GUI 路线 + 玻璃主题
 - 主路线 `winsuitex-gui-gdi`：纯 Rust + windows 0.62 + GDI 自绘，单 exe 零 dll 零 GPU（≈680KB），VM/RDP 都能画。
 - 整窗渐变 `(135,81,238)`→`(38,98,235)`；底栏实色 `(27,54,122)`。半透明靠逐行混合（GDI 无原生玻璃）。
-- **卡片压暗不提亮**：内容卡 `C_GLASS_TINT=(20,24,52)` 深 navy 0.22/0.30，白字对比度 6.7~7.5:1（提亮仅 3.5:1，Z.W. "字看不清"根因）。
+- **卡片压暗不提亮**：内容卡 `C_GLASS_TINT=(20,24,52)` 深 navy，白字对比度 6.7~7.5:1（提亮仅 3.5:1，Z.W. "字看不清"根因）。
+- **⚠️ 玻璃透明度已固化 50%（v0.4.5）**：`theme.rs` 中 `GLASS_ALPHA: f32 = 0.50`（常量，`glass_alpha()` 直接返回），`tint_color()` 固定返回深 navy 全实（叠色深浅=100% 等效）。**「调试」页（滑杆/输入框/重置）已于 v0.4.5 整体删除**——`pages.rs` 的 debug 整段（draw_debug_page/debug_group/debug_* 函数 + SLIDER_RECS/INPUT_RECS/RESET_RECS 缓存）、`main.rs` 的 WM_CHAR/WM_LBUTTONDOWN 调试分支/on_debug_down 全部移除；页签由 4 个（含「调试」）缩为 3 个。要改透明度只动 `GLASS_ALPHA` 常量 + 回归测试 `theme_constants_regression`（`smoke_tests.rs` 已钉死 0.50 与 tint_color==C_GLASS_TINT）。
 - **图标柔和粉彩**（第九轮定案）：`C_ACCENT_SOFT[8]` = 高饱和 C_ACCENT×0.55 + C_ICON×0.45。禁用 emoji（豆腐块）；禁用"一刀切淡紫"和"高饱和 8 色彩虹"两端。
 - 字号 body14/sub13/tiny12/section15；字段名/提示用 `C_ON_GRAD_DIM`。
 

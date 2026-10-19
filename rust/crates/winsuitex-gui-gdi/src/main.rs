@@ -987,33 +987,10 @@ unsafe extern "system" fn wnd_proc(
             set_hover_tb(-1);
             set_hover_switch(-1);
             set_hover_vol_row(-1);
-            pages::set_debug_drag(-1);
-            pages::set_debug_hover_reset(-1);
             let _ = InvalidateRect(Some(hwnd), None, false);
             LRESULT(0)
         }
-        WM_LBUTTONDOWN => {
-            // 调试页：按下即开始滑杆拖动 / 输入框聚焦——不能等 UP，
-            // 否则"按下→微移→抬起"的点击定位感很钝（滑杆要跟手）。
-            if cur_tab() == 3 {
-                on_debug_down(hwnd, lparam);
-            }
-            LRESULT(0)
-        }
-        WM_CHAR => {
-            // 调试页输入框键盘输入：数字键入（实时生效）/ 退格 / 回车失焦。
-            if cur_tab() == 3 && pages::debug_focus() > 0 {
-                let c = (wparam.0 & 0xFFFF) as u16;
-                match c {
-                    0x08 => pages::debug_backspace(),
-                    0x0D | 0x0A => pages::set_debug_focus(0),
-                    0x30..=0x39 => pages::debug_push_digit((c - 0x30) as u8),
-                    _ => {}
-                }
-                let _ = InvalidateRect(Some(hwnd), None, false);
-            }
-            LRESULT(0)
-        }
+        WM_LBUTTONDOWN => LRESULT(0),
         WM_LBUTTONUP => {
             on_click(hwnd, lparam);
             LRESULT(0)
@@ -1115,7 +1092,6 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
         Some(measure) => match cur_tab() {
             1 => pages::draw_menu_page(&ctx(measure.mem)),
             2 => pages::draw_disk_page(&ctx(measure.mem)),
-            3 => pages::draw_debug_page(&ctx(measure.mem)),
             _ => pages::draw_hw_page(&ctx(measure.mem)),
         },
         // 极端内存压力下 DIB 建不出来：当作内容刚好一屏，不滚（宁可不滚也不崩）。
@@ -1178,7 +1154,6 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     let _ = match cur_tab() {
         1 => pages::draw_menu_page(&ctx(mdc)),
         2 => pages::draw_disk_page(&ctx(mdc)),
-        3 => pages::draw_debug_page(&ctx(mdc)),
         _ => pages::draw_hw_page(&ctx(mdc)),
     };
     wlog!("on_paint: content page drawn (tab={})", cur_tab());
@@ -1443,74 +1418,23 @@ unsafe fn on_mouse_move(hwnd: HWND, lparam: LPARAM) {
     } else {
         -1
     };
-    // 调试页：滑杆拖动中——按 x 实时应用并重绘（不等 UP，跟手）。
-    if cur_tab() == 3 && pages::debug_dragging() {
-        pages::debug_apply_from_x(pages::debug_drag_idx(), x);
-        let _ = InvalidateRect(Some(hwnd), None, false);
-        return;
-    }
-    // 调试页重置按钮悬停（-1=无）。
-    let dr = if cur_tab() == 3 {
-        pages::debug_reset_at(x, y).map_or(-1, |i| i as i32)
-    } else {
-        -1
-    };
     let changed = hover_export() != (btn == 0)
         || hover_shot() != (btn == 1)
         || hover_tb() != tb
         || hover_switch() != sw
-        || hover_vol_row() != vr
-        || pages::debug_hover_reset() != dr;
+        || hover_vol_row() != vr;
     set_hover_export(btn == 0);
     set_hover_shot(btn == 1);
     set_hover_tb(tb);
     set_hover_switch(sw);
     set_hover_vol_row(vr);
-    pages::set_debug_hover_reset(dr);
     if changed {
-        let _ = InvalidateRect(Some(hwnd), None, false);
-    }
-}
-
-/// 左键按下（调试页）：滑杆开始拖动 / 输入框聚焦 / 重置 / 点空白失焦。
-///
-/// 输入框优先于滑杆判定——滑杆命中区上下扩了 10px，与输入行相邻，
-/// 先判输入框可避免"点输入框却抓到滑杆"。
-unsafe fn on_debug_down(hwnd: HWND, lparam: LPARAM) {
-    let x = (lparam.0 & 0xFFFF) as i32;
-    let screen_y = ((lparam.0 >> 16) & 0xFFFF) as i32;
-    // 内容坐标（与 on_click 同款：缓存矩形是内容系，鼠标是窗口系）。
-    let y = screen_y - scroll_y();
-
-    if let Some(i) = pages::debug_input_at(x, y) {
-        pages::set_debug_focus(i as i32 + 1);
-        pages::debug_sync_input(i);
-        let _ = InvalidateRect(Some(hwnd), None, false);
-        return;
-    }
-    if let Some(i) = pages::debug_slider_at(x, y) {
-        pages::set_debug_focus(i as i32 + 1);
-        pages::set_debug_drag(i as i32);
-        pages::debug_apply_from_x(i, x);
-        let _ = InvalidateRect(Some(hwnd), None, false);
-        return;
-    }
-    if let Some(i) = pages::debug_reset_at(x, y) {
-        pages::debug_reset(i);
-        let _ = InvalidateRect(Some(hwnd), None, false);
-        return;
-    }
-    // 点空白：失焦（有焦点才重绘，避免无谓刷新）
-    if pages::debug_focus() != 0 {
-        pages::set_debug_focus(0);
         let _ = InvalidateRect(Some(hwnd), None, false);
     }
 }
 
 /// 左键点击：处理窗口按钮 / 页签 / 导出按钮。
 unsafe fn on_click(hwnd: HWND, lparam: LPARAM) {
-    // 任何点击都结束调试滑杆拖动（防抬死在窗口外导致 drag 态残留）。
-    pages::set_debug_drag(-1);
     let x = (lparam.0 & 0xFFFF) as i32;
     let screen_y = ((lparam.0 >> 16) & 0xFFFF) as i32;
     // ⚠️ 内容区绘制用了 `OffsetViewportOrgEx(0, -scroll_y)`，所以**缓存里存的是

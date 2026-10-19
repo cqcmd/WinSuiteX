@@ -1220,4 +1220,20 @@ fn theme_constants_regression() {
     for (got, want) in exp {
         assert_eq!(got, rgb(want.0, want.1, want.2).0, "主题色板漂离基线");
     }
+    // 0.4.5 固化：玻璃透明度 = 50%，叠色深浅固定 100%（= 深 navy tint 全实）。
+    // Z.W. 取消调试页、把值固化回 theme.rs，这里钉死，防止日后误改。
+    assert!(
+        (crate::theme::GLASS_ALPHA - 0.50).abs() < 1e-6,
+        "玻璃透明度必须固定 0.50"
+    );
+    assert_eq!(
+        crate::theme::glass_alpha(),
+        crate::theme::GLASS_ALPHA,
+        "glass_alpha() 必须返回固化常量"
+    );
+    assert_eq!(
+        crate::theme::tint_color(),
+        C_GLASS_TINT,
+        "tint_color() 必须固定为深 navy 全实"
+    );
 }

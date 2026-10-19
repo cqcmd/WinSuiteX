@@ -234,42 +234,24 @@ pub fn scale(v: i32) -> i32 {
 }
 
 // ============================================================
-// 调试用可调主题参数（「调试」页实时调节，Z.W. 试出满意值后固化回 theme.rs）
+// 玻璃观感参数（已固化，不再提供调试滑杆）
 // ============================================================
 //
-// 这两个参数是**调试滑杆**的作用目标：全部 tint 玻璃卡（硬件页大卡/头部/
-// 表格/详情卡/分组横条）都读取它们，于是拖动滑杆时全窗口玻璃观感实时联动。
+// 这两个参数原本是「调试」页实时滑杆的作用目标。Z.W. 试出满意值后，于
+// 0.4.5 取消调试页、把值固化回 theme.rs：玻璃透明度 = 50%，叠色深浅 = 100%
+// （深 navy tint 全实）。全部 tint 玻璃卡（硬件页大卡/头部/表格/详情卡/
+// 分组横条）都读取它们，保持全窗口玻璃观感一致。
 
-/// 控件① 玻璃透明度：tint 叠层的不透明度百分比，0-100。
-/// 0 = 卡片完全透出窗口渐变（只剩文字浮在渐变上）；100 = tint 层全实。
-static GLASS_ALPHA: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(22);
-
-/// 控件② 叠色深浅：tint 混合色在「渐变顶 → 深 navy tint」之间的位置百分比，0-100。
-/// 100 = tint 全实（默认深 navy 最暗）；0 = 渐变顶色。
-static TINT_DEPTH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(100);
+/// 玻璃透明度（tint 叠层不透明度，0.0-1.0）：Z.W. 0.4.5 定案 = 0.50。
+/// 0.0 = 卡片完全透出窗口渐变（只剩文字浮在渐变上）；1.0 = tint 层全实。
+pub const GLASS_ALPHA: f32 = 0.50;
 
 /// 取玻璃透明度（0.0-1.0，供绘制原语直接消费）。
 pub fn glass_alpha() -> f32 {
-    GLASS_ALPHA.load(std::sync::atomic::Ordering::Relaxed) as f32 / 100.0
+    GLASS_ALPHA
 }
 
-/// 设置玻璃透明度（百分比，自动钳制 0-100）。
-pub fn set_glass_alpha(pct: u32) {
-    GLASS_ALPHA.store(pct.min(100), std::sync::atomic::Ordering::Relaxed);
-}
-
-/// 取叠色深浅（百分比 0-100）。
-pub fn tint_depth() -> u32 {
-    TINT_DEPTH.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// 设置叠色深浅（百分比，自动钳制 0-100）。
-pub fn set_tint_depth(pct: u32) {
-    TINT_DEPTH.store(pct.min(100), std::sync::atomic::Ordering::Relaxed);
-}
-
-/// 当前 tint 混合色：渐变顶 `C_GRAD_TOP` → 深 navy `C_GLASS_TINT` 按深浅插值。
-/// 深浅 100 = tint 全实（默认）；0 = 渐变顶色。
+/// 当前 tint 混合色：深浅固定 100% = 深 navy `C_GLASS_TINT` 全实（默认最暗）。
 pub fn tint_color() -> Color {
-    mix(C_GRAD_TOP, C_GLASS_TINT, tint_depth() as f32 / 100.0)
+    C_GLASS_TINT
 }
