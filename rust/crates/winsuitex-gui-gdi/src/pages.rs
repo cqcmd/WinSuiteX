@@ -1931,10 +1931,17 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
     ];
     // 列宽按可用宽度**按权重分配**，不能写死 78px：
     // 多列时 ×78 会超出窄窗口，末列被右边框裁掉。
-    // 权重按内容长度给：盘符/磁盘/簇大小/已用%/分区格式 是短值，类型/容量是长值。
-    // 盘符列权重从 6 提到 8：左端要给"分区类型图标(16) + 间距"让位（第九轮新增）。
+    // ⚠️ 权重必须**贴合每列真实内容最小宽**（表头中文 vs 最长数据取大者），
+    // 否则窄权重的中文表头会被相邻列挤到"零间隙相贴"——Z.W. 2026-10-19 真机
+    // 圈红框反馈「分区格式/簇大小」两表头粘在一起，根因就是"分区格式"是 4 字
+    // 中文表头（≈48px）却只拿到权重 6（≈38px < 最小宽），DrawTextW 左对齐硬裁
+    // 后右缘顶到"簇大小"左缘。各列最小宽（96-DPI，f_tiny 表头/f_sub 数据）：
+    //   盘符 44(图标+字母) 磁盘 30 文件系统 48 分区格式 48 簇大小 46
+    //   类型 52(本地磁盘) 总容量 71(2048.0 GiB) 可用 71 已用% 37
+    // 权重按此比例给，且每列留 ≥7px  gutter；数值列(总容量/可用/已用%)权重不动，
+    // 保住 2048.0 GiB 不被右对齐裁掉。
     let table_w = (right - left - scale(20)).max(scale(200));
-    let weights = [8i32, 7, 10, 6, 8, 12, 13, 12, 6];
+    let weights = [8i32, 5, 9, 9, 8, 10, 13, 14, 6];
     let total_w: i32 = weights.iter().sum();
     let rowh = scale(34);
     // 列边界数组：**长度必须是列数 + 1**（10 而不是 9）——
@@ -2119,8 +2126,10 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                     format!("SMART 健康：{}", smart_label(&s.health_status)),
                     smart_color(&s.health_status),
                 )];
-                if let Some(t) = s.temperature_c {
-                    v.push((format!("温度 {}℃", t), temp_color(t as i32)));
+                // 温度：0 或负 = 未真正读到（SMART 未上报），按纪律**不显示**"0℃"假数据；
+                // 采集层已滤 0（physical_disk WMI 回填），这里再兜底一层，双保险。
+                if let Some(t) = s.temperature_c.filter(|t| *t > 0) {
+                    v.push((format!("温度 {}℃", t), temp_color(i32::from(t))));
                 }
                 if let Some(p) = s.health_percent {
                     v.push((format!("剩余寿命 {}%", p), C_ON_GRAD));

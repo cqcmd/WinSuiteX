@@ -978,7 +978,10 @@ fn collect_storage_reliability() -> &'static HashMap<u32, ReliabilityInfo> {
             let counters = wmi_query(&svc, &assoc);
             wmi_dbg(&format!("disk ObjectId={object_id} -> 计数器 {} 条", counters.len()));
             for c in &counters {
-                let temp_c = wmi_get_u16(c, "Temperature").map(calibrate_temp);
+                // 温度 0 = 未上报（与 wear/poh、NVMe 开尔文路径同一套"0 即无读数"纪律）：
+                // 真机 VM 的 WMI 报 Temperature=0 曾被 `calibrate_temp(0)=0` 收成 Some(0)，
+                // 详情卡于是显示"温度 0℃"——0°C 物理不可能，是假数据。`wmi_temp_c` 先滤 0。
+                let temp_c = wmi_get_u16(c, "Temperature").and_then(wmi_temp_c);
                 let wear = wmi_get_u16(c, "Wear").filter(|w| *w != 0).map(|w| w as u8);
                 // 通电小时是 uint64；真 0 表示"未上报"，按纪律判 None（与 wear 同一套规则）。
                 let poh = wmi_get_u64(c, "PowerOnHours")
@@ -1210,6 +1213,20 @@ fn calibrate_temp(raw: u16) -> i16 {
         (i32::from(raw) - 273) as i16
     } else {
         raw as i16
+    }
+}
+
+/// WMI `MSFT_StorageReliabilityCounter.Temperature` 原始读数 → 摄氏温度。
+///
+/// **0 = 未上报**：与 `Wear` / `PowerOnHours`、NVMe 开尔文路径（`parse_nvme_smart`）
+/// 同一套「0 即无读数」纪律。`calibrate_temp(0)` 会返回 `0`，若不过滤就会被收成
+/// `Some(0)`，详情卡于是显示「温度 0℃」——0°C 对运行中的硬盘物理不可能，是假数据。
+/// 故这里显式把 0 判为 `None`，宁可留白也不误报。
+fn wmi_temp_c(raw: u16) -> Option<i16> {
+    if raw == 0 {
+        None
+    } else {
+        Some(calibrate_temp(raw))
     }
 }
 
@@ -2084,6 +2101,14 @@ mod tests {
         assert_eq!(calibrate_temp(273), 273); // 边界：<274 按 °C 原样返回（实现约定）
         assert_eq!(escape_wql("a\\b\"c"), "a\\\\b\\\"c");
         assert_eq!(escape_wql("no_special"), "no_special");
+    }
+
+    #[test]
+    fn wmi_temp_zero_is_not_zero_celsius() {
+        // 回归：VM / 部分存储栈 WMI 报 Temperature=0（未上报），绝不能显示"温度 0℃"。
+        assert_eq!(wmi_temp_c(0), None, "0 = 未上报，绝不是 0°C");
+        assert_eq!(wmi_temp_c(30), Some(30), "正常 °C 读数照常校准");
+        assert_eq!(wmi_temp_c(300), Some(27), "疑似开尔文的大值减 273");
     }
 
     #[test]
