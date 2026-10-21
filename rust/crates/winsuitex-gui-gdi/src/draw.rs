@@ -15,7 +15,7 @@
 #![allow(dead_code)]
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::RECT;
+use windows::Win32::Foundation::{POINT, RECT};
 use windows::Win32::Graphics::Gdi::*;
 
 use crate::theme::*;
@@ -191,6 +191,9 @@ pub fn fill(hdc: HDC, r: &RECT, color: Color) {
 }
 
 /// 圆角填充（GDI 无原生圆角矩形 API，用 `RoundRect` + 椭圆刷）。
+///
+/// 默认走 3x 超采样抗锯齿路径（见 [`AaSurface`]）；小圆角/小尺寸/离屏失败
+/// 时自动降级为直接 `RoundRect`（过渡带 <1px 时 AA 无意义，省开销）。
 pub fn fill_round(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     let w = r.right - r.left;
     let h = r.bottom - r.top;
@@ -198,6 +201,31 @@ pub fn fill_round(hdc: HDC, r: &RECT, radius: i32, color: Color) {
         return;
     }
     // RoundRect 的椭圆宽高是"直径"，要传 radius*2。
+    if aa_worthwhile(r, radius) {
+        if let Some(s) = AaSurface::new(hdc, r) {
+            let d = (radius * AA_SS * 2).max(1);
+            let b = solid(color);
+            if !is_invalid(b) {
+                // SAFETY: tmp 离屏 DC 内 SelectObject/RoundRect 成对恢复；b 用后即删。
+                unsafe {
+                    let old = SelectObject(s.tmp, b.into());
+                    let npen = GetStockObject(NULL_PEN);
+                    let oldp = SelectObject(s.tmp, npen);
+                    let _ = RoundRect(s.tmp, 0, 0, s.tw, s.th, d, d);
+                    let _ = SelectObject(s.tmp, oldp);
+                    let _ = SelectObject(s.tmp, old);
+                    let _ = DeleteObject(b.into());
+                }
+            }
+            s.finish(hdc, r);
+            return;
+        }
+    }
+    fill_round_raw(hdc, r, radius, color);
+}
+
+/// `fill_round` 的原路径（直接 RoundRect，无 AA）：小尺寸/降级时走这里。
+fn fill_round_raw(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     let d = (radius * 2).max(1);
     let b = solid(color);
     if is_invalid(b) {
@@ -213,8 +241,38 @@ pub fn fill_round(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     }
 }
 
-/// 圆角描边（不填充）。
+/// 圆角描边（不填充）。默认走 3x 超采样 AA；小尺寸/失败降级直接 RoundRect。
 pub fn stroke_round(hdc: HDC, r: &RECT, radius: i32, color: Color, width: i32) {
+    let w = r.right - r.left;
+    let h = r.bottom - r.top;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    if aa_worthwhile(r, radius) {
+        if let Some(s) = AaSurface::new(hdc, r) {
+            let d = (radius * AA_SS * 2).max(1);
+            // SAFETY: 离屏 DC 内 CreatePen/RoundRect 成对恢复；pen 用后即删。
+            unsafe {
+                let pen = CreatePen(PS_SOLID, (width.max(1)) * AA_SS, color);
+                if !pen.is_invalid() {
+                    let old = SelectObject(s.tmp, pen.into());
+                    let null = GetStockObject(NULL_BRUSH);
+                    let oldb = SelectObject(s.tmp, null);
+                    let _ = RoundRect(s.tmp, 0, 0, s.tw, s.th, d, d);
+                    let _ = SelectObject(s.tmp, oldb);
+                    let _ = SelectObject(s.tmp, old);
+                    let _ = DeleteObject(pen.into());
+                }
+            }
+            s.finish(hdc, r);
+            return;
+        }
+    }
+    stroke_round_raw(hdc, r, radius, color, width);
+}
+
+/// `stroke_round` 的原路径（直接 RoundRect 描边，无 AA）。
+fn stroke_round_raw(hdc: HDC, r: &RECT, radius: i32, color: Color, width: i32) {
     let d = (radius * 2).max(1);
     // SAFETY: CreatePen 无前置条件，失败返回空句柄（下面立即判掉）。
     let pen = unsafe { CreatePen(PS_SOLID, width.max(1), color) };
@@ -230,6 +288,159 @@ pub fn stroke_round(hdc: HDC, r: &RECT, radius: i32, color: Color, width: i32) {
         let _ = SelectObject(hdc, oldb);
         let _ = SelectObject(hdc, old);
         let _ = DeleteObject(pen.into());
+    }
+}
+
+// ============================================================
+// 抗锯齿圆角基础设施（3x 超采样 + HALFTONE 缩回）
+//
+// 背景：GDI 的 `RoundRect` 是 1-bit 硬边，圆角弧在视觉上是阶梯锯齿
+// （Z.W. 真机反馈"圆角模糊/发毛"的根源之一；VM 100% 与高分屏均可见）。
+// 治本手段是 GDI+/D2D，但主线坚持零依赖单 exe——退而求其次用**超采样**：
+// 在 3x 离屏上画，`StretchBlt(HALFTONE)` 缩回时区域平均自动生成边缘
+// 灰度过渡，肉眼即平滑。纯 GDI、无新 DLL、无 GPU 依赖（RDP/VM 照常）。
+//
+// ⚠️ 窗口形状圆角（`SetWindowRgn`）**不在本机制射程内**——region 是二值
+// 形状掩码不是绘制内容，超采样无解；那条路只有 DWM 圆角（Win11）或分层
+// 窗口（per-pixel alpha）才是真 AA，已评估记录在案（2026-10-21 日志）。
+// 这里治的是**绘制出来的**圆角：卡片、按钮、选中行、滑块轨道等。
+// ============================================================
+
+/// 超采样倍率：3x 是质量/开销平衡点（2x 过渡生硬，4x 内存耗时翻倍）。
+const AA_SS: i32 = 3;
+/// 离屏位图像素上限（约 24MB @32bpp）：超过则降为 2x，仍超则放弃 AA。
+/// 防硬件页整页大卡（约 600×800）3x 分配拖垮帧时间。
+const AA_MAX_PIXELS: i64 = 24_000_000;
+/// 小于该尺寸或圆角小于 3px 时 AA 无意义（过渡带不足 1px），直接原路径。
+const AA_MIN_SPAN: i32 = 16;
+
+/// 该次绘制是否值得走 AA 路径（尺寸/圆角太小则过渡带 <1px，肉眼无差）。
+fn aa_worthwhile(r: &RECT, radius: i32) -> bool {
+    radius >= 3 && (r.right - r.left) >= AA_MIN_SPAN && (r.bottom - r.top) >= AA_MIN_SPAN
+}
+
+/// 抗锯齿离屏面：`AA_SS` 倍尺寸的 DIB，创建时先把目标区域**当前背景**
+/// 放大抠入——圆角外区域因此与真实背景连续，缩回后看不出拼接边界。
+/// 调用方在 `tmp` 上画前景（圆角形），`finish` 用 HALFTONE 缩回目标 DC。
+struct AaSurface {
+    tmp: HDC,
+    bmp: HBITMAP,
+    old_bmp: HGDIOBJ,
+    tw: i32,
+    th: i32,
+}
+
+impl AaSurface {
+    /// 为 `r`（**内容坐标**，可能处于滚动视口）建离屏并抠入背景。
+    /// 任一步失败返回 `None`（调用方降级原路径，保证任何环境不劣化）。
+    fn new(hdc: HDC, r: &RECT) -> Option<Self> {
+        let w = r.right - r.left;
+        let h = r.bottom - r.top;
+        if w <= 0 || h <= 0 {
+            return None;
+        }
+        // 视口偏移自适应：on_paint 用 OffsetViewportOrgEx(0,-scroll) 滚动，
+        // r 是内容坐标；读目标 DC 当前像素必须换算到设备坐标——
+        // GetViewportOrgEx 拿到的原点即补偿量（无需调用方传 scroll）。
+        let mut org = POINT { x: 0, y: 0 };
+        let (sx, sy) = unsafe {
+            if GetViewportOrgEx(hdc, &mut org).as_bool() {
+                (r.left + org.x, r.top + org.y)
+            } else {
+                (r.left, r.top)
+            }
+        };
+        let mut ss = AA_SS;
+        if (w as i64 * h as i64) > AA_MAX_PIXELS / (AA_SS as i64 * AA_SS as i64) {
+            ss = 2; // 巨型卡降倍率（600×800 → 1200×1600 = 7.7MB）
+        }
+        if (w as i64 * ss as i64 * h as i64 * ss as i64) > AA_MAX_PIXELS {
+            return None; // 2x 仍超限（极端尺寸），放弃 AA
+        }
+        let tw = w * ss;
+        let th = h * ss;
+        // SAFETY: 离屏 DC/DIB 在本结构内创建，finish 里成对释放。
+        unsafe {
+            let screen = GetDC(None);
+            let tmp = CreateCompatibleDC(Some(screen));
+            let _ = ReleaseDC(None, screen);
+            if tmp.is_invalid() {
+                return None;
+            }
+            let bmi = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: tw,
+                    biHeight: -th,
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut bits: *mut core::ffi::c_void = core::ptr::null_mut();
+            let bmp = match CreateDIBSection(Some(tmp), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+                Ok(b) => b,
+                Err(_) => {
+                    let _ = DeleteDC(tmp);
+                    return None;
+                }
+            };
+            let old_bmp = SelectObject(tmp, bmp.into());
+            // 把目标区当前背景放大抠入（HALFTONE 平滑放大；渐变低频无可见损失）。
+            // 失败（返回 0，如个别远程会话禁屏幕读取）→ 整体放弃 AA 走原路径。
+            let prev = SetStretchBltMode(tmp, HALFTONE);
+            let ok = StretchBlt(tmp, 0, 0, tw, th, Some(hdc), sx, sy, w, h, SRCCOPY);
+            let _ = SetStretchBltMode(tmp, STRETCH_BLT_MODE(prev));
+            if !ok.as_bool() {
+                let _ = SelectObject(tmp, old_bmp);
+                let _ = DeleteObject(bmp.into());
+                let _ = DeleteDC(tmp);
+                return None;
+            }
+            Some(Self {
+                tmp,
+                bmp,
+                old_bmp,
+                tw,
+                th,
+            })
+        }
+    }
+
+    /// HALFTONE 缩回目标 DC（设备坐标同 `new` 的换算）并释放全部 GDI 资源。
+    fn finish(self, hdc: HDC, r: &RECT) {
+        let w = r.right - r.left;
+        let h = r.bottom - r.top;
+        // SAFETY: 成员句柄均由 new 创建；这里成对释放，无跨调用泄漏。
+        unsafe {
+            let mut org = POINT { x: 0, y: 0 };
+            let (dx, dy) = if GetViewportOrgEx(hdc, &mut org).as_bool() {
+                (r.left + org.x, r.top + org.y)
+            } else {
+                (r.left, r.top)
+            };
+            // 保存/恢复拉伸模式，避免影响同帧其它绘制（HALFTONE 是 DC 级状态）。
+            let prev = SetStretchBltMode(hdc, HALFTONE);
+            let _ = StretchBlt(
+                hdc,
+                dx,
+                dy,
+                w,
+                h,
+                Some(self.tmp),
+                0,
+                0,
+                self.tw,
+                self.th,
+                SRCCOPY,
+            );
+            let _ = SetStretchBltMode(hdc, STRETCH_BLT_MODE(prev));
+            let _ = SelectObject(self.tmp, self.old_bmp);
+            let _ = DeleteObject(self.bmp.into());
+            let _ = DeleteDC(self.tmp);
+        }
     }
 }
 
@@ -368,10 +579,14 @@ pub fn fill_glass(hdc: HDC, r: &RECT, over_c: Color, alpha: f32, scroll: i32, wi
     }
 }
 
-/// 玻璃填充的**圆角**版：先用圆角 Region 裁剪，再逐行混合。
+/// 玻璃填充的**圆角**版：默认走 3x 超采样 AA 路径（圆角边缘灰度过渡，
+/// 治 `RoundRect` 1-bit 硬边锯齿）；小尺寸/离屏失败自动降级为
+/// "圆角 Region 裁剪 + 逐行混合"原路径（行为与旧版完全一致）。
 ///
-/// 圆角裁剪是必须的——否则四个直角会把卡片的圆角"戳"出来。
-/// `SaveDC`/`RestoreDC` 成对包住裁剪区，避免污染后续绘制（底栏、滚动条）。
+/// AA 路径与原路径的关键差异：原路径在**窗口 DC** 上 `ExtSelectClipRgn
+/// (RGN_AND)`（铁律——必须相交，否则替换会逃掉 on_paint 的可视区裁剪）；
+/// AA 路径在**全新离屏 DC** 上裁剪，无外部裁剪需要保护，用
+/// `SelectClipRgn`（RGN_COPY）即可，最后整块 HALFTONE 缩回窗口 DC。
 pub fn fill_glass_round(
     hdc: HDC,
     r: &RECT,
@@ -386,6 +601,59 @@ pub fn fill_glass_round(
     if w <= 0 || h <= 0 {
         return;
     }
+    if aa_worthwhile(r, radius) {
+        if let Some(s) = AaSurface::new(hdc, r) {
+            // SAFETY: 离屏 DC 内 region/SelectClipRgn 成对恢复；逐行 fill 用
+            // 已封装的 `fill`（内部自建自删刷子）。
+            unsafe {
+                // 圆角裁剪（离屏坐标 0,0,tw,th；直径随超采样放大）。
+                let hrgn =
+                    CreateRoundRectRgn(0, 0, s.tw, s.th, radius * AA_SS * 2, radius * AA_SS * 2);
+                if !hrgn.is_invalid() {
+                    let _ = SelectClipRgn(s.tmp, Some(hrgn));
+                }
+                // 逐行玻璃：每 3px 一带（= 目标 1 行）。窗口底色渐变是低频的，
+                // 3px 同色经 HALFTONE 缩回后无可见色阶；行数降为 1/3，
+                // 抵消离屏放大的额外开销。
+                let mut y = 0;
+                while y < h {
+                    let band = (h - y).min(AA_SS);
+                    let base = grad_at(r.top + y - scroll, win_h);
+                    let c = over(base, over_c, alpha);
+                    fill(
+                        s.tmp,
+                        &RECT {
+                            left: 0,
+                            top: y * AA_SS,
+                            right: s.tw,
+                            bottom: (y + band) * AA_SS,
+                        },
+                        c,
+                    );
+                    y += band;
+                }
+                if !hrgn.is_invalid() {
+                    let _ = SelectClipRgn(s.tmp, None);
+                    let _ = DeleteObject(hrgn.into());
+                }
+            }
+            s.finish(hdc, r);
+            return;
+        }
+    }
+    fill_glass_round_raw(hdc, r, radius, over_c, alpha, scroll, win_h);
+}
+
+/// `fill_glass_round` 的原路径（窗口 DC 上 Region 相交裁剪 + 逐行混合）。
+fn fill_glass_round_raw(
+    hdc: HDC,
+    r: &RECT,
+    radius: i32,
+    over_c: Color,
+    alpha: f32,
+    scroll: i32,
+    win_h: i32,
+) {
     // SAFETY: Region 在本函数内创建/选中/释放；SaveDC+RestoreDC 保证 DC 状态复原。
     unsafe {
         let saved = SaveDC(hdc);
@@ -683,6 +951,91 @@ impl Drop for Backbuffer {
             let _ = SelectObject(self.mem, self.old_bmp);
             let _ = DeleteObject(self.bmp.into());
             let _ = DeleteDC(self.mem);
+        }
+    }
+}
+
+#[cfg(test)]
+mod aa_tests {
+    use super::*;
+    use windows::Win32::Foundation::COLORREF;
+
+    fn r(l: i32, t: i32, rt: i32, b: i32) -> RECT {
+        RECT {
+            left: l,
+            top: t,
+            right: rt,
+            bottom: b,
+        }
+    }
+
+    /// AA 路径准入：小圆角/小尺寸不值得（过渡带不足 1px），正常卡值得。
+    #[test]
+    fn aa_worthwhile_thresholds() {
+        // 圆角 < 3px：过渡带不足，不值得。
+        assert!(!aa_worthwhile(&r(0, 0, 200, 100), 2));
+        assert!(aa_worthwhile(&r(0, 0, 200, 100), 3));
+        // 尺寸 < 16px：AA 后肉眼无差且开销不划算。
+        assert!(!aa_worthwhile(&r(0, 0, 15, 100), 8));
+        assert!(!aa_worthwhile(&r(0, 0, 200, 15), 8));
+        // 常规卡片：值得。
+        assert!(aa_worthwhile(&r(0, 0, 545, 300), 12));
+        // 退化矩形：宽或高 ≤ 0 一律不进。
+        assert!(!aa_worthwhile(&r(10, 10, 10, 50), 8));
+    }
+
+    /// fill_round/stroke_round/fill_glass_round 在 1×1 内存 DC 上全链路不崩：
+    /// 大矩形会尝试 AA 离屏（背景抠入/缩回在 1×1 源上部分失败也要安全降级），
+    /// 小矩形走原路径；任何 GDI 失败都不得 panic。
+    #[test]
+    fn aa_paths_never_panic_on_tiny_dc() {
+        let screen = unsafe { GetDC(None) };
+        let mem = unsafe { CreateCompatibleDC(Some(screen)) };
+        unsafe {
+            let _ = ReleaseDC(None, screen);
+        }
+        if mem.is_invalid() {
+            eprintln!("[skip] 无法创建内存 DC，跳过 AA 路径冒烟");
+            return;
+        }
+        let bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: 1,
+                biHeight: -1,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut bits: *mut core::ffi::c_void = core::ptr::null_mut();
+        let bmp = unsafe { CreateDIBSection(Some(mem), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) };
+        let Ok(bmp) = bmp else {
+            unsafe {
+                let _ = DeleteDC(mem);
+            }
+            eprintln!("[skip] 无法创建 DIB，跳过 AA 路径冒烟");
+            return;
+        };
+        unsafe {
+            let old = SelectObject(mem, bmp.into());
+            let c = COLORREF(0x00201850);
+            // 大矩形（AA 路径会启动，离屏抠背景对 1×1 源拉伸成功与否均须安全）。
+            fill_round(mem, &r(0, 0, 300, 200), 12, c);
+            stroke_round(mem, &r(0, 0, 300, 200), 12, c, 1);
+            fill_glass_round(mem, &r(0, 0, 300, 200), 12, c, 0.5, 0, 948);
+            // 小矩形（低于阈值，原路径）。
+            fill_round(mem, &r(0, 0, 10, 10), 3, c);
+            stroke_round(mem, &r(0, 0, 10, 10), 3, c, 1);
+            fill_glass_round(mem, &r(0, 0, 10, 10), 3, c, 0.5, 0, 948);
+            // 退化矩形（宽高 ≤ 0，直接返回）。
+            fill_round(mem, &r(5, 5, 5, 50), 8, c);
+            stroke_round(mem, &r(5, 5, 50, 5), 8, c, 1);
+            let _ = SelectObject(mem, old);
+            let _ = DeleteObject(bmp.into());
+            let _ = DeleteDC(mem);
         }
     }
 }

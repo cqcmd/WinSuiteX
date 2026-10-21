@@ -8,7 +8,18 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
-## GUI 0.4.8 — 2026-10-19（右键增强页玻璃统一到 50% navy）
+## GUI 0.4.9 — 2026-10-22（圆角超采样抗锯齿，分支 `gdi-aa-radius`）
+
+Z.W.「主线的『圆角』还有一招没试过，试一下」→ 纯 GDI 的 3x 超采样 AA（环境无关，VM/RDP 照常）：
+
+- **draw.rs 新增 `AaSurface`**：目标区当前背景先放大抠入 3x 离屏（渐变低频无可见损失）→ 前景以 3x 尺寸画圆角 → `StretchBlt(HALFTONE)` 缩回时区域平均自动生成边缘灰度过渡。`fill_round` / `stroke_round` / `fill_glass_round` 三函数内部升级，**调用点零改动**，全部卡片/按钮/玻璃卡自动受益。
+- **准入与降级**：圆角 <3px 或边 <16px 过渡带不足 1px，走原路径（`*_raw`）；离屏像素超 24MB 降 2x、仍超或 `StretchBlt` 失败（个别远程会话禁屏幕读取）整体降级——任何环境不劣化。视口滚动偏移经 `GetViewportOrgEx` 自适应，调用方无需传 scroll。
+- **scope 界定**：`SetWindowRgn` 窗口形状圆角是二值掩码，超采样无解（真 AA 只有 DWM/分层窗口，已评估在案）；本版治的是**绘制出来的**圆角。
+- **量化对比**（`tools/aa_edge_compare.py`，三页 A/B）：微过渡（软）像素占比 menu 8.6%→26.5%、hw 7.2%→16.4%、disk 11.5%→33.0%；唯一色数 1.8~2.2x；硬跳变占比不变（文字边缘未受扰）。
+- 回归测试：`aa_worthwhile_thresholds`（准入阈值）+ `aa_paths_never_panic_on_tiny_dc`（AA/降级/退化三路不崩）。
+- 门禁：fmt / clippy -D / 全量测试通过；部署 `dist/winsuitex-gui-gdi.exe`（0.4.9.20261022）。
+
+
 
 Z.W. 目检疑点「透明度50是否都统一调整的？右键增强里好像不太一样」：
 
