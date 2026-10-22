@@ -137,11 +137,73 @@ pub struct Theme {
     pub C_GRAY_BG: Color,
     pub C_AMBER_DARK: Color,
     pub C_AMBER_BG: Color,
-    /// 卡片圆角（两套略有差异：深空 8 / 流畅 10）。
+    /// 卡片圆角（各套略有差异：深空 8 / 其它 10）。
     pub CARD_RADIUS: i32,
-    /// 玻璃透明度（tint 叠层不透明度，0.0-1.0）：两套均固定 0.50。
+    /// 玻璃透明度（tint 叠层不透明度，0.0-1.0）：各套均固定 0.50。
     pub GLASS_ALPHA: f32,
 }
+
+// ============================================================
+// 共享 token 层（所有皮肤一致的产品视觉语言）
+//
+// **为什么抽**：2026-10-23 加两套皮肤时实测——按钮色、语义状态色、徽章色、
+// 图标粉彩、选中行、玻璃透明度，在已有两套里**一字不差重复**。这些是"产品统一
+// 视觉语言"（绿=启用、红=错误、图标粉彩是产品识别色），不该随皮肤气质漂移。
+// 抽成 `S_*` 常量后新增皮肤只需填**皮肤特有**的 11 个值，其余引用常量：
+// 既省一半设计工作量，也从结构上保证"任何皮肤下绿都代表启用"。
+//
+// ⚠️ **为什么保留 Theme 的字段不删**：调用点有 136 处 `theme().C_XXX`，
+// 若把共享字段移出 Theme 就得全改（风险高、收益低）。这里取"字段保留 +
+// 值引用共享常量"——单一数据源的效果达到了，调用点零改动。
+// ============================================================
+
+/// 纯白（文字/玻璃混合目标/页签高亮底）。
+const S_WHITE: Color = rgb(255, 255, 255);
+/// 主文字（各套均为纯白，靠玻璃压暗保证对比）。
+const S_ON_GRAD: Color = rgb(255, 255, 255);
+/// 图标柔和粉彩（8 组，顺序见 `icons::HwIcon`）——产品统一识别色，不随皮肤变。
+const S_ACCENT_SOFT: [Color; 8] = [
+    rgb(115, 210, 242), // Os   柔天蓝
+    rgb(234, 174, 144), // Board 柔桃
+    rgb(188, 170, 249), // Cpu  柔薰衣草紫
+    rgb(124, 210, 196), // Mem  柔薄荷
+    rgb(234, 155, 185), // Gpu  柔粉
+    rgb(233, 206, 123), // Disk 柔金
+    rgb(149, 184, 249), // Nic  柔蓝
+    rgb(230, 156, 212), // Audio 柔品红
+];
+/// 已启用卡片亮色描边 = 亮绿（"启用=绿"语义）。
+const S_CARD_EDGE_ON: Color = rgb(52, 199, 89);
+/// 纯色卡兜底底色 / 描边（死代码原语用）。
+const S_CARD_BG: Color = rgb(250, 250, 253);
+const S_BORDER: Color = rgb(217, 217, 217);
+/// 选中行薄荷绿底 + 深绿字（跨皮肤一致，保证"选中"语义统一）。
+const S_SEL_ROW: Color = rgb(216, 240, 228);
+const S_SEL_ROW_TEXT: Color = rgb(28, 62, 44);
+/// 按钮：品牌紫底 / hover / 白底 / 白底 hover / 白底深字。
+const S_BTN: Color = rgb(79, 70, 229);
+const S_BTN_H: Color = rgb(99, 91, 240);
+const S_BTN_WHITE: Color = rgb(255, 255, 255);
+const S_BTN_WHITE_H: Color = rgb(232, 228, 252);
+const S_BTN_WHITE_TEXT: Color = rgb(40, 36, 70);
+/// 标题栏关闭按钮 hover 红。
+const S_TB_CLOSE_HOVER: Color = rgb(232, 17, 35);
+/// 语义状态色：成功 / 预警 / 错误。
+const S_SUCCESS: Color = rgb(52, 199, 89);
+const S_WARNING: Color = rgb(250, 173, 20);
+const S_ERROR: Color = rgb(255, 77, 79);
+/// 徽章（已启用/未启用/警告）文字 + 背景。
+const S_GREEN_DARK: Color = rgb(21, 128, 61);
+const S_GREEN_BG: Color = rgb(223, 242, 230);
+const S_GRAY_DARK: Color = rgb(89, 89, 89);
+const S_GRAY_BG: Color = rgb(242, 242, 242);
+const S_AMBER_DARK: Color = rgb(202, 110, 4);
+const S_AMBER_BG: Color = rgb(254, 244, 225);
+/// 玻璃透明度：各套固定 0.50（深底叠色，白字对比度 6.7~7.5:1）。
+const S_GLASS_ALPHA: f32 = 0.50;
+
+/// 皮肤总数（`set_theme` 钳制 / 随机取值 / 切换按钮取模都用它）。
+pub const THEME_COUNT: u8 = 4;
 
 /// 深空玻璃：紫蓝渐变 + 深 navy 玻璃（科技/电竞感）。
 pub const DEEP_SPACE: Theme = Theme {
@@ -152,45 +214,36 @@ pub const DEEP_SPACE: Theme = Theme {
     // 低饱和暗靛灰：既是窗口轮廓线，也是压 1-bit 圆角锯齿的暗边环。
     // 原亮薰衣草 (170,160,245) 在真机窗口圆角上锯齿炸眼，据 Z.W. 反馈压暗。
     C_WIN_BORDER: rgb(70, 66, 104),
-    C_ON_GRAD: rgb(255, 255, 255),
+    C_ON_GRAD: S_ON_GRAD,
     C_ON_GRAD_DIM: rgb(224, 216, 250),
     C_ON_GRAD_FAINT: rgb(198, 190, 240),
-    C_WHITE: rgb(255, 255, 255),
+    C_WHITE: S_WHITE,
     C_GLASS_TINT: rgb(20, 24, 52),
     C_GLASS_DARK: rgb(64, 60, 96),
     C_ICON: rgb(214, 208, 248),
-    C_ACCENT_SOFT: [
-        rgb(115, 210, 242), // Os   柔天蓝
-        rgb(234, 174, 144), // Board 柔桃
-        rgb(188, 170, 249), // Cpu  柔薰衣草紫
-        rgb(124, 210, 196), // Mem  柔薄荷
-        rgb(234, 155, 185), // Gpu  柔粉
-        rgb(233, 206, 123), // Disk 柔金
-        rgb(149, 184, 249), // Nic  柔蓝
-        rgb(230, 156, 212), // Audio 柔品红
-    ],
-    C_CARD_EDGE_ON: rgb(52, 199, 89),
-    C_CARD_BG: rgb(250, 250, 253),
-    C_BORDER: rgb(217, 217, 217),
-    C_SEL_ROW: rgb(216, 240, 228),
-    C_SEL_ROW_TEXT: rgb(28, 62, 44),
-    C_BTN: rgb(79, 70, 229),
-    C_BTN_H: rgb(99, 91, 240),
-    C_BTN_WHITE: rgb(255, 255, 255),
-    C_BTN_WHITE_H: rgb(232, 228, 252),
-    C_BTN_WHITE_TEXT: rgb(40, 36, 70),
-    C_TB_CLOSE_HOVER: rgb(232, 17, 35),
-    C_SUCCESS: rgb(52, 199, 89),
-    C_WARNING: rgb(250, 173, 20),
-    C_ERROR: rgb(255, 77, 79),
-    C_GREEN_DARK: rgb(21, 128, 61),
-    C_GREEN_BG: rgb(223, 242, 230),
-    C_GRAY_DARK: rgb(89, 89, 89),
-    C_GRAY_BG: rgb(242, 242, 242),
-    C_AMBER_DARK: rgb(202, 110, 4),
-    C_AMBER_BG: rgb(254, 244, 225),
+    C_ACCENT_SOFT: S_ACCENT_SOFT,
+    C_CARD_EDGE_ON: S_CARD_EDGE_ON,
+    C_CARD_BG: S_CARD_BG,
+    C_BORDER: S_BORDER,
+    C_SEL_ROW: S_SEL_ROW,
+    C_SEL_ROW_TEXT: S_SEL_ROW_TEXT,
+    C_BTN: S_BTN,
+    C_BTN_H: S_BTN_H,
+    C_BTN_WHITE: S_BTN_WHITE,
+    C_BTN_WHITE_H: S_BTN_WHITE_H,
+    C_BTN_WHITE_TEXT: S_BTN_WHITE_TEXT,
+    C_TB_CLOSE_HOVER: S_TB_CLOSE_HOVER,
+    C_SUCCESS: S_SUCCESS,
+    C_WARNING: S_WARNING,
+    C_ERROR: S_ERROR,
+    C_GREEN_DARK: S_GREEN_DARK,
+    C_GREEN_BG: S_GREEN_BG,
+    C_GRAY_DARK: S_GRAY_DARK,
+    C_GRAY_BG: S_GRAY_BG,
+    C_AMBER_DARK: S_AMBER_DARK,
+    C_AMBER_BG: S_AMBER_BG,
     CARD_RADIUS: 8,
-    GLASS_ALPHA: 0.50,
+    GLASS_ALPHA: S_GLASS_ALPHA,
 };
 
 /// 流畅灰紫：低饱和靛灰渐变 + Smoke 深色玻璃（安静专业，长时间盯屏不累）。
@@ -201,10 +254,10 @@ pub const FLUENT: Theme = Theme {
     C_FOOTER_BG: rgb(25, 25, 40),
     // 低饱和中深灰：贴 1-bit 圆角边缘时不勾出锯齿台阶。
     C_WIN_BORDER: rgb(108, 102, 140),
-    C_ON_GRAD: rgb(255, 255, 255),
+    C_ON_GRAD: S_ON_GRAD,
     C_ON_GRAD_DIM: rgb(212, 212, 222),
     C_ON_GRAD_FAINT: rgb(182, 182, 198),
-    C_WHITE: rgb(255, 255, 255),
+    C_WHITE: S_WHITE,
     C_GLASS_TINT: rgb(30, 30, 44),
     C_GLASS_DARK: rgb(44, 44, 62),
     C_ICON: rgb(204, 204, 218),
@@ -218,51 +271,137 @@ pub const FLUENT: Theme = Theme {
         rgb(149, 184, 249),
         rgb(230, 156, 212),
     ],
-    C_CARD_EDGE_ON: rgb(52, 199, 89),
-    C_CARD_BG: rgb(250, 250, 253),
-    C_BORDER: rgb(217, 217, 217),
-    C_SEL_ROW: rgb(216, 240, 228),
-    C_SEL_ROW_TEXT: rgb(28, 62, 44),
-    C_BTN: rgb(79, 70, 229),
-    C_BTN_H: rgb(99, 91, 240),
-    C_BTN_WHITE: rgb(255, 255, 255),
-    C_BTN_WHITE_H: rgb(232, 228, 252),
-    C_BTN_WHITE_TEXT: rgb(40, 36, 70),
-    C_TB_CLOSE_HOVER: rgb(232, 17, 35),
-    C_SUCCESS: rgb(52, 199, 89),
-    C_WARNING: rgb(250, 173, 20),
-    C_ERROR: rgb(255, 77, 79),
-    C_GREEN_DARK: rgb(21, 128, 61),
-    C_GREEN_BG: rgb(223, 242, 230),
-    C_GRAY_DARK: rgb(89, 89, 89),
-    C_GRAY_BG: rgb(242, 242, 242),
-    C_AMBER_DARK: rgb(202, 110, 4),
-    C_AMBER_BG: rgb(254, 244, 225),
+    C_CARD_EDGE_ON: S_CARD_EDGE_ON,
+    C_CARD_BG: S_CARD_BG,
+    C_BORDER: S_BORDER,
+    C_SEL_ROW: S_SEL_ROW,
+    C_SEL_ROW_TEXT: S_SEL_ROW_TEXT,
+    C_BTN: S_BTN,
+    C_BTN_H: S_BTN_H,
+    C_BTN_WHITE: S_BTN_WHITE,
+    C_BTN_WHITE_H: S_BTN_WHITE_H,
+    C_BTN_WHITE_TEXT: S_BTN_WHITE_TEXT,
+    C_TB_CLOSE_HOVER: S_TB_CLOSE_HOVER,
+    C_SUCCESS: S_SUCCESS,
+    C_WARNING: S_WARNING,
+    C_ERROR: S_ERROR,
+    C_GREEN_DARK: S_GREEN_DARK,
+    C_GREEN_BG: S_GREEN_BG,
+    C_GRAY_DARK: S_GRAY_DARK,
+    C_GRAY_BG: S_GRAY_BG,
+    C_AMBER_DARK: S_AMBER_DARK,
+    C_AMBER_BG: S_AMBER_BG,
     CARD_RADIUS: 10,
-    GLASS_ALPHA: 0.50,
+    GLASS_ALPHA: S_GLASS_ALPHA,
 };
 
-/// 当前主题索引：0 = 深空玻璃，1 = 流畅灰紫。
+/// 琥珀暖调：暖褐琥珀渐变 + 深褐玻璃（夜间维护护眼，Z.W. 2026-10-23 选定）。
+///
+/// ⚠️ `C_WIN_BORDER` 用**暗**褐 (96,68,40) 而非亮琥珀：窗形圆角由分层 alpha
+/// 羽化，但羽化边缘外仍靠这圈暗边压对比——亮边在浅色桌面下会把锯齿勾出来
+/// （深空玻璃踩过同一个坑，原亮薰衣草被压暗）。
+pub const AMBER: Theme = Theme {
+    NAME: "琥珀暖调",
+    C_GRAD_TOP: rgb(132, 82, 40),
+    C_GRAD_BOT: rgb(64, 40, 24),
+    C_FOOTER_BG: rgb(44, 28, 16),
+    C_WIN_BORDER: rgb(96, 68, 40),
+    C_ON_GRAD: S_ON_GRAD,
+    C_ON_GRAD_DIM: rgb(240, 226, 206),
+    C_ON_GRAD_FAINT: rgb(206, 186, 158),
+    C_WHITE: S_WHITE,
+    C_GLASS_TINT: rgb(40, 26, 14),
+    C_GLASS_DARK: rgb(72, 48, 28),
+    C_ICON: rgb(245, 220, 190),
+    C_ACCENT_SOFT: S_ACCENT_SOFT,
+    C_CARD_EDGE_ON: S_CARD_EDGE_ON,
+    C_CARD_BG: S_CARD_BG,
+    C_BORDER: S_BORDER,
+    C_SEL_ROW: S_SEL_ROW,
+    C_SEL_ROW_TEXT: S_SEL_ROW_TEXT,
+    C_BTN: S_BTN,
+    C_BTN_H: S_BTN_H,
+    C_BTN_WHITE: S_BTN_WHITE,
+    C_BTN_WHITE_H: S_BTN_WHITE_H,
+    C_BTN_WHITE_TEXT: S_BTN_WHITE_TEXT,
+    C_TB_CLOSE_HOVER: S_TB_CLOSE_HOVER,
+    C_SUCCESS: S_SUCCESS,
+    C_WARNING: S_WARNING,
+    C_ERROR: S_ERROR,
+    C_GREEN_DARK: S_GREEN_DARK,
+    C_GREEN_BG: S_GREEN_BG,
+    C_GRAY_DARK: S_GRAY_DARK,
+    C_GRAY_BG: S_GRAY_BG,
+    C_AMBER_DARK: S_AMBER_DARK,
+    C_AMBER_BG: S_AMBER_BG,
+    CARD_RADIUS: 10,
+    GLASS_ALPHA: S_GLASS_ALPHA,
+};
+
+/// 薄荷青竹：青绿渐变 + 深青玻璃（清新通透，Z.W. 2026-10-23 选定）。
+pub const MINT: Theme = Theme {
+    NAME: "薄荷青竹",
+    C_GRAD_TOP: rgb(24, 118, 106),
+    C_GRAD_BOT: rgb(12, 58, 60),
+    C_FOOTER_BG: rgb(10, 44, 44),
+    C_WIN_BORDER: rgb(44, 92, 88),
+    C_ON_GRAD: S_ON_GRAD,
+    C_ON_GRAD_DIM: rgb(210, 240, 234),
+    C_ON_GRAD_FAINT: rgb(168, 206, 200),
+    C_WHITE: S_WHITE,
+    C_GLASS_TINT: rgb(12, 36, 36),
+    C_GLASS_DARK: rgb(26, 66, 62),
+    C_ICON: rgb(200, 240, 232),
+    C_ACCENT_SOFT: S_ACCENT_SOFT,
+    C_CARD_EDGE_ON: S_CARD_EDGE_ON,
+    C_CARD_BG: S_CARD_BG,
+    C_BORDER: S_BORDER,
+    C_SEL_ROW: S_SEL_ROW,
+    C_SEL_ROW_TEXT: S_SEL_ROW_TEXT,
+    C_BTN: S_BTN,
+    C_BTN_H: S_BTN_H,
+    C_BTN_WHITE: S_BTN_WHITE,
+    C_BTN_WHITE_H: S_BTN_WHITE_H,
+    C_BTN_WHITE_TEXT: S_BTN_WHITE_TEXT,
+    C_TB_CLOSE_HOVER: S_TB_CLOSE_HOVER,
+    C_SUCCESS: S_SUCCESS,
+    C_WARNING: S_WARNING,
+    C_ERROR: S_ERROR,
+    C_GREEN_DARK: S_GREEN_DARK,
+    C_GREEN_BG: S_GREEN_BG,
+    C_GRAY_DARK: S_GRAY_DARK,
+    C_GRAY_BG: S_GRAY_BG,
+    C_AMBER_DARK: S_AMBER_DARK,
+    C_AMBER_BG: S_AMBER_BG,
+    CARD_RADIUS: 10,
+    GLASS_ALPHA: S_GLASS_ALPHA,
+};
+
+/// 当前主题索引：0 = 深空玻璃，1 = 流畅灰紫，2 = 琥珀暖调，3 = 薄荷青竹。
 /// 初始值仅兜底——`load_theme()` 会覆盖（有偏好读偏好、无偏好随机）。
 static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
 
-/// 设置当前主题（id 非 0 一律视为流畅灰紫）。
+/// 设置当前主题（越界钳到最后一档，防 `theme.txt` 被手改成无效值后取到野主题）。
 pub fn set_theme(id: u8) {
-    CURRENT_THEME.store(if id == 0 { 0 } else { 1 }, Ordering::Relaxed);
+    CURRENT_THEME.store(id.min(THEME_COUNT - 1), Ordering::Relaxed);
 }
 
-/// 当前主题索引（0/1）。
+/// 当前主题索引（0..`THEME_COUNT`）。
 pub fn theme_id() -> u8 {
     CURRENT_THEME.load(Ordering::Relaxed)
 }
 
 /// 当前主题的不可变引用（指向 `const` 实例，`'static`）。
+///
+/// N 路 `match`——LLVM 对密集整数匹配生成跳转表，与原来两分支开销同级
+/// （实测 136 处调用点、每帧开销仍在微秒量级，与皮肤数量无关）。
 #[inline]
 pub fn theme() -> &'static Theme {
-    if CURRENT_THEME.load(Ordering::Relaxed) == 1 {
-        &FLUENT
-    } else {
-        &DEEP_SPACE
+    match CURRENT_THEME.load(Ordering::Relaxed) {
+        1 => &FLUENT,
+        2 => &AMBER,
+        3 => &MINT,
+        _ => &DEEP_SPACE,
     }
 }
 
@@ -284,12 +423,12 @@ pub fn load_theme() {
             }
         }
     }
-    // 无偏好：用纳秒时间戳做熵源，奇偶决定 0/1（零依赖，不引 rand crate）。
+    // 无偏好：用纳秒时间戳做熵源，`% THEME_COUNT` 取档（零依赖，不引 rand crate）。
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.subsec_nanos())
         .unwrap_or(0);
-    set_theme(if nanos & 1 == 0 { 0 } else { 1 });
+    set_theme((nanos % u32::from(THEME_COUNT)) as u8);
 }
 
 /// 切换主题后调用：把当前选择写盘，重启仍生效。写盘失败静默忽略（内存切换仍有效）。

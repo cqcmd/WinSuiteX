@@ -11,8 +11,8 @@ IDI_APP_ICON ICON "app.ico"
 VS_VERSION_INFO VERSIONINFO
 // 第四段是 YYYYMMDD 日期戳，>65535 放不进 16 位字 → 数字段溢出成乱码。
 // 数字段用 0,1,0,0 占位保结构合法；完整「主.次.修订.日期戳」只放字符串（Explorer 显示字符串）。
-FILEVERSION 0,5,4,1022
-PRODUCTVERSION 0,5,4,1022
+FILEVERSION 0,5,5,1023
+PRODUCTVERSION 0,5,5,1023
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -22,12 +22,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "重庆持玛多网络科技有限公司"
             VALUE "FileDescription", "WinSuiteX 硬件概览面板"
-            VALUE "FileVersion", "0.5.4.20261022"
+            VALUE "FileVersion", "0.5.5.20261023"
             VALUE "InternalName", "WinSuiteX.GuiGdi"
             VALUE "LegalCopyright", "持玛多网络 / Z.W."
             VALUE "OriginalFilename", "winsuitex-gui-gdi.exe"
             VALUE "ProductName", "WinSuiteX"
-            VALUE "ProductVersion", "0.5.4.20261022"
+            VALUE "ProductVersion", "0.5.5.20261023"
         END
     END
     BLOCK "VarFileInfo"

@@ -1694,7 +1694,8 @@ unsafe fn on_click(hwnd: HWND, lparam: LPARAM) {
 
     // footer 主题切换按钮（跨页可用，固定层，用屏幕坐标）。
     if pages::hit_theme_btn(x, screen_y) {
-        let id = 1 - theme::theme_id();
+        // 循环切到下一档（N 路取模，不再写死 1-id 的两档翻转）。
+        let id = (theme::theme_id() + 1) % theme::THEME_COUNT;
         theme::set_theme(id);
         theme::save_theme(id);
         let _ = InvalidateRect(Some(hwnd), None, false);

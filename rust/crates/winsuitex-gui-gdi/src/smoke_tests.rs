@@ -1410,3 +1410,105 @@ fn loading_page_never_panics_on_tiny_dc() {
         let _ = COLORREF(0); // 仅占位，保持 use 成功（tiny DIB 无像素可断言）
     }
 }
+
+/// 共享 token 层：所有皮肤的"产品视觉语言"字段必须**完全一致**。
+///
+/// 钉死 2026-10-23 抽共享 token 层的成果（加琥珀/薄荷两套时做的重构）：
+/// 按钮色、语义状态色、徽章色、图标粉彩、选中行、玻璃透明度，在已有皮肤里
+/// 实测一字不差重复，抽成 `S_*` 常量后由各皮肤引用。本测试保证：
+/// 1. 任何皮肤的这些字段都相等——绿在任何皮肤下都代表"启用"，语义不漂移；
+/// 2. 新增皮肤只需填皮肤特有字段，共享部分自动一致（改一处即全生效）。
+///
+/// 同时钉死皮肤总数与"皮肤特有字段确实不同"（否则等于加了个重复皮肤）。
+#[test]
+fn shared_tokens_identical_across_all_skins() {
+    use crate::theme::{AMBER, DEEP_SPACE, FLUENT, MINT, THEME_COUNT};
+
+    assert_eq!(THEME_COUNT, 4, "皮肤总数应为 4（深空/流畅/琥珀/薄荷）");
+    let all = [&DEEP_SPACE, &FLUENT, &AMBER, &MINT];
+
+    // 1) 共享 token：所有皮肤必须逐字段相等
+    for (i, t) in all.iter().enumerate() {
+        assert_eq!(t.C_WHITE, DEEP_SPACE.C_WHITE, "皮肤{i} C_WHITE 应共享");
+        assert_eq!(
+            t.C_ON_GRAD, DEEP_SPACE.C_ON_GRAD,
+            "皮肤{i} C_ON_GRAD 应共享"
+        );
+        assert_eq!(
+            t.C_ACCENT_SOFT, DEEP_SPACE.C_ACCENT_SOFT,
+            "皮肤{i} 图标粉彩应共享（产品识别色，不随皮肤变）"
+        );
+        assert_eq!(
+            t.C_SUCCESS, DEEP_SPACE.C_SUCCESS,
+            "皮肤{i} 成功色应共享（绿=启用语义统一）"
+        );
+        assert_eq!(t.C_WARNING, DEEP_SPACE.C_WARNING, "皮肤{i} 预警色应共享");
+        assert_eq!(t.C_ERROR, DEEP_SPACE.C_ERROR, "皮肤{i} 错误色应共享");
+        assert_eq!(t.C_SEL_ROW, DEEP_SPACE.C_SEL_ROW, "皮肤{i} 选中行底应共享");
+        assert_eq!(
+            t.C_SEL_ROW_TEXT, DEEP_SPACE.C_SEL_ROW_TEXT,
+            "皮肤{i} 选中行字应共享"
+        );
+        assert_eq!(t.C_BTN, DEEP_SPACE.C_BTN, "皮肤{i} 按钮色应共享");
+        assert_eq!(t.C_BTN_H, DEEP_SPACE.C_BTN_H, "皮肤{i} 按钮 hover 应共享");
+        assert_eq!(
+            t.C_GREEN_DARK, DEEP_SPACE.C_GREEN_DARK,
+            "皮肤{i} 徽章绿字应共享"
+        );
+        assert!(
+            (t.GLASS_ALPHA - 0.50).abs() < 1e-6,
+            "皮肤{i} 玻璃透明度应固定 0.50"
+        );
+    }
+
+    // 2) 皮肤特有字段必须**互不相同**（否则等于加了个重复皮肤）
+    let mut grads = std::collections::HashSet::new();
+    let mut tints = std::collections::HashSet::new();
+    for t in all {
+        grads.insert(t.C_GRAD_TOP.0);
+        tints.insert(t.C_GLASS_TINT.0);
+    }
+    assert_eq!(grads.len(), 4, "4 套皮肤的渐变顶色应各不相同");
+    assert_eq!(tints.len(), 4, "4 套皮肤的玻璃 tint 应各不相同");
+
+    // 3) 主题名两两不同（切换按钮靠它显示）
+    let mut names = std::collections::HashSet::new();
+    for t in all {
+        names.insert(t.NAME);
+    }
+    assert_eq!(names.len(), 4, "4 套皮肤名称应各不相同");
+    assert_eq!(DEEP_SPACE.NAME, "深空玻璃");
+    assert_eq!(FLUENT.NAME, "流畅灰紫");
+    assert_eq!(AMBER.NAME, "琥珀暖调");
+    assert_eq!(MINT.NAME, "薄荷青竹");
+}
+
+/// 皮肤切换为 N 路循环（不再两档翻转）+ 越界钳制。
+#[test]
+fn theme_switch_cycles_all_skins_and_clamps() {
+    use crate::theme::{set_theme, theme, theme_id, THEME_COUNT};
+
+    let orig = theme_id();
+    // 循环一整圈应回到起点，且每档都能取到对应皮肤（名称随档位变化）。
+    let mut seen = Vec::new();
+    set_theme(0);
+    for _ in 0..THEME_COUNT {
+        seen.push(theme().NAME);
+        set_theme((theme_id() + 1) % THEME_COUNT);
+    }
+    assert_eq!(seen.len(), usize::from(THEME_COUNT));
+    assert_eq!(
+        seen,
+        vec!["深空玻璃", "流畅灰紫", "琥珀暖调", "薄荷青竹"],
+        "循环顺序应为深空→流畅→琥珀→薄荷"
+    );
+    // 取模后回到起点
+    assert_eq!(theme_id(), 0, "循环一圈后应回到 0");
+
+    // 越界钳到最后一档（theme.txt 被手改成 99 也不能取到野主题）
+    set_theme(99);
+    assert_eq!(theme_id(), THEME_COUNT - 1, "越界应钳到最后一档");
+    assert_eq!(theme().NAME, "薄荷青竹");
+
+    set_theme(orig);
+}
