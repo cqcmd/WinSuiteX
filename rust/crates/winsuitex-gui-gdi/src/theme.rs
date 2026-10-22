@@ -143,7 +143,7 @@ pub struct Theme {
     pub GLASS_ALPHA: f32,
 }
 
-/// 深空玻璃：紫蓝渐变 + 深 navy 玻璃（默认主题，科技/电竞感）。
+/// 深空玻璃：紫蓝渐变 + 深 navy 玻璃（科技/电竞感）。
 pub const DEEP_SPACE: Theme = Theme {
     NAME: "深空玻璃",
     C_GRAD_TOP: rgb(135, 81, 238),
@@ -243,6 +243,7 @@ pub const FLUENT: Theme = Theme {
 };
 
 /// 当前主题索引：0 = 深空玻璃，1 = 流畅灰紫。
+/// 初始值仅兜底——`load_theme()` 会覆盖（有偏好读偏好、无偏好随机）。
 static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
 
 /// 设置当前主题（id 非 0 一律视为流畅灰紫）。
@@ -269,16 +270,26 @@ pub fn theme() -> &'static Theme {
 // 主题持久化（%APPDATA%/WinSuiteX/theme.txt）
 // ============================================================
 
-/// 启动时调用：从磁盘读回上次选择的主题。读不到/解析失败则保持默认深空玻璃。
+/// 启动时调用：
+/// - 有 `theme.txt`（用户手动选过）→ 尊重用户选择；
+/// - 无文件 / 解析失败 → **随机** 0 或 1（Z.W. 2026-10-22「随机皮肤，
+///   让使用者有不同感受」），每次冷启动都可能不同，制造新鲜感。
 pub fn load_theme() {
     if let Some(dir) = app_data_dir() {
         let p = dir.join("theme.txt");
         if let Ok(s) = std::fs::read_to_string(&p) {
             if let Ok(id) = s.trim().parse::<u8>() {
                 set_theme(id);
+                return;
             }
         }
     }
+    // 无偏好：用纳秒时间戳做熵源，奇偶决定 0/1（零依赖，不引 rand crate）。
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    set_theme(if nanos & 1 == 0 { 0 } else { 1 });
 }
 
 /// 切换主题后调用：把当前选择写盘，重启仍生效。写盘失败静默忽略（内存切换仍有效）。

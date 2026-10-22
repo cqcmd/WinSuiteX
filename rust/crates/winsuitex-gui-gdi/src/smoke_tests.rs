@@ -1239,15 +1239,15 @@ fn theme_constants_regression() {
         (FLUENT.GLASS_ALPHA - 0.50).abs() < 1e-6,
         "流畅玻璃透明度必须固定 0.50"
     );
-    // 默认主题（深空）的访问器必须返回深空基线值。
-    assert_eq!(
-        crate::theme::tint_color(),
-        DEEP_SPACE.C_GLASS_TINT,
-        "tint_color() 默认应返回深空 navy"
+    // 当前主题的访问器必须返回**某套**基线值（默认随机皮肤，不绑定单主题）。
+    let tint = crate::theme::tint_color();
+    assert!(
+        tint == DEEP_SPACE.C_GLASS_TINT || tint == FLUENT.C_GLASS_TINT,
+        "tint_color() 应返回深空 navy 或流畅 Smoke，实际 {tint:?}"
     );
     assert!(
         (crate::theme::glass_alpha() - 0.50).abs() < 1e-6,
-        "glass_alpha() 默认应 0.50"
+        "glass_alpha() 应恒 0.50"
     );
 }
 
