@@ -8,6 +8,16 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
+## GUI 0.5.4 — 2026-10-22（页签药丸化 + 按钮 WinUI 度量，分支 `gdi-aa-radius`）
+
+Z.W.「其它地方是否也需要像这样修改？」→ 全面审计后修三处（开关是最后一个硬边控件、已修完，其余控件均已走 AA）：
+
+- **页签激活指示药丸化**：去掉下划线（药丸+下划线双重指示冗余显碎），玻璃底从 0.12 提亮到 0.20——整颗页签浮起即指示器，ZSUI/WinUI 分段控件风格。
+- **按钮度量统一 WinUI 3**：圆角从硬编码 6px 改 `scale(4)`（WinUI 标准按钮圆角，DPI 自适应）；hover 态加 1px 边框提亮（`ButtonBorderBrushPointerOver` 行为）——主按钮白混边、次按钮深字色边。
+- 其余控件（卡片/SMART 徽标/选中行/滚动条/开关）均已 AA 达标，无需改动。
+
+门禁：fmt / clippy -D / 10 测试套件全绿；verify PASS；部署 `dist/winsuitex-gui-gdi.exe`（0.5.4.20261022）。
+
 ## GUI 0.5.3 — 2026-10-22（开关 ZSUI 精度复刻，分支 `gdi-aa-radius`）
 
 Z.W.「按钮开关还是没有之前 ZSUI 做出来的细腻」→ 拆解 `qiu7824/zsui` 的 `zs_toggle_native_draw_plan` 源码，照搬三条几何/配色铁律：

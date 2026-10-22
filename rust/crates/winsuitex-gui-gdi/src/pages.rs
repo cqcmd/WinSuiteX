@@ -178,15 +178,15 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT, f_tiny: HFONT) {
         };
         let active = cur_tab() == i as i32;
         if active {
-            // 选中页签：玻璃高亮底 + 文字提亮到纯白，比仅下划线更醒目。
-            // 浅玻璃（theme().C_WHITE 0.12）叠在渐变上、不切断整体色调（页签条不铺实色条的铁律）。
-            // 页签条在固定层、不随滚动，故 scroll=0；win_h 用真实窗口高以对齐背景渐变。
+            // 选中页签：ZSUI/WinUI 药丸浮起风格——**整颗页签**是指示器，
+            // 不再叠下划线（药丸+下划线双重指示反而冗余、显碎）。
+            // 玻璃底从 0.12 提亮到 0.20：药丸轮廓清晰可辨、但不切断渐变。
             fill_glass_round(
                 hdc,
                 &r,
                 scale(8),
                 theme().C_WHITE,
-                0.12,
+                0.20,
                 0,
                 WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
             );
@@ -203,20 +203,6 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT, f_tiny: HFONT) {
             },
             true,
         );
-        if active {
-            // 选中下划线：白色圆角条（C++ 版是白色实心下划线），高亮底之上的强调线。
-            fill_round(
-                hdc,
-                &RECT {
-                    left: x + scale(12),
-                    top: top + th - scale(10),
-                    right: x + scale(TAB_W) - scale(12),
-                    bottom: top + th - scale(7),
-                },
-                scale(2),
-                theme().C_WHITE,
-            );
-        }
     }
 
     // —— 主题切换按钮：页签条右侧（磁盘信息 tab 之后），跨页常驻 ——

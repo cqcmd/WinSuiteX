@@ -803,6 +803,11 @@ pub fn text_multiline(hdc: HDC, r: &RECT, s: &str, font: HFONT, color: Color) {
 /// 配色取自 C++ 版实测：主色按钮 `(79,70,229)` 白字，次色按钮纯白底 + 深色字
 /// （「导出报告」「一键复制」都是后者）。玻璃主题下按钮**不再描边**——
 /// 白底本身在紫渐变上已经有足够对比度，再加灰边反而脏。
+/// 按钮——WinUI 3 标准度量（`qiu7824/zsui` 的 button 同源）。
+///
+/// WinUI 3 Button：32px 高、**4px 圆角**（非满药丸——标准按钮不用 pill）、
+/// 11px 水平内边距。hover 态：变色 + 1px 边框提亮（WinUI 的
+/// `ButtonBorderBrushPointerOver` 行为）。
 pub fn button(hdc: HDC, r: &RECT, label: &str, primary: bool, hovered: bool, font: HFONT) {
     let (bg, fg) = if primary {
         (
@@ -823,7 +828,19 @@ pub fn button(hdc: HDC, r: &RECT, label: &str, primary: bool, hovered: bool, fon
             theme().C_BTN_WHITE_TEXT,
         )
     };
-    fill_round(hdc, r, 6, bg);
+    // WinUI 3 标准按钮圆角 = 4px（96 DPI 基准），DPI 缩放。
+    let radius = scale(4);
+    fill_round(hdc, r, radius, bg);
+    // hover 态 1px 边框提亮（WinUI ButtonBorderBrushPointerOver）：
+    // 主按钮 = 白混提亮边，次按钮 = 深字色半透边。不变 hover 不画边。
+    if hovered {
+        let border = if primary {
+            mix(bg, rgb(255, 255, 255), 0.35)
+        } else {
+            mix(bg, theme().C_BTN_WHITE_TEXT, 0.30)
+        };
+        stroke_round(hdc, r, radius, border, scale(1));
+    }
     text_center(hdc, r, label, font, fg);
 }
 
