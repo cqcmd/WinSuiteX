@@ -1716,67 +1716,74 @@ fn feature_row(
     y + row_h + scale(10)
 }
 
-/// 开关本体：Fluent 药丸轨道 + 纯白圆形旋钮（**扁平无阴影**）。
+/// 开关本体——ZSUI 精度复刻（`qiu7824/zsui` 的 `zs_toggle_native_draw_plan`）。
 ///
-/// 借鉴 ZSUI 的令牌化控件方法（`qiu7824/zsui`）——4px 网格 / 满药丸 radius / 语义色 /
-/// 扁平无脏投影。具体：
-/// - **开=绿**（`C_SUCCESS`，与「已启用」文字、卡片描边 `C_CARD_EDGE_ON` 同一"启用=绿"语言），
-///   **关=叠白玻璃灰紫**——两态**异色相**一眼分清；此前开态靛 `C_BTN`、关态灰紫同为紫调、
-///   区分度低显"闷"。
-/// - 旋钮**纯白、无阴影无描边环**：上一版在旋钮下画 `aa_round`"软阴影"，小控件上渲染成
-///   一块脏月牙（Z.W. 圈"太丑"），彻底删除。白在绿/灰紫轨道上对比都够，无需描边。
-/// - 轨道 1px 描边用**双层硬边填充**（外边色 + 内缩轨道色）画，不用 AA stroke——小控件
-///   AA 描边发虚；轨道/旋钮一律 `fill_round_crisp`（硬边铁律）。
-fn draw_switch(hdc: HDC, r: &RECT, on: bool, hovered: bool, scroll: i32, win_h: i32) {
-    let grad = grad_at(r.top - scroll, win_h);
-    let radius = (r.bottom - r.top) / 2; // 满药丸（ZSUI Pill radius = h/2）
+/// ZSUI 走 GDI+ `GdipSetSmoothingMode(ANTI_ALIAS)` 画圆角弧线，观感细腻的根源
+/// 是**曲线抗锯齿**（不是渐变/阴影——ZSUI 的 toggle 明确无渐变无阴影）。我们零 dll
+/// 约束不引 GDI+，用 `fill_round` 的 3x 超采样 + HALFTONE 达到同级弧线平滑度。
+///
+/// ZSUI 的三条几何/配色铁律（本轮照搬）：
+/// 1. **旋钮开大关小**：`toggle_knob_on_size` > `toggle_knob_off_size`——
+///    开态旋钮饱满突出、关态小旋钮内收贴轨，比恒定大小更有"开关手感"。
+/// 2. **旋钮开白关灰**：开态纯白 `Color::rgb(255,255,255)`，关态 `SecondaryText`
+///    灰——关态白旋钮在暗轨上太扎眼，灰旋钮才"安静"。
+/// 3. **描边开关不同**：开态 `stroke == fill`（无可见边框），关态 1px
+///    `SecondaryText` 细描边（hover 提亮到 `PrimaryText`）勾出轮廓。
+fn draw_switch(hdc: HDC, r: &RECT, on: bool, hovered: bool, _scroll: i32, _win_h: i32) {
+    let track_h = r.bottom - r.top;
+    let radius = track_h / 2; // 满药丸（ZSUI track_radius = h/2）
+    if track_h <= 0 || r.right <= r.left {
+        return;
+    }
 
-    // —— 轨道（ZSUI/Fluent：药丸 + 1px 描边，语义色）——
-    // 开 = 绿（与「已启用」文字 / 卡片描边 `C_CARD_EDGE_ON` 同语言，语义=启用），
-    // 关 = 叠白玻璃（灰紫，贴玻璃卡片质感）。两态**异色相**（绿↔灰紫），一眼分清
-    // ——此前开态用靛 `C_BTN`、关态灰紫，两态同为紫调、区分度低显"闷"。
-    // hover 各自提亮一档。轨道/旋钮**硬边**（小控件 AA 发虚，见 fill_round_crisp 铁律）。
-    let (track, edge) = if on {
+    // —— 轨道配色（ZSUI draw plan：开=Accent 同色描边 / 关=Control 面 + Text 描边）——
+    // 开态沿用「启用=绿」语义（C_SUCCESS，与「已启用」文字同语言），hover 白混提亮。
+    // 关态改 ZSUI 暗色 Control 面（深灰蓝），不再叠白玻璃——白玻璃+白旋钮两层白
+    // 在暗卡上太"跳"，ZSUI 的暗轨+灰旋钮才叫细腻。
+    let (track_fill, track_stroke) = if on {
         let c = if hovered {
-            mix(theme().C_SUCCESS, rgb(255, 255, 255), 0.14)
+            mix(theme().C_SUCCESS, rgb(255, 255, 255), 0.12)
         } else {
             theme().C_SUCCESS
         };
-        (c, mix(c, rgb(0, 0, 0), 0.22)) // 边=同色相压暗，融进绿轨
+        (c, c) // stroke=fill → 无可见描边（ZSUI 开态）
     } else {
-        (
-            over(grad, theme().C_WHITE, if hovered { 0.32 } else { 0.22 }),
-            over(grad, theme().C_WHITE, if hovered { 0.50 } else { 0.40 }),
-        )
+        let base = rgb(54, 54, 72); // ZSUI ColorRole::Control 的暗面
+        let stroke = if hovered {
+            rgb(172, 172, 194) // PrimaryText 提亮
+        } else {
+            rgb(118, 118, 142) // SecondaryText 细描边
+        };
+        (base, stroke)
     };
-    // 1px 描边用**双层硬边填充**画（外层边色 + 内缩 1px 轨道色），不用 AA stroke——
-    // 小控件 AA 描边会发虚，硬边更利落。
-    fill_round_crisp(hdc, r, radius, edge);
-    let r_in = RECT {
-        left: r.left + scale(1),
-        top: r.top + scale(1),
-        right: r.right - scale(1),
-        bottom: r.bottom - scale(1),
-    };
-    fill_round_crisp(hdc, &r_in, radius - scale(1), track);
 
-    // —— 旋钮：纯白圆，**无阴影无描边环**（ZSUI 扁平；白在绿/灰紫轨道上对比都够）。——
-    // 上一版曾在旋钮下画"软阴影"（aa_round），小控件上渲染成一块脏月牙——已彻底删除。
-    let d = r.bottom - r.top - scale(6); // 18px，与轨道高 24 留 3px 内边距
-    let pad = scale(3);
+    // AA 圆角轨道（3x 超采样替代 ZSUI 的 GDI+ 抗锯齿——弧线平滑度同级）。
+    fill_round(hdc, r, radius, track_fill);
+    // 关态 1px 细描边（开态 stroke=fill 已无边）。
+    if track_stroke != track_fill {
+        stroke_round(hdc, r, radius, track_stroke, scale(1));
+    }
+
+    // —— 旋钮（ZSUI：开大白 / 关小灰，knob_pad=(track_h-knob)/2 居中内收）——
+    let (knob_d, knob_c) = if on {
+        (track_h - scale(4), rgb(255, 255, 255)) // 开：大 + 纯白
+    } else {
+        (track_h - scale(8), rgb(176, 176, 196)) // 关：小 + 灰（SecondaryText）
+    };
+    let pad = ((track_h - knob_d) / 2).max(scale(2));
     let cy = (r.top + r.bottom) / 2;
     let cx = if on {
-        r.right - pad - d / 2
+        r.right - pad - knob_d / 2
     } else {
-        r.left + pad + d / 2
+        r.left + pad + knob_d / 2
     };
     let knob = RECT {
-        left: cx - d / 2,
-        top: cy - d / 2,
-        right: cx + d / 2,
-        bottom: cy + d / 2,
+        left: cx - knob_d / 2,
+        top: cy - knob_d / 2,
+        right: cx + knob_d / 2,
+        bottom: cy + knob_d / 2,
     };
-    fill_round_crisp(hdc, &knob, d / 2, rgb(255, 255, 255));
+    fill_round(hdc, &knob, knob_d / 2, knob_c);
 }
 
 thread_local! {

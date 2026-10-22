@@ -8,6 +8,18 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
+## GUI 0.5.3 — 2026-10-22（开关 ZSUI 精度复刻，分支 `gdi-aa-radius`）
+
+Z.W.「按钮开关还是没有之前 ZSUI 做出来的细腻」→ 拆解 `qiu7824/zsui` 的 `zs_toggle_native_draw_plan` 源码，照搬三条几何/配色铁律：
+
+- **旋钮开大关小**（`toggle_knob_on_size` > `toggle_knob_off_size`）：开态旋钮饱满突出（`track_h-4`）、关态小旋钮内收（`track_h-8`），比恒定大小更有"开关手感"。
+- **旋钮开白关灰**：开态纯白，关态 `SecondaryText` 灰（`rgb(176,176,196)`）——关态白旋钮在暗轨上太扎眼，灰旋钮才"安静"。
+- **描边开关不同**：开态 `stroke==fill`（无可见边框），关态 1px 细描边（hover 提亮）勾出轮廓。
+- **AA 升级**：轨道/旋钮从 `fill_round_crisp`（硬边）改 `fill_round`（3x 超采样 AA），弧线平滑度对齐 ZSUI 的 GDI+ 抗锯齿（零 dll 约束不引 GDI+）。
+- 关态轨道改暗色 Control 面（`rgb(54,54,72)`），弃白玻璃叠层——白玻璃+白旋钮两层白太"跳"。
+
+门禁：fmt / clippy -D / 364 测试全绿；verify PASS；部署 `dist/winsuitex-gui-gdi.exe`（0.5.3.20261022）。
+
 ## GUI 0.5.2 — 2026-10-22（滚动错位修复 + 启动提速，分支 `gdi-aa-radius`）
 
 Z.W. 两则真机反馈：「滚动竖条后内容界面有问题」（截图暗条盖字、SMART 徽标串到内存区）+「运行的时候，界面要等一阵才弹得出来」。
