@@ -28,6 +28,22 @@ Z.W. 目检疑点「透明度50是否都统一调整的？右键增强里好像�
 - 验证：VM 内真实截图，扫两页卡片内区 navy 像素直方图同族同档（(64~67,55~56,145)），与混合数学精确吻合（navy(20,24,52)@0.5 叠渐变 ≈ (66,55,145)）。
 - 门禁：fmt / clippy -D / 355 测试全过；verify_gui_resource PASS。
 
+## 羽化双修（窗口圆角描边 + 开关控件质感，两版通用）
+
+- 旧窗口描边是亮薰衣草 (170,160,245)，勾在 `SetWindowRgn` 的 1-bit 锯齿上炸眼；且描边仅 1px、外缘主导色是亮渐变本身（实测外缘亮度 146，A 方案仅 101）。修：`C_WIN_BORDER`→(70,66,104) 暗靛 + 描边改画全窗矩形宽 scale(4)（GDI 画笔以路径为中心，外半边被 RGN/AA 离屏裁掉、内半边≈2px 才是可见暗环；描边矩形**不能内缩**——内缩到 x=0 的半笔会被 AA 离屏整个切掉）。修复后外缘 1px/2px 亮度 = 72/70，与 A 的 101/72 持平。
+- 开关轨道/旋钮原本走 `aa_round`（3x 超采样），小尺寸高对比控件上 1px 灰度过渡读作"发虚"。新增 `draw::fill_round_crisp`（硬边 RoundRect），轨道+旋钮改硬边，阴影保留 AA 软影做深度。连带修出 `fill_round_raw` 潜伏 bug：未选 NULL_PEN，RoundRect 用 DC 残留画笔描出黑边——已补 NULL_PEN。
+- 钉死值 `smoke_tests::theme_constants_regression` 同步 (70,66,104)；物证 `_shot_tmp/cmp_fix_corner.png` / `cmp_fix_switch.png` / `fix_*.png`。
+
+## 双主题运行时一键切换（深空玻璃 ⇄ 流畅灰紫，本分支收尾动作）
+
+Z.W. 对两版都满意、难取舍 → 不做二选一，把两套主题都编进同一 exe，面板底栏点一下即时换肤，选择持久化到 `%APPDATA%/WinSuiteX/theme.txt`，重启仍生效。
+
+- `theme.rs` 从「编译期 `const` 颜色」重构为「`Theme` 结构体 + `DEEP_SPACE`/`FLUENT` 两个 `const` 实例 + 全局 `AtomicU8`(`CURRENT_THEME`) + `theme()` 访问器」；几何常量（窗口尺寸/圆角/行高）两套相同，保持 `const` 不变，`CARD_RADIUS` 纳入 `Theme`（深空 8 / 流畅 10）。
+- 124 处颜色/`CARD_RADIUS` 常量调用点经脚本按名称降序替换为 `theme().XXX`（pages 106 / draw 15 / icons 1 / main 2），调用点零语义改动；`grad_at`/`tint_color`/`glass_alpha` 改读 `theme()`。
+- 底栏新增切换按钮（`draw_footer` 画 "主题：XXX ▸"）→ `pages::theme_btn_rect` 命中区 → `main::on_click` 命中后 `set_theme(1-id)+save_theme+InvalidateRect`；`theme_constants_regression` 重写为双主题校验（DEEP_SPACE 12 色 + FLUENT 6 色基线 + 两套 GLASS_ALPHA==0.50 + 默认 `tint_color()==DEEP_SPACE.C_GLASS_TINT`）。
+- 验证：VM 内 `tools/gdi_interact.py` 发 `SendMessageW` 点击 footer 按钮坐标触发切换，生成深空/流畅两套三页截图（`_shot_tmp/sw_deep_*.png` / `sw_fluent_*.png`）与并排对比图（`_shot_tmp/sw_cmp_*.png`）；像素证据确认两版均为 AA 圆角 + 各自色板，差异集中在背景梯度与卡片色调。
+- 门禁：fmt / clippy -D / 全量测试通过；verify_gui_resource PASS；dist 已部署运行（0.4.9.20261022）。
+
 ## GUI 0.4.7 — 2026-10-19（硬件页内存段「插槽」标签去重）
 
 - 内存段三个字段名都叫「插槽」（汇总行 + 每根明细行），明细行改顺序编号「内存 #N」（与 硬盘#N/网卡#N/显卡#N 一致），汇总行仍叫「插槽」。

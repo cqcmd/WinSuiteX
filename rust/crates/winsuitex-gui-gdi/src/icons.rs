@@ -13,7 +13,7 @@
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Gdi::*;
 
-use crate::theme::{scale, Color};
+use crate::theme::{scale, theme, Color};
 
 /// 硬件分组图标（与 C++ 版 `HWSEC_*` 一一对应）。
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -152,7 +152,7 @@ pub fn draw_hw_icon(hdc: HDC, r: &RECT, icon: HwIcon, color: Color) {
 /// 应用图标（顶栏瓦片用）：一个"芯片+ 心形点"的组合，比 emoji 稳。
 pub fn draw_app_icon(hdc: HDC, r: &RECT) {
     // 白色描边（顶栏是紫渐变底，图标必须亮色才看得见）。
-    draw_hw_icon(hdc, r, HwIcon::Cpu, crate::theme::C_ON_GRAD);
+    draw_hw_icon(hdc, r, HwIcon::Cpu, theme().C_ON_GRAD);
 }
 
 // ============================================================

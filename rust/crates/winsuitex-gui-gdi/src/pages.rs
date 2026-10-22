@@ -78,7 +78,7 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
         bottom: pad + scale((TITLE_H + 22) / 2),
     };
     // 瓦片底 = 渐变上叠白 22%（玻璃主题里没有实色块，所有"底"都是叠出来的）。
-    fill_glass_round(hdc, &tile, scale(6), C_WHITE, 0.22, 0, h);
+    fill_glass_round(hdc, &tile, scale(6), theme().C_WHITE, 0.22, 0, h);
     icons::draw_app_icon(hdc, &tile);
     let name = RECT {
         left: tile.right + scale(10),
@@ -87,7 +87,7 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
         right: w / 2,
         bottom: r.bottom,
     };
-    text(hdc, &name, "WinSuiteX", f_title, C_ON_GRAD, false);
+    text(hdc, &name, "WinSuiteX", f_title, theme().C_ON_GRAD, false);
 
     // 窗口按钮（右上角两键：最左=最小化，最右=关闭；最大化键已按反馈取消）。
     let bw = scale(46);
@@ -105,14 +105,14 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
         // 关闭键 hover 用红，沿用系统习惯。
         if hovered {
             let c = if i == 1 {
-                C_TB_CLOSE_HOVER
+                theme().C_TB_CLOSE_HOVER
             } else {
-                over(grad_at(r.top, h), C_WHITE, 0.22)
+                over(grad_at(r.top, h), theme().C_WHITE, 0.22)
             };
             fill(hdc, &br, c);
         }
         // 字形在键内居中（Windows 惯例；原先 DT_RIGHT 会让 ✕ 贴到窗口右缘）。
-        text_center(hdc, &br, labels[i], f_sub, C_ON_GRAD);
+        text_center(hdc, &br, labels[i], f_sub, theme().C_ON_GRAD);
     }
 }
 
@@ -126,12 +126,12 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
 /// 3. 描边画在内缩 `SHADOW_PAD` 的 body 上，与 `SetWindowRgn` 裁出的窗口
 ///    圆角**不同心**，窗口真实边缘没有任何描边——"圆角是虚的"。
 ///
-/// 现在的定案：**窗口 = 内容矩形本身**。全窗铺 `C_GRAD_BOT`，贴边画一圈
-/// `C_WIN_BORDER`（中深灰，任何壁纸下都可见），圆角交给 `SetWindowRgn`。
+/// 现在的定案：**窗口 = 内容矩形本身**。全窗铺 `theme().C_GRAD_BOT`，贴边画一圈
+/// `theme().C_WIN_BORDER`（中深灰，任何壁纸下都可见），圆角交给 `SetWindowRgn`。
 /// 桌面阴影由 Windows 11 DWM 对圆角窗口自动补（`WS_POPUP` + region 圆角
 /// 在 Win11 会走系统圆角阴影路径；Win10 无阴影但浅灰描边足够定义轮廓）。
 /// 现在更进一步：**整窗铺紫蓝渐变**（`(135,81,238)` → `(38,98,235)`，
-/// C++ 版实测值），贴边一圈叠白描边 `C_WIN_BORDER`。所有卡片都是在这条渐变上
+/// C++ 版实测值），贴边一圈叠白描边 `theme().C_WIN_BORDER`。所有卡片都是在这条渐变上
 /// 叠白/叠暗"透"出来的（见 `draw::fill_glass*`），因此窗口与内容是一体的，
 /// 不存在"白底 + 紫色顶栏"的割裂感。
 ///
@@ -144,8 +144,15 @@ pub fn draw_window_frame(hdc: HDC, w: i32, h: i32) {
         right: w,
         bottom: h,
     };
-    fill_gradient_v(hdc, &body, C_GRAD_TOP, C_GRAD_BOT);
-    stroke_round(hdc, &body, r, C_WIN_BORDER, scale(1));
+    fill_gradient_v(hdc, &body, theme().C_GRAD_TOP, theme().C_GRAD_BOT);
+    // 暗边环：1-bit `SetWindowRgn` 的圆角锯齿切在亮渐变上会炸眼（Z.W. 真机
+    // 反馈"窗口圆角羽化比方案 A 重"——A 通身暗色所以没事）。用低饱和暗靛
+    // 描边把外缘 2px 压暗，锯齿对比度骤降，观感与 A 对齐。
+    // ⚠️ 描边必须画在**全窗矩形**上且宽 scale(4)：GDI 画笔以路径为中心，
+    // 外半边被 RGN/离屏裁掉，内半边 ≈2px 才是实际可见的暗环；若把矩形内缩，
+    // AA 离屏裁剪会把压到 x=0 的那半笔整个切掉（实测最外 1px 露回亮渐变）。
+    // 圆角与 RGN 同径（r），AA 超采样保证环的弧线平滑。
+    stroke_round(hdc, &body, r, theme().C_WIN_BORDER, scale(4));
 }
 
 // ============================================================
@@ -172,13 +179,13 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
         let active = cur_tab() == i as i32;
         if active {
             // 选中页签：玻璃高亮底 + 文字提亮到纯白，比仅下划线更醒目。
-            // 浅玻璃（C_WHITE 0.12）叠在渐变上、不切断整体色调（页签条不铺实色条的铁律）。
+            // 浅玻璃（theme().C_WHITE 0.12）叠在渐变上、不切断整体色调（页签条不铺实色条的铁律）。
             // 页签条在固定层、不随滚动，故 scroll=0；win_h 用真实窗口高以对齐背景渐变。
             fill_glass_round(
                 hdc,
                 &r,
                 scale(8),
-                C_WHITE,
+                theme().C_WHITE,
                 0.12,
                 0,
                 WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
@@ -189,7 +196,11 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
             &r,
             n,
             f_sub,
-            if active { C_WHITE } else { C_ON_GRAD_FAINT },
+            if active {
+                theme().C_WHITE
+            } else {
+                theme().C_ON_GRAD_FAINT
+            },
             true,
         );
         if active {
@@ -203,7 +214,7 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
                     bottom: top + th - scale(7),
                 },
                 scale(2),
-                C_WHITE,
+                theme().C_WHITE,
             );
         }
     }
@@ -240,7 +251,7 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
     };
     // 底栏是**实色深藏青**（C++ 版实测 `(27,54,122)`）——比渐变底更深，
     // 把整窗重心压住，也让"提示 + 版权"这一行有明确的归属。
-    fill(hdc, &fr, C_FOOTER_BG);
+    fill(hdc, &fr, theme().C_FOOTER_BG);
 
     // 右键页签提示（常规逻辑：切换经典菜单会自动重启资源管理器）。
     let menu_hint = "右键项即时生效，切换经典菜单会自动重启资源管理器";
@@ -256,16 +267,44 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
         right: fr.right - scale(MARGIN),
         bottom: top + scale(30),
     };
-    text_center(hdc, &hr, hint, f_sub, C_ON_GRAD_DIM);
+    text_center(hdc, &hr, hint, f_sub, theme().C_ON_GRAD_DIM);
 
+    // 右下角主题切换按钮（绘制与命中共用 theme_btn_rect）。
+    let tb = theme_btn_rect();
+    fill_round(hdc, &tb, scale(6), theme().C_BTN);
+    let label = format!("主题：{} ▸", theme().NAME);
+    text_center(hdc, &tb, &label, f_tiny, theme().C_ON_GRAD);
+
+    // 版权行：左半显示，右半让给主题按钮。
     let ver = format!("{} · v{}", FOOTER_COPYRIGHT, env!("WSX_GUI_VERSION"));
     let cr = RECT {
         left: fr.left + scale(MARGIN),
         top: top + scale(30),
-        right: fr.right - scale(MARGIN),
+        right: tb.left - scale(8),
         bottom: fr.bottom - scale(4),
     };
-    text_center(hdc, &cr, &ver, f_tiny, C_ON_GRAD_FAINT);
+    text_center(hdc, &cr, &ver, f_tiny, theme().C_ON_GRAD_FAINT);
+}
+
+/// footer 右下角的主题切换按钮矩形（**绘制与命中唯一真源**，保证两者一致）。
+pub fn theme_btn_rect() -> RECT {
+    let w = WIN_CACHED_W.load(std::sync::atomic::Ordering::Relaxed);
+    let h = WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed);
+    let pad = body_pad();
+    let fr_right = content_right(w);
+    let btn_w = scale(108);
+    RECT {
+        left: fr_right - scale(MARGIN) - btn_w,
+        top: (h - pad) - scale(4) - scale(20),
+        right: fr_right - scale(MARGIN),
+        bottom: (h - pad) - scale(4),
+    }
+}
+
+/// 命中 footer 主题切换按钮（屏幕坐标）。
+pub fn hit_theme_btn(x: i32, y: i32) -> bool {
+    let r = theme_btn_rect();
+    hit_rect(x, y, (r.left, r.top, r.right, r.bottom))
 }
 
 // ============================================================
@@ -1087,7 +1126,7 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
     fill_glass_round(
         hdc,
         &card,
-        scale(CARD_RADIUS),
+        scale(theme().CARD_RADIUS),
         tint_color(),
         glass_alpha(),
         scroll,
@@ -1125,7 +1164,7 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
                     right: right - pad,
                     bottom: y + (i as i32 + 1) * scale(SEC_NOTE_H),
                 };
-                text(hdc, &nr, ln, f_tiny, C_ON_GRAD_DIM, false);
+                text(hdc, &nr, ln, f_tiny, theme().C_ON_GRAD_DIM, false);
             }
             y += scale(SEC_NOTE_H) * lines.len().max(1) as i32;
         }
@@ -1178,7 +1217,7 @@ pub fn draw_hw_header(hdc: HDC, w: i32, h: i32, f_sec: HFONT, f_body: HFONT) {
     fill_glass_round(
         hdc,
         &hdr,
-        scale(CARD_RADIUS),
+        scale(theme().CARD_RADIUS),
         tint_color(),
         glass_alpha(),
         0,
@@ -1194,7 +1233,14 @@ pub fn draw_hw_header(hdc: HDC, w: i32, h: i32, f_sec: HFONT, f_body: HFONT) {
         right: hdr.right - pad - scale(120) - scale(72) - scale(16),
         bottom: hdr.top + (hdr.bottom - hdr.top + th) / 2,
     };
-    text(hdc, &head, "计算机常规配置", f_sec, C_ON_GRAD, false);
+    text(
+        hdc,
+        &head,
+        "计算机常规配置",
+        f_sec,
+        theme().C_ON_GRAD,
+        false,
+    );
 
     let (ex, ey, ew, eh) = export_btn_rect();
     let br = RECT {
@@ -1222,7 +1268,7 @@ pub fn draw_hw_header(hdc: HDC, w: i32, h: i32, f_sec: HFONT, f_body: HFONT) {
 ///
 /// C++ 版硬件页没有彩色方瓦片——它是**线性小图标 + 一条比卡片底略亮的带**，
 /// 靠"亮一档"而不是"色块"来分层。这里同样处理：带子用玻璃混合画，
-/// 图标直接用分组强调色（[`C_ACCENT_SOFT`]）描边，不垫底色。
+/// 图标直接用分组强调色（[`theme().C_ACCENT_SOFT`]）描边，不垫底色。
 fn section(c: &SecCtx, y: i32, icon: HwIcon, title: &str) -> i32 {
     let SecCtx {
         hdc,
@@ -1239,7 +1285,7 @@ fn section(c: &SecCtx, y: i32, icon: HwIcon, title: &str) -> i32 {
         right: right - scale(8),
         bottom: y + band_h,
     };
-    fill_glass_round(hdc, &band, scale(6), C_WHITE, 0.10, scroll, win_h);
+    fill_glass_round(hdc, &band, scale(6), theme().C_WHITE, 0.10, scroll, win_h);
 
     // 图标：14px 简笔，用分组强调色（不垫彩色瓦片，与 C++ 版一致）。
     let tile = RECT {
@@ -1255,7 +1301,7 @@ fn section(c: &SecCtx, y: i32, icon: HwIcon, title: &str) -> i32 {
         right: band.right - scale(12),
         bottom: y + band_h,
     };
-    text(hdc, &tr, title, font, C_ON_GRAD, false);
+    text(hdc, &tr, title, font, theme().C_ON_GRAD, false);
     y + band_h
 }
 
@@ -1271,14 +1317,14 @@ struct SecCtx {
     font: HFONT,
 }
 
-/// 分组图标描边色：第九轮改成**柔和粉彩**（`C_ACCENT_SOFT`）——
-/// 第八轮一刀切成淡紫单色（`C_ICON`）治"花眼"，但用户又觉得"没了色彩"；
+/// 分组图标描边色：第九轮改成**柔和粉彩**（`theme().C_ACCENT_SOFT`）——
+/// 第八轮一刀切成淡紫单色（`theme().C_ICON`）治"花眼"，但用户又觉得"没了色彩"；
 /// 这版每组保留各自色相、只把饱和度压到不刺眼，是两者的折中。
 fn accent_of(icon: HwIcon) -> Color {
-    C_ACCENT_SOFT[hw_accent_idx(icon)]
+    theme().C_ACCENT_SOFT[hw_accent_idx(icon)]
 }
 
-/// 把 `HwIcon` 映射到 `C_ACCENT_SOFT` / `C_ACCENT_SOFT` 的下标（顺序与枚举声明一致）。
+/// 把 `HwIcon` 映射到 `theme().C_ACCENT_SOFT` / `theme().C_ACCENT_SOFT` 的下标（顺序与枚举声明一致）。
 fn hw_accent_idx(icon: HwIcon) -> usize {
     match icon {
         HwIcon::Os => 0,
@@ -1296,15 +1342,15 @@ fn hw_accent_idx(icon: HwIcon) -> usize {
 ///
 /// `idx` 与 `FEATURES` 下标对齐（0..4）；经典右键菜单行不走本映射，
 /// 绘制时直接传 `FeatureIcon::Menu`，所以 `_ =>` 分支只是兜底防越界。
-/// 颜色从 `C_ACCENT_SOFT` 取各自的粉彩色相，让菜单卡片也"有色彩"但不花眼。
+/// 颜色从 `theme().C_ACCENT_SOFT` 取各自的粉彩色相，让菜单卡片也"有色彩"但不花眼。
 fn feature_icon_for(idx: usize) -> (icons::FeatureIcon, Color) {
     match idx {
-        0 => (icons::FeatureIcon::Monitor, C_ACCENT_SOFT[2]), // 计算机管理
-        1 => (icons::FeatureIcon::Chip, C_ACCENT_SOFT[1]),    // 设备管理器
-        2 => (icons::FeatureIcon::Eye, C_ACCENT_SOFT[6]),     // 显示/隐藏系统文件
-        3 => (icons::FeatureIcon::Terminal, C_ACCENT_SOFT[5]), // 命令提示符
-        4 => (icons::FeatureIcon::PowerShell, C_ACCENT_SOFT[4]), // PowerShell
-        _ => (icons::FeatureIcon::Menu, C_ACCENT_SOFT[0]),    // 经典右键菜单
+        0 => (icons::FeatureIcon::Monitor, theme().C_ACCENT_SOFT[2]), // 计算机管理
+        1 => (icons::FeatureIcon::Chip, theme().C_ACCENT_SOFT[1]),    // 设备管理器
+        2 => (icons::FeatureIcon::Eye, theme().C_ACCENT_SOFT[6]),     // 显示/隐藏系统文件
+        3 => (icons::FeatureIcon::Terminal, theme().C_ACCENT_SOFT[5]), // 命令提示符
+        4 => (icons::FeatureIcon::PowerShell, theme().C_ACCENT_SOFT[4]), // PowerShell
+        _ => (icons::FeatureIcon::Menu, theme().C_ACCENT_SOFT[0]),    // 经典右键菜单
     }
 }
 
@@ -1326,8 +1372,8 @@ fn kv(hdc: HDC, lay: &KvLayout, y: i32, k: &str, v: &str, val_color: Option<Colo
         right: lay.x_key + scale(96),
         bottom: y + kh,
     };
-    text(hdc, &kr, k, lay.font, C_ON_GRAD_DIM, false);
-    let vcol = val_color.unwrap_or(C_ON_GRAD);
+    text(hdc, &kr, k, lay.font, theme().C_ON_GRAD_DIM, false);
+    let vcol = val_color.unwrap_or(theme().C_ON_GRAD);
     let lines = wrap_value(hdc, lay.font, v, lay.max_w());
     for (i, ln) in lines.iter().enumerate() {
         let vr = RECT {
@@ -1507,12 +1553,12 @@ fn feature_row(
         bottom: y + row_h,
     };
     // 内容卡玻璃：与硬件页 / 磁盘页**统一**——深 navy tint 叠 `glass_alpha()`（固化 50%）。
-    // 曾单用 `C_GLASS_DARK`(64,60,96) @ 0.45（更浅、更紫），与别处内容卡不是一档；
+    // 曾单用 `theme().C_GLASS_DARK`(64,60,96) @ 0.45（更浅、更紫），与别处内容卡不是一档；
     // Z.W. 2026-10-19 指出"右键增强里好像不太一样"，遂收敛到同一档玻璃（白字对比度反而更高）。
     fill_glass_round(
         hdc,
         &card,
-        scale(CARD_RADIUS),
+        scale(theme().CARD_RADIUS),
         tint_color(),
         glass_alpha(),
         scroll,
@@ -1520,11 +1566,11 @@ fn feature_row(
     );
     // 描边即状态：已启用=亮绿（一眼扫出哪几个是开的），未启用=叠白细边。
     let edge = if on {
-        C_CARD_EDGE_ON
+        theme().C_CARD_EDGE_ON
     } else {
-        over(grad_at(y - scroll, win_h), C_WHITE, 0.28)
+        over(grad_at(y - scroll, win_h), theme().C_WHITE, 0.28)
     };
-    stroke_round(hdc, &card, scale(CARD_RADIUS), edge, scale(1));
+    stroke_round(hdc, &card, scale(theme().CARD_RADIUS), edge, scale(1));
 
     // 左侧功能图标（柔彩，与硬件页图标同一套粉彩强调色）。
     let icon_sz = scale(22);
@@ -1544,7 +1590,7 @@ fn feature_row(
         right: right - scale(140),
         bottom: y + scale(32),
     };
-    text(hdc, &nr, name, f_name, C_ON_GRAD, false);
+    text(hdc, &nr, name, f_name, theme().C_ON_GRAD, false);
     let dr = RECT {
         left: text_left,
         top: y + scale(33),
@@ -1552,7 +1598,7 @@ fn feature_row(
         // 两行 13pt 文字 ≈ 34px：33+34=67 ≤ 68（= row_h−10，留出下边距）
         bottom: y + scale(68),
     };
-    text_multiline(hdc, &dr, desc, f_sub, C_ON_GRAD_DIM);
+    text_multiline(hdc, &dr, desc, f_sub, theme().C_ON_GRAD_DIM);
 
     // 右侧：状态文字 + 开关
     let sw_w = scale(44);
@@ -1588,23 +1634,22 @@ fn feature_row(
 /// 第十四轮重设计（Z.W. 反馈"开关不舒服"）：
 /// - 去掉上一版"淡灰描边环 + 白旋钮"的双环——双环在深色卡片上显脏、边界乱；
 /// - 改成**单色白旋钮 + 软阴影**，像一颗实体拨钮，观感更安静、更舒适；
-/// - 关态轨道用叠白玻璃（`over(grad, C_WHITE, 0.30)`），清晰可读的"关"态，
+/// - 关态轨道用叠白玻璃（`over(grad, theme().C_WHITE, 0.30)`），清晰可读的"关"态，
 ///   不再用半透明白导致发灰不清。
 fn draw_switch(hdc: HDC, r: &RECT, on: bool, hovered: bool, scroll: i32, win_h: i32) {
     let grad = grad_at(r.top - scroll, win_h);
-    let card = over(grad, C_GLASS_DARK, 0.45);
     // 轨道：开=品牌靛蓝（hover 提亮），关=叠白玻璃（清晰的"关"态）。
     let track = if on {
         if hovered {
-            C_BTN_H
+            theme().C_BTN_H
         } else {
-            C_BTN
+            theme().C_BTN
         }
     } else {
-        over(grad, C_WHITE, 0.30)
+        over(grad, theme().C_WHITE, 0.30)
     };
-    // 轨道圆角（AA）。
-    aa_round(hdc, r, (r.bottom - r.top) / 2, track, card);
+    // 轨道圆角（硬边：小控件 AA 反而发虚）。
+    fill_round_crisp(hdc, r, (r.bottom - r.top) / 2, track);
 
     // 滑块：白色圆 + 下方 1px 软阴影。
     let d = r.bottom - r.top - scale(6);
@@ -1628,14 +1673,14 @@ fn draw_switch(hdc: HDC, r: &RECT, on: bool, hovered: bool, scroll: i32, win_h: 
         over(grad, rgb(0, 0, 0), 0.30),
         track,
     );
-    // 白色滑块（bg=轨道色 → 圆角外无缝融进轨道）。
+    // 白色滑块（硬边：小控件 AA 反而发虚）。
     let knob = RECT {
         left: cx - d / 2,
         top: cy - d / 2,
         right: cx + d / 2,
         bottom: cy + d / 2,
     };
-    aa_round(hdc, &knob, d / 2, C_ON_GRAD, track);
+    fill_round_crisp(hdc, &knob, d / 2, theme().C_ON_GRAD);
 }
 
 thread_local! {
@@ -1736,7 +1781,14 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         right,
         bottom: y + scale(28),
     };
-    text(hdc, &head, "右键菜单增强工具", f_sec, C_ON_GRAD, false);
+    text(
+        hdc,
+        &head,
+        "右键菜单增强工具",
+        f_sec,
+        theme().C_ON_GRAD,
+        false,
+    );
     y += scale(32);
     let hint_text = "开关即时生效；切换经典右键菜单会自动重启资源管理器（约 1~2 秒）";
     let hint = RECT {
@@ -1745,7 +1797,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         right,
         bottom: y + scale(20),
     };
-    text(hdc, &hint, hint_text, f_sub, C_ON_GRAD_DIM, false);
+    text(hdc, &hint, hint_text, f_sub, theme().C_ON_GRAD_DIM, false);
     y += scale(32);
 
     // 当前系统是否 Windows 11（经典菜单仅 Win11 需要；判断系统是否显示该菜单）。
@@ -1765,7 +1817,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             &classic_head,
             "Windows 11 经典右键菜单",
             f_sec,
-            C_ON_GRAD,
+            theme().C_ON_GRAD,
             false,
         );
         y += scale(30);
@@ -1774,9 +1826,9 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             "在“此电脑”上右键直接看到旧版完整菜单，不再需要点“显示更多选项”",
             if classic_on { "已启用" } else { "未启用" },
             if classic_on {
-                C_CARD_EDGE_ON
+                theme().C_CARD_EDGE_ON
             } else {
-                C_ON_GRAD_FAINT
+                theme().C_ON_GRAD_FAINT
             },
         );
         y = feature_row(
@@ -1786,7 +1838,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             y,
             0,
             icons::FeatureIcon::Menu,
-            C_ACCENT_SOFT[0],
+            theme().C_ACCENT_SOFT[0],
             "显示经典菜单",
             desc_text,
             classic_on,
@@ -1813,7 +1865,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         right,
         bottom: y + scale(24),
     };
-    text(hdc, &feat_head, "功能增强", f_sec, C_ON_GRAD, false);
+    text(hdc, &feat_head, "功能增强", f_sec, theme().C_ON_GRAD, false);
     y += scale(30);
     let classic_on = classic_menu_on();
     let hide_extras = win11 && !classic_on;
@@ -1830,7 +1882,7 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
             &tip,
             "启用上方“经典右键菜单”后，其余扩展项才会出现并生效",
             f_sub,
-            C_ON_GRAD_FAINT,
+            theme().C_ON_GRAD_FAINT,
             false,
         );
         y += scale(22);
@@ -1846,7 +1898,11 @@ pub fn draw_menu_page(ctx: &PageCtx<'_>) -> i32 {
         let on = is_installed(&reg, f);
         let (fi, fcol) = feature_icon_for(i);
         let status = if on { "已启用" } else { "未启用" };
-        let status_color = if on { C_CARD_EDGE_ON } else { C_ON_GRAD_FAINT };
+        let status_color = if on {
+            theme().C_CARD_EDGE_ON
+        } else {
+            theme().C_ON_GRAD_FAINT
+        };
         y = feature_row(
             hdc,
             left,
@@ -1882,7 +1938,7 @@ fn card_bg(hdc: HDC, r: &RECT, scroll: i32, win_h: i32, extra_alpha: f32) {
     fill_glass_round(
         hdc,
         r,
-        scale(CARD_RADIUS),
+        scale(theme().CARD_RADIUS),
         tint_color(),
         glass_alpha() + extra_alpha,
         scroll,
@@ -1891,8 +1947,8 @@ fn card_bg(hdc: HDC, r: &RECT, scroll: i32, win_h: i32, extra_alpha: f32) {
     stroke_round(
         hdc,
         r,
-        scale(CARD_RADIUS),
-        over(grad_at(r.top - scroll, win_h), C_WHITE, 0.32),
+        scale(theme().CARD_RADIUS),
+        over(grad_at(r.top - scroll, win_h), theme().C_WHITE, 0.32),
         scale(1),
     );
 }
@@ -1997,7 +2053,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             bottom: y + rowh,
         };
         let numeric = i >= 6;
-        text(hdc, &cr, c, f_tiny, C_ON_GRAD_DIM, numeric);
+        text(hdc, &cr, c, f_tiny, theme().C_ON_GRAD_DIM, numeric);
     }
     y += rowh + scale(4);
 
@@ -2012,17 +2068,21 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         // 选中行：薄荷绿实底 + 深字（C++ 版实测 `(216,240,228)`）。
         // 深字是必须的——绿底上再放白字对比度不够。
         if selected {
-            fill_round(hdc, &row, 6, C_SEL_ROW);
+            fill_round(hdc, &row, 6, theme().C_SEL_ROW);
         } else if i as i32 == crate::hover_vol_row() {
             // 非选中行的 hover 浅玻璃底：鼠标悬停时给一点反馈，便于瞄准点击。
-            // 用 `C_WHITE` 低透明度（0.08）叠在渐变上，比实色更轻、不抢选中行的绿底。
-            fill_glass_round(hdc, &row, 6, C_WHITE, 0.08, scroll, h);
+            // 用 `theme().C_WHITE` 低透明度（0.08）叠在渐变上，比实色更轻、不抢选中行的绿底。
+            fill_glass_round(hdc, &row, 6, theme().C_WHITE, 0.08, scroll, h);
         }
 
         // 分区类型图标（盘符列左端）：本地盘 / 可移动 / 网络 / 光盘四类简笔。
-        // 选中行底变浅绿，图标改深字色（`C_SEL_ROW_TEXT`）保证对比；否则用柔彩。
+        // 选中行底变浅绿，图标改深字色（`theme().C_SEL_ROW_TEXT`）保证对比；否则用柔彩。
         let (vi, vcol) = volume_icon(v);
-        let icon_color = if selected { C_SEL_ROW_TEXT } else { vcol };
+        let icon_color = if selected {
+            theme().C_SEL_ROW_TEXT
+        } else {
+            vcol
+        };
         let ir = RECT {
             left: col_x[0] + scale(2),
             top: y + (rowh - scale(16)) / 2,
@@ -2049,7 +2109,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         let used_col = if total > 0 {
             used_color(used_pct)
         } else {
-            C_ON_GRAD_DIM
+            theme().C_ON_GRAD_DIM
         };
         let cells = [
             v.letter.clone(),
@@ -2088,11 +2148,11 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             // 已用% 非选中行按阈值上色（满盘红 / 偏满橙），一眼看出哪块盘快满了。
             let numeric = j >= 6;
             let fg = if selected {
-                C_SEL_ROW_TEXT
+                theme().C_SEL_ROW_TEXT
             } else if j == 8 {
                 used_col
             } else {
-                C_ON_GRAD
+                theme().C_ON_GRAD
             };
             text(hdc, &cr, cell, f_sub, fg, numeric);
         }
@@ -2120,8 +2180,8 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         // 选中分区详情卡 SMART 行：每行独立上色——
         // 健康状态按语义（绿/橙/红/灰），温度按阈值（≥85°红 / ≥75°橙），
         // 与硬件页显卡段、HTML 报告 `telemetry_line` 口径一致。
-        // ⚠️ 读不到 SMART 时显示"未读取"，用 `C_ON_GRAD_DIM`（深底弱对比、实测 5.5:1），
-        // 绝不能用 `C_GRAY_DARK`(89,89,89)——那是浅底深灰，深 navy 详情卡上 ≈1:1 隐形。
+        // ⚠️ 读不到 SMART 时显示"未读取"，用 `theme().C_ON_GRAD_DIM`（深底弱对比、实测 5.5:1），
+        // 绝不能用 `theme().C_GRAY_DARK`(89,89,89)——那是浅底深灰，深 navy 详情卡上 ≈1:1 隐形。
         let smart_lines: Vec<(String, Color)> = match v
             .disk_index
             .and_then(|di| r.info.disks.iter().find(|d| d.index == di))
@@ -2138,13 +2198,13 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                     v.push((format!("温度 {}℃", t), temp_color(i32::from(t))));
                 }
                 if let Some(p) = s.health_percent {
-                    v.push((format!("剩余寿命 {}%", p), C_ON_GRAD));
+                    v.push((format!("剩余寿命 {}%", p), theme().C_ON_GRAD));
                 }
                 v
             }
             None => vec![(
                 "SMART 健康：未读取（可能需以管理员身份运行）".to_string(),
-                crate::theme::C_ON_GRAD_DIM,
+                theme().C_ON_GRAD_DIM,
             )],
         };
 
@@ -2160,7 +2220,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
         };
         let used_line: (String, Color) = match used_pct {
             Some(p) => (format!("已用率 {p}%"), used_color(p)),
-            None => ("已用率 -".to_string(), C_ON_GRAD_DIM),
+            None => ("已用率 -".to_string(), theme().C_ON_GRAD_DIM),
         };
 
         y += scale(12);
@@ -2177,7 +2237,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                     v.type_name.clone().unwrap_or_default(),
                     v.fs_name.clone().unwrap_or_default()
                 ),
-                C_ON_GRAD,
+                theme().C_ON_GRAD,
             ),
             (
                 format!(
@@ -2186,7 +2246,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                     v.sectors_per_cluster.unwrap_or(0),
                     v.bytes_per_sector.unwrap_or(0)
                 ),
-                C_ON_GRAD,
+                theme().C_ON_GRAD,
             ),
             (
                 format!(
@@ -2194,7 +2254,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                     fmt_gb(v.total_bytes),
                     fmt_gb(v.free_bytes)
                 ),
-                C_ON_GRAD,
+                theme().C_ON_GRAD,
             ),
             used_line,
             (
@@ -2204,7 +2264,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                         .map_or_else(|| "-".to_string(), |d| format!("\\\\.\\PhysicalDrive{d}")),
                     v.vol_label.clone().unwrap_or_else(|| "无".into())
                 ),
-                C_ON_GRAD,
+                theme().C_ON_GRAD,
             ),
             (
                 format!(
@@ -2214,7 +2274,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                         .and_then(|d| d.partition_style.clone())
                         .unwrap_or_else(|| "未读取".into())
                 ),
-                C_ON_GRAD,
+                theme().C_ON_GRAD,
             ),
         ];
         // SMART 健康 / 温度 / 剩余寿命：独立彩色行，跟随选中盘渲染。
@@ -2261,16 +2321,16 @@ fn smart_label(h: &winsuitex_core::model::HealthStatus) -> &'static str {
 
 /// SMART 健康状态对应主题色：健康绿 / 预警橙 / 危险红 / 未知弱化紫。
 ///
-/// ⚠️ Unknown 不能用 `C_GRAY_DARK`(89,89,89)——那是**浅底**用的深灰，放在详情卡
+/// ⚠️ Unknown 不能用 `theme().C_GRAY_DARK`(89,89,89)——那是**浅底**用的深灰，放在详情卡
 /// 深 navy 底（亮度 ~78）上对比度 ≈1:1，真机实测整行"隐身"、ClearType 下只剩
-/// 字形残影像被裁半截（第二十七轮）。改用 `C_ON_GRAD_DIM`：应用里"字段名/提示行"
+/// 字形残影像被裁半截（第二十七轮）。改用 `theme().C_ON_GRAD_DIM`：应用里"字段名/提示行"
 /// 的统一弱化色，深底实测 5.5:1，与白正文仍拉开层级。
 fn smart_color(h: &winsuitex_core::model::HealthStatus) -> Color {
     match h {
-        winsuitex_core::model::HealthStatus::Healthy => C_SUCCESS,
-        winsuitex_core::model::HealthStatus::Warning => C_WARNING,
-        winsuitex_core::model::HealthStatus::Critical => C_ERROR,
-        winsuitex_core::model::HealthStatus::Unknown => C_ON_GRAD_DIM,
+        winsuitex_core::model::HealthStatus::Healthy => theme().C_SUCCESS,
+        winsuitex_core::model::HealthStatus::Warning => theme().C_WARNING,
+        winsuitex_core::model::HealthStatus::Critical => theme().C_ERROR,
+        winsuitex_core::model::HealthStatus::Unknown => theme().C_ON_GRAD_DIM,
     }
 }
 
@@ -2279,11 +2339,11 @@ fn smart_color(h: &winsuitex_core::model::HealthStatus) -> Color {
 /// 让"哪块卡/盘在发烧"一眼可辨，两端观感统一。
 fn temp_color(t: i32) -> Color {
     if t >= 85 {
-        C_ERROR
+        theme().C_ERROR
     } else if t >= 75 {
-        C_WARNING
+        theme().C_WARNING
     } else {
-        C_ON_GRAD
+        theme().C_ON_GRAD
     }
 }
 
@@ -2291,11 +2351,11 @@ fn temp_color(t: i32) -> Color {
 /// ≥75% 橙（偏满）、其余白字。用于磁盘页表格「已用%」列，满盘一眼可辨。
 fn used_color(pct: i32) -> Color {
     if pct >= 90 {
-        C_ERROR
+        theme().C_ERROR
     } else if pct >= 75 {
-        C_WARNING
+        theme().C_WARNING
     } else {
-        C_ON_GRAD
+        theme().C_ON_GRAD
     }
 }
 
@@ -2323,8 +2383,8 @@ fn draw_disk_health_badge(
     let tcol = match st {
         // 危险红底上的字色走皮肤 on_error：深色皮肤=白，浅色皮肤=深字，
         // 保证任何红底下都可读（C 皮肤的红是浅红 #f87171，白字会糊）。
-        winsuitex_core::model::HealthStatus::Critical => C_WHITE,
-        _ => C_BTN_WHITE_TEXT,
+        winsuitex_core::model::HealthStatus::Critical => theme().C_WHITE,
+        _ => theme().C_BTN_WHITE_TEXT,
     };
     text_center(hdc, &r, smart_label(&st), font, tcol);
 }
@@ -2351,7 +2411,7 @@ pub fn draw_disk_header(hdc: HDC, w: i32, h: i32, f_body: HFONT, n: usize) {
     fill_glass_round(
         hdc,
         &band,
-        scale(CARD_RADIUS),
+        scale(theme().CARD_RADIUS),
         tint_color(),
         glass_alpha(),
         0,
@@ -2370,7 +2430,7 @@ pub fn draw_disk_header(hdc: HDC, w: i32, h: i32, f_body: HFONT, n: usize) {
         &t,
         &format!("查看各分区的簇大小与容量信息　共 {} 个分区", n),
         f_body,
-        C_ON_GRAD,
+        theme().C_ON_GRAD,
         false,
     );
 }
@@ -2397,10 +2457,10 @@ fn volume_icon(v: &winsuitex_core::model::Volume) -> (icons::VolumeIcon, Color) 
         _ => icons::VolumeIcon::Drive, // 本地磁盘 / RAM / 未知
     };
     let color = match v.type_name.as_deref() {
-        Some("网络磁盘") => C_ACCENT_SOFT[0],
-        Some("可移动磁盘") => C_ACCENT_SOFT[5],
-        Some("光盘驱动器") => C_ACCENT_SOFT[4],
-        _ => C_ACCENT_SOFT[6], // 本地磁盘 蓝
+        Some("网络磁盘") => theme().C_ACCENT_SOFT[0],
+        Some("可移动磁盘") => theme().C_ACCENT_SOFT[5],
+        Some("光盘驱动器") => theme().C_ACCENT_SOFT[4],
+        _ => theme().C_ACCENT_SOFT[6], // 本地磁盘 蓝
     };
     (icon, color)
 }
@@ -2513,7 +2573,12 @@ pub fn draw_scrollbar(
         bottom: top + view_h - scale(4),
     };
     // 轨道/滑块同样用"叠白"表达，不引实灰（玻璃主题下实灰会显脏）。
-    fill_round(hdc, &track, bar_w / 2, over(grad_at(top, h), C_WHITE, 0.18));
+    fill_round(
+        hdc,
+        &track,
+        bar_w / 2,
+        over(grad_at(top, h), theme().C_WHITE, 0.18),
+    );
 
     // 滑块高度按"可视/总内容"比例，最小 24px 保证可点。
     let content_h = view_h + max_offset;
@@ -2528,7 +2593,7 @@ pub fn draw_scrollbar(
         right: track.right,
         bottom: track.top + pos + thumb_h,
     };
-    fill_round(hdc, &thumb, bar_w / 2, C_WHITE);
+    fill_round(hdc, &thumb, bar_w / 2, theme().C_WHITE);
 }
 
 /// 弹出错误提示（`MessageBoxW`）。

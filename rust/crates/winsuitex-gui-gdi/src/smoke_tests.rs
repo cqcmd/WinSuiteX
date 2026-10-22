@@ -1199,41 +1199,54 @@ fn hw_memory_section_omits_channel_warning_when_channels_are_full() {
 /// 回退为单一主题常量；颜色值与原 SKIN_A 一致）。
 #[test]
 fn theme_constants_regression() {
-    use crate::theme::{
-        rgb, C_BTN, C_FOOTER_BG, C_GLASS_DARK, C_GLASS_TINT, C_GRAD_BOT, C_GRAD_TOP, C_ICON,
-        C_ON_GRAD_DIM, C_ON_GRAD_FAINT, C_SEL_ROW, C_TB_CLOSE_HOVER, C_WIN_BORDER,
-    };
-    let exp: [(u32, (u8, u8, u8)); 12] = [
-        (C_GRAD_TOP.0, (135, 81, 238)),
-        (C_GRAD_BOT.0, (38, 98, 235)),
-        (C_FOOTER_BG.0, (27, 54, 122)),
-        (C_WIN_BORDER.0, (170, 160, 245)),
-        (C_ON_GRAD_DIM.0, (224, 216, 250)),
-        (C_ON_GRAD_FAINT.0, (198, 190, 240)),
-        (C_GLASS_TINT.0, (20, 24, 52)),
-        (C_GLASS_DARK.0, (64, 60, 96)),
-        (C_ICON.0, (214, 208, 248)),
-        (C_SEL_ROW.0, (216, 240, 228)),
-        (C_BTN.0, (79, 70, 229)),
-        (C_TB_CLOSE_HOVER.0, (232, 17, 35)),
+    use crate::theme::{rgb, DEEP_SPACE, FLUENT};
+    // 深空玻璃基线（默认主题）。
+    let exp_deep: [(u32, (u8, u8, u8)); 12] = [
+        (DEEP_SPACE.C_GRAD_TOP.0, (135, 81, 238)),
+        (DEEP_SPACE.C_GRAD_BOT.0, (38, 98, 235)),
+        (DEEP_SPACE.C_FOOTER_BG.0, (27, 54, 122)),
+        (DEEP_SPACE.C_WIN_BORDER.0, (70, 66, 104)),
+        (DEEP_SPACE.C_ON_GRAD_DIM.0, (224, 216, 250)),
+        (DEEP_SPACE.C_ON_GRAD_FAINT.0, (198, 190, 240)),
+        (DEEP_SPACE.C_GLASS_TINT.0, (20, 24, 52)),
+        (DEEP_SPACE.C_GLASS_DARK.0, (64, 60, 96)),
+        (DEEP_SPACE.C_ICON.0, (214, 208, 248)),
+        (DEEP_SPACE.C_SEL_ROW.0, (216, 240, 228)),
+        (DEEP_SPACE.C_BTN.0, (79, 70, 229)),
+        (DEEP_SPACE.C_TB_CLOSE_HOVER.0, (232, 17, 35)),
     ];
-    for (got, want) in exp {
-        assert_eq!(got, rgb(want.0, want.1, want.2).0, "主题色板漂离基线");
+    for (got, want) in exp_deep {
+        assert_eq!(got, rgb(want.0, want.1, want.2).0, "深空玻璃色板漂离基线");
     }
-    // 0.4.5 固化：玻璃透明度 = 50%，叠色深浅固定 100%（= 深 navy tint 全实）。
-    // Z.W. 取消调试页、把值固化回 theme.rs，这里钉死，防止日后误改。
+    // 流畅灰紫基线（第二主题）。
+    let exp_fluent: [(u32, (u8, u8, u8)); 6] = [
+        (FLUENT.C_GRAD_TOP.0, (56, 52, 84)),
+        (FLUENT.C_GRAD_BOT.0, (32, 32, 50)),
+        (FLUENT.C_FOOTER_BG.0, (25, 25, 40)),
+        (FLUENT.C_WIN_BORDER.0, (108, 102, 140)),
+        (FLUENT.C_GLASS_TINT.0, (30, 30, 44)),
+        (FLUENT.C_ICON.0, (204, 204, 218)),
+    ];
+    for (got, want) in exp_fluent {
+        assert_eq!(got, rgb(want.0, want.1, want.2).0, "流畅灰紫色板漂离基线");
+    }
+    // 0.4.5 固化：两套玻璃透明度均 = 50%。
     assert!(
-        (crate::theme::GLASS_ALPHA - 0.50).abs() < 1e-6,
-        "玻璃透明度必须固定 0.50"
+        (DEEP_SPACE.GLASS_ALPHA - 0.50).abs() < 1e-6,
+        "深空玻璃透明度必须固定 0.50"
     );
-    assert_eq!(
-        crate::theme::glass_alpha(),
-        crate::theme::GLASS_ALPHA,
-        "glass_alpha() 必须返回固化常量"
+    assert!(
+        (FLUENT.GLASS_ALPHA - 0.50).abs() < 1e-6,
+        "流畅玻璃透明度必须固定 0.50"
     );
+    // 默认主题（深空）的访问器必须返回深空基线值。
     assert_eq!(
         crate::theme::tint_color(),
-        C_GLASS_TINT,
-        "tint_color() 必须固定为深 navy 全实"
+        DEEP_SPACE.C_GLASS_TINT,
+        "tint_color() 默认应返回深空 navy"
+    );
+    assert!(
+        (crate::theme::glass_alpha() - 0.50).abs() < 1e-6,
+        "glass_alpha() 默认应 0.50"
     );
 }

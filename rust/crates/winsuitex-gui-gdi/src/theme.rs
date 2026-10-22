@@ -4,10 +4,20 @@
 //! GDI 没有 alpha 通道，所有毛玻璃效果都用**"取该处渐变色 → 与目标色按比例混合"**
 //! 实现（见 [`mix`]）。因为底色是随 y 变化的渐变，混合必须**逐行**做，
 //! 见 `draw::fill_glass_round` —— 一次性混一个固定值会让长卡片上下端与背景脱节。
-// ============================================================
+//
+// ## 双主题运行时切换
+// 面板内置两套完整主题：**深空玻璃**（紫蓝渐变 + navy 玻璃，科技/电竞感）与
+// **流畅灰紫**（低饱和靛灰渐变 + Smoke 深色玻璃，安静专业）。两套字段完全一致、
+// 只是取值不同，因此把颜色从「编译期 `const`」改为「运行时按当前主题取值」：
+// `theme()` 返回 `&'static Theme`，调用点写 `theme().C_XXX`。几何常量（窗口尺寸 /
+// 圆角 / 行高）两套相同，保持 `const` 不变。切换走全局 `AtomicU8` + `set_theme`，
+// 选择持久化到 `%APPDATA%/WinSuiteX/theme.txt`，重启仍生效。
 
 #![allow(dead_code)]
+#![allow(non_snake_case)]
 
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU8, Ordering};
 use windows::Win32::Foundation::COLORREF;
 
 // ============================================================
@@ -56,89 +66,233 @@ pub fn over(base: Color, over_c: Color, alpha: f32) -> Color {
 }
 
 // ============================================================
-// 配色（深空玻璃 · 紫蓝渐变 + 深 navy 玻璃）
+// 主题调色板
+// ============================================================
 //
-// 与 `design-demos/ui-schemes-compare.html` 方案 A 同源（零回归护栏：
-// `smoke_tests::theme_constants_regression` 钉死这些关键值）。
+// 两套主题字段完全一致，仅取值不同。颜色名沿用历史 `C_*` 命名（见文件顶部
+// 「双主题运行时切换」说明），几何参数不在此结构内（见下方 `const`）。
+
+/// 一套完整主题的全部颜色 + 玻璃观感参数。
+#[derive(Clone, Copy)]
+pub struct Theme {
+    /// 主题名（footer 切换按钮显示）。
+    pub NAME: &'static str,
+    /// 整窗垂直渐变顶。
+    pub C_GRAD_TOP: Color,
+    /// 整窗垂直渐变底。
+    pub C_GRAD_BOT: Color,
+    /// 底部栏实色。
+    pub C_FOOTER_BG: Color,
+    /// 窗口外描边 / 压 1-bit `SetWindowRgn` 圆角锯齿的暗边环。
+    pub C_WIN_BORDER: Color,
+    /// 主文字（卡片/渐变上的白字）。
+    pub C_ON_GRAD: Color,
+    /// 次级文字（页签未选中 / 表头）。
+    pub C_ON_GRAD_DIM: Color,
+    /// 弱文字（字段名 / 说明 / 版权）。
+    pub C_ON_GRAD_FAINT: Color,
+    /// 渐变上的实色线条/强调（页签下划线、滑块、hover 玻璃层混合目标）= 白。
+    pub C_WHITE: Color,
+    /// 玻璃卡 tint 混合基准色（压暗让白字清楚）。
+    pub C_GLASS_TINT: Color,
+    /// 右键页"暗玻璃"混合色。
+    pub C_GLASS_DARK: Color,
+    /// 分组图标统一描边色。
+    pub C_ICON: Color,
+    /// 分组图标柔和粉彩强调色（8 组，顺序见 `icons::HwIcon`）。两套主题共用同一组
+    /// 柔和粉彩——图标强调是产品统一视觉语言，不随背景气质切换而改变。
+    pub C_ACCENT_SOFT: [Color; 8],
+    /// 已启用卡片的亮色描边（亮绿）。
+    pub C_CARD_EDGE_ON: Color,
+    /// 纯色卡兜底底色（死代码原语用）。
+    pub C_CARD_BG: Color,
+    /// 纯色卡描边。
+    pub C_BORDER: Color,
+    /// 选中行底（薄荷绿）。
+    pub C_SEL_ROW: Color,
+    /// 选中行字（深绿）。
+    pub C_SEL_ROW_TEXT: Color,
+    /// 按钮基底色（品牌紫）。
+    pub C_BTN: Color,
+    /// 按钮 hover 色。
+    pub C_BTN_H: Color,
+    /// 白底按钮。
+    pub C_BTN_WHITE: Color,
+    /// 白底按钮 hover。
+    pub C_BTN_WHITE_H: Color,
+    /// 白底按钮字（深靛）。
+    pub C_BTN_WHITE_TEXT: Color,
+    /// 标题栏关闭按钮 hover 红。
+    pub C_TB_CLOSE_HOVER: Color,
+    /// 状态色：成功 / 预警 / 错误。
+    pub C_SUCCESS: Color,
+    /// 状态色：预警。
+    pub C_WARNING: Color,
+    /// 状态色：错误。
+    pub C_ERROR: Color,
+    /// 徽章（已启用/未启用/警告）文字/背景色。
+    pub C_GREEN_DARK: Color,
+    pub C_GREEN_BG: Color,
+    pub C_GRAY_DARK: Color,
+    pub C_GRAY_BG: Color,
+    pub C_AMBER_DARK: Color,
+    pub C_AMBER_BG: Color,
+    /// 卡片圆角（两套略有差异：深空 8 / 流畅 10）。
+    pub CARD_RADIUS: i32,
+    /// 玻璃透明度（tint 叠层不透明度，0.0-1.0）：两套均固定 0.50。
+    pub GLASS_ALPHA: f32,
+}
+
+/// 深空玻璃：紫蓝渐变 + 深 navy 玻璃（默认主题，科技/电竞感）。
+pub const DEEP_SPACE: Theme = Theme {
+    NAME: "深空玻璃",
+    C_GRAD_TOP: rgb(135, 81, 238),
+    C_GRAD_BOT: rgb(38, 98, 235),
+    C_FOOTER_BG: rgb(27, 54, 122),
+    // 低饱和暗靛灰：既是窗口轮廓线，也是压 1-bit 圆角锯齿的暗边环。
+    // 原亮薰衣草 (170,160,245) 在真机窗口圆角上锯齿炸眼，据 Z.W. 反馈压暗。
+    C_WIN_BORDER: rgb(70, 66, 104),
+    C_ON_GRAD: rgb(255, 255, 255),
+    C_ON_GRAD_DIM: rgb(224, 216, 250),
+    C_ON_GRAD_FAINT: rgb(198, 190, 240),
+    C_WHITE: rgb(255, 255, 255),
+    C_GLASS_TINT: rgb(20, 24, 52),
+    C_GLASS_DARK: rgb(64, 60, 96),
+    C_ICON: rgb(214, 208, 248),
+    C_ACCENT_SOFT: [
+        rgb(115, 210, 242), // Os   柔天蓝
+        rgb(234, 174, 144), // Board 柔桃
+        rgb(188, 170, 249), // Cpu  柔薰衣草紫
+        rgb(124, 210, 196), // Mem  柔薄荷
+        rgb(234, 155, 185), // Gpu  柔粉
+        rgb(233, 206, 123), // Disk 柔金
+        rgb(149, 184, 249), // Nic  柔蓝
+        rgb(230, 156, 212), // Audio 柔品红
+    ],
+    C_CARD_EDGE_ON: rgb(52, 199, 89),
+    C_CARD_BG: rgb(250, 250, 253),
+    C_BORDER: rgb(217, 217, 217),
+    C_SEL_ROW: rgb(216, 240, 228),
+    C_SEL_ROW_TEXT: rgb(28, 62, 44),
+    C_BTN: rgb(79, 70, 229),
+    C_BTN_H: rgb(99, 91, 240),
+    C_BTN_WHITE: rgb(255, 255, 255),
+    C_BTN_WHITE_H: rgb(232, 228, 252),
+    C_BTN_WHITE_TEXT: rgb(40, 36, 70),
+    C_TB_CLOSE_HOVER: rgb(232, 17, 35),
+    C_SUCCESS: rgb(52, 199, 89),
+    C_WARNING: rgb(250, 173, 20),
+    C_ERROR: rgb(255, 77, 79),
+    C_GREEN_DARK: rgb(21, 128, 61),
+    C_GREEN_BG: rgb(223, 242, 230),
+    C_GRAY_DARK: rgb(89, 89, 89),
+    C_GRAY_BG: rgb(242, 242, 242),
+    C_AMBER_DARK: rgb(202, 110, 4),
+    C_AMBER_BG: rgb(254, 244, 225),
+    CARD_RADIUS: 8,
+    GLASS_ALPHA: 0.50,
+};
+
+/// 流畅灰紫：低饱和靛灰渐变 + Smoke 深色玻璃（安静专业，长时间盯屏不累）。
+pub const FLUENT: Theme = Theme {
+    NAME: "流畅灰紫",
+    C_GRAD_TOP: rgb(56, 52, 84),
+    C_GRAD_BOT: rgb(32, 32, 50),
+    C_FOOTER_BG: rgb(25, 25, 40),
+    // 低饱和中深灰：贴 1-bit 圆角边缘时不勾出锯齿台阶。
+    C_WIN_BORDER: rgb(108, 102, 140),
+    C_ON_GRAD: rgb(255, 255, 255),
+    C_ON_GRAD_DIM: rgb(212, 212, 222),
+    C_ON_GRAD_FAINT: rgb(182, 182, 198),
+    C_WHITE: rgb(255, 255, 255),
+    C_GLASS_TINT: rgb(30, 30, 44),
+    C_GLASS_DARK: rgb(44, 44, 62),
+    C_ICON: rgb(204, 204, 218),
+    C_ACCENT_SOFT: [
+        rgb(115, 210, 242),
+        rgb(234, 174, 144),
+        rgb(188, 170, 249),
+        rgb(124, 210, 196),
+        rgb(234, 155, 185),
+        rgb(233, 206, 123),
+        rgb(149, 184, 249),
+        rgb(230, 156, 212),
+    ],
+    C_CARD_EDGE_ON: rgb(52, 199, 89),
+    C_CARD_BG: rgb(250, 250, 253),
+    C_BORDER: rgb(217, 217, 217),
+    C_SEL_ROW: rgb(216, 240, 228),
+    C_SEL_ROW_TEXT: rgb(28, 62, 44),
+    C_BTN: rgb(79, 70, 229),
+    C_BTN_H: rgb(99, 91, 240),
+    C_BTN_WHITE: rgb(255, 255, 255),
+    C_BTN_WHITE_H: rgb(232, 228, 252),
+    C_BTN_WHITE_TEXT: rgb(40, 36, 70),
+    C_TB_CLOSE_HOVER: rgb(232, 17, 35),
+    C_SUCCESS: rgb(52, 199, 89),
+    C_WARNING: rgb(250, 173, 20),
+    C_ERROR: rgb(255, 77, 79),
+    C_GREEN_DARK: rgb(21, 128, 61),
+    C_GREEN_BG: rgb(223, 242, 230),
+    C_GRAY_DARK: rgb(89, 89, 89),
+    C_GRAY_BG: rgb(242, 242, 242),
+    C_AMBER_DARK: rgb(202, 110, 4),
+    C_AMBER_BG: rgb(254, 244, 225),
+    CARD_RADIUS: 10,
+    GLASS_ALPHA: 0.50,
+};
+
+/// 当前主题索引：0 = 深空玻璃，1 = 流畅灰紫。
+static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
+
+/// 设置当前主题（id 非 0 一律视为流畅灰紫）。
+pub fn set_theme(id: u8) {
+    CURRENT_THEME.store(if id == 0 { 0 } else { 1 }, Ordering::Relaxed);
+}
+
+/// 当前主题索引（0/1）。
+pub fn theme_id() -> u8 {
+    CURRENT_THEME.load(Ordering::Relaxed)
+}
+
+/// 当前主题的不可变引用（指向 `const` 实例，`'static`）。
+#[inline]
+pub fn theme() -> &'static Theme {
+    if CURRENT_THEME.load(Ordering::Relaxed) == 1 {
+        &FLUENT
+    } else {
+        &DEEP_SPACE
+    }
+}
+
+// ============================================================
+// 主题持久化（%APPDATA%/WinSuiteX/theme.txt）
 // ============================================================
 
-/// 整窗垂直渐变顶。
-pub const C_GRAD_TOP: Color = rgb(135, 81, 238);
-/// 整窗垂直渐变底。
-pub const C_GRAD_BOT: Color = rgb(38, 98, 235);
-/// 底部栏实色。
-pub const C_FOOTER_BG: Color = rgb(27, 54, 122);
-/// 窗口外描边（中深灰，任何壁纸下可见）。
-pub const C_WIN_BORDER: Color = rgb(170, 160, 245);
+/// 启动时调用：从磁盘读回上次选择的主题。读不到/解析失败则保持默认深空玻璃。
+pub fn load_theme() {
+    if let Some(dir) = app_data_dir() {
+        let p = dir.join("theme.txt");
+        if let Ok(s) = std::fs::read_to_string(&p) {
+            if let Ok(id) = s.trim().parse::<u8>() {
+                set_theme(id);
+            }
+        }
+    }
+}
 
-/// 主文字（卡片/渐变上的白字）。
-pub const C_ON_GRAD: Color = rgb(255, 255, 255);
-/// 次级文字（页签未选中 / 表头）。
-pub const C_ON_GRAD_DIM: Color = rgb(224, 216, 250);
-/// 弱文字（字段名 / 说明 / 版权）。
-pub const C_ON_GRAD_FAINT: Color = rgb(198, 190, 240);
-/// 渐变上的**实色线条/强调**（页签下划线、滑块、hover 玻璃层混合目标）= 白。
-pub const C_WHITE: Color = rgb(255, 255, 255);
+/// 切换主题后调用：把当前选择写盘，重启仍生效。写盘失败静默忽略（内存切换仍有效）。
+pub fn save_theme(id: u8) {
+    if let Some(dir) = app_data_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join("theme.txt"), id.to_string());
+    }
+}
 
-/// 玻璃卡 tint 混合基准色（深 navy，压暗让白字清楚）。
-pub const C_GLASS_TINT: Color = rgb(20, 24, 52);
-/// 右键页"暗玻璃"混合色。
-pub const C_GLASS_DARK: Color = rgb(64, 60, 96);
-
-/// 分组图标统一描边色（淡紫）。
-pub const C_ICON: Color = rgb(214, 208, 248);
-/// 分组图标柔和粉彩强调色（8 组，顺序见 `icons::HwIcon`）。
-/// `C_ACCENT 高饱和 × 0.55 + 淡紫(214,208,248) × 0.45`，深 navy 玻璃卡上的"柔彩"
-/// 观感（第九轮 Z.W. 定案：禁用 emoji、禁用一刀切淡紫、禁用高饱和彩虹）。
-pub const C_ACCENT_SOFT: [Color; 8] = [
-    rgb(115, 210, 242), // Os   柔天蓝
-    rgb(234, 174, 144), // Board 柔桃
-    rgb(188, 170, 249), // Cpu  柔薰衣草紫
-    rgb(124, 210, 196), // Mem  柔薄荷
-    rgb(234, 155, 185), // Gpu  柔粉
-    rgb(233, 206, 123), // Disk 柔金
-    rgb(149, 184, 249), // Nic  柔蓝
-    rgb(230, 156, 212), // Audio 柔品红
-];
-
-/// 已启用卡片的亮色描边（亮绿）。
-pub const C_CARD_EDGE_ON: Color = rgb(52, 199, 89);
-/// 纯色卡兜底底色（`draw::card` 死代码原语用）。
-pub const C_CARD_BG: Color = rgb(250, 250, 253);
-/// 纯色卡描边。
-pub const C_BORDER: Color = rgb(217, 217, 217);
-
-/// 选中行底（薄荷绿）。
-pub const C_SEL_ROW: Color = rgb(216, 240, 228);
-/// 选中行字（深绿）。
-pub const C_SEL_ROW_TEXT: Color = rgb(28, 62, 44);
-
-/// 按钮基底色（品牌紫）。
-pub const C_BTN: Color = rgb(79, 70, 229);
-/// 按钮 hover 色。
-pub const C_BTN_H: Color = rgb(99, 91, 240);
-/// 白底按钮。
-pub const C_BTN_WHITE: Color = rgb(255, 255, 255);
-/// 白底按钮 hover。
-pub const C_BTN_WHITE_H: Color = rgb(232, 228, 252);
-/// 白底按钮字（深靛）。
-pub const C_BTN_WHITE_TEXT: Color = rgb(40, 36, 70);
-
-/// 标题栏关闭按钮 hover 红。
-pub const C_TB_CLOSE_HOVER: Color = rgb(232, 17, 35);
-
-/// 状态色：成功 / 预警 / 错误。
-pub const C_SUCCESS: Color = rgb(52, 199, 89);
-pub const C_WARNING: Color = rgb(250, 173, 20);
-pub const C_ERROR: Color = rgb(255, 77, 79);
-
-/// 徽章（已启用/未启用/警告）文字/背景色。
-pub const C_GREEN_DARK: Color = rgb(21, 128, 61);
-pub const C_GREEN_BG: Color = rgb(223, 242, 230);
-pub const C_GRAY_DARK: Color = rgb(89, 89, 89);
-pub const C_GRAY_BG: Color = rgb(242, 242, 242);
-pub const C_AMBER_DARK: Color = rgb(202, 110, 4);
-pub const C_AMBER_BG: Color = rgb(254, 244, 225);
+/// `%APPDATA%/WinSuiteX`。
+fn app_data_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|v| PathBuf::from(v).join("WinSuiteX"))
+}
 
 /// 取窗口渐变在屏幕 y（0..`h`）处的颜色。
 ///
@@ -146,11 +300,11 @@ pub const C_AMBER_BG: Color = rgb(254, 244, 225);
 /// 所以混合不能用一个固定值，必须按 y 现算。
 pub fn grad_at(y: i32, h: i32) -> Color {
     let t = (y.clamp(0, h.max(1)) as f32 / h.max(1) as f32).clamp(0.0, 1.0);
-    mix(C_GRAD_TOP, C_GRAD_BOT, t)
+    mix(theme().C_GRAD_TOP, theme().C_GRAD_BOT, t)
 }
 
 // ============================================================
-// 几何（96-DPI 基准）
+// 几何（96-DPI 基准）—— 两套主题完全一致，保持 `const`
 // ============================================================
 
 /// 顶栏高度（标题 + 窗口按钮）。
@@ -205,9 +359,7 @@ pub const WIN_H: i32 = 948;
 /// 磁盘页自适应窗口的**最小高度**（分区极少时窗口也不至于矮到畸形）。
 pub const DISK_MIN_H: i32 = 360;
 
-/// 卡片圆角（96-DPI 基准）。
-pub const CARD_RADIUS: i32 = 8;
-/// 窗口圆角（96-DPI 基准，`SetWindowRgn` 用）。
+/// 窗口圆角（96-DPI 基准，`SetWindowRgn` 用）。两套均为 12。
 pub const WIN_RADIUS: i32 = 12;
 
 // ============================================================
@@ -242,16 +394,12 @@ pub fn scale(v: i32) -> i32 {
 // （深 navy tint 全实）。全部 tint 玻璃卡（硬件页大卡/头部/表格/详情卡/
 // 分组横条）都读取它们，保持全窗口玻璃观感一致。
 
-/// 玻璃透明度（tint 叠层不透明度，0.0-1.0）：Z.W. 0.4.5 定案 = 0.50。
-/// 0.0 = 卡片完全透出窗口渐变（只剩文字浮在渐变上）；1.0 = tint 层全实。
-pub const GLASS_ALPHA: f32 = 0.50;
-
-/// 取玻璃透明度（0.0-1.0，供绘制原语直接消费）。
+/// 取玻璃透明度（0.0-1.0，供绘制原语直接消费）。两套主题均固定 0.50。
 pub fn glass_alpha() -> f32 {
-    GLASS_ALPHA
+    theme().GLASS_ALPHA
 }
 
-/// 当前 tint 混合色：深浅固定 100% = 深 navy `C_GLASS_TINT` 全实（默认最暗）。
+/// 当前 tint 混合色：深浅固定 100% = tint 全实（默认最暗）。
 pub fn tint_color() -> Color {
-    C_GLASS_TINT
+    theme().C_GLASS_TINT
 }

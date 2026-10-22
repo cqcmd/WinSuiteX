@@ -481,6 +481,8 @@ fn main() {
         // 而不是等 WM_DPICHANGED（后者在创建后才可能触发；窗口宽度不会被 OnPaint
         // 校正，缺少这一步会导致高分屏下窗口过窄、右侧内容被裁）。
         set_dpi(GetDpiForSystem().max(96) as u32);
+        // 启动时读回上次选择的主题（默认深空玻璃），保存到 %APPDATA%/WinSuiteX/theme.txt。
+        theme::load_theme();
         // scale(96) 反推当前 DPI（96*原DPI/96 取整），用于日志确认缩放基准。
         wlog!("set_dpi -> dpi≈{}", theme::scale(96));
 
@@ -1039,7 +1041,7 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
             right: w,
             bottom: h,
         },
-        C_GRAD_BOT,
+        theme().C_GRAD_BOT,
     );
 
     // 字体（临时创建，用完即删；字体族读当前皮肤，切皮肤下一帧自动生效——
@@ -1249,7 +1251,7 @@ unsafe fn capture_hw_page() {
             right: w,
             bottom: img_h,
         },
-        C_GRAD_BOT,
+        theme().C_GRAD_BOT,
     );
     pages::draw_window_frame(mdc, w, img_h);
     pages::draw_titlebar(mdc, w, img_h, f_title, f_sub);
@@ -1453,6 +1455,15 @@ unsafe fn on_click(hwnd: HWND, lparam: LPARAM) {
         } else {
             capture_hw_page();
         }
+        return;
+    }
+
+    // footer 主题切换按钮（跨页可用，固定层，用屏幕坐标）。
+    if pages::hit_theme_btn(x, screen_y) {
+        let id = 1 - theme::theme_id();
+        theme::set_theme(id);
+        theme::save_theme(id);
+        let _ = InvalidateRect(Some(hwnd), None, false);
         return;
     }
 

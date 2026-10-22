@@ -224,6 +224,13 @@ pub fn fill_round(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     fill_round_raw(hdc, r, radius, color);
 }
 
+/// 圆角填充的**硬边**版本（不走 AA 超采样）：用于小尺寸高对比控件
+/// （开关旋钮 / 轨道）。AA 的 1px 灰度过渡在这种控件上反而显得"发虚 / 羽化"，
+/// 硬边更利落。窗形圆角（`SetWindowRgn`）与卡片大圆角不在此列。
+pub fn fill_round_crisp(hdc: HDC, r: &RECT, radius: i32, color: Color) {
+    fill_round_raw(hdc, r, radius, color);
+}
+
 /// `fill_round` 的原路径（直接 RoundRect，无 AA）：小尺寸/降级时走这里。
 fn fill_round_raw(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     let d = (radius * 2).max(1);
@@ -235,7 +242,12 @@ fn fill_round_raw(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     // 这里临时把 b 选入 DC，绘制后恢复原画笔。
     unsafe {
         let old = SelectObject(hdc, b.into());
+        // ⚠️ 必须选 NULL_PEN：RoundRect 会同时用当前画笔描轮廓，
+        // 不选就会把 DC 里残留的画笔（常是深色）画成一圈黑边。
+        let npen = GetStockObject(NULL_PEN);
+        let oldp = SelectObject(hdc, npen);
         let _ = RoundRect(hdc, r.left, r.top, r.right, r.bottom, d, d);
+        let _ = SelectObject(hdc, oldp);
         let _ = SelectObject(hdc, old);
         let _ = DeleteObject(b.into());
     }
@@ -796,11 +808,22 @@ pub fn text_multiline(hdc: HDC, r: &RECT, s: &str, font: HFONT, color: Color) {
 /// 白底本身在紫渐变上已经有足够对比度，再加灰边反而脏。
 pub fn button(hdc: HDC, r: &RECT, label: &str, primary: bool, hovered: bool, font: HFONT) {
     let (bg, fg) = if primary {
-        (if hovered { C_BTN_H } else { C_BTN }, C_ON_GRAD)
+        (
+            if hovered {
+                theme().C_BTN_H
+            } else {
+                theme().C_BTN
+            },
+            theme().C_ON_GRAD,
+        )
     } else {
         (
-            if hovered { C_BTN_WHITE_H } else { C_BTN_WHITE },
-            C_BTN_WHITE_TEXT,
+            if hovered {
+                theme().C_BTN_WHITE_H
+            } else {
+                theme().C_BTN_WHITE
+            },
+            theme().C_BTN_WHITE_TEXT,
         )
     };
     fill_round(hdc, r, 6, bg);
@@ -810,9 +833,9 @@ pub fn button(hdc: HDC, r: &RECT, label: &str, primary: bool, hovered: bool, fon
 /// 状态徽章（已启用 / 未启用 / 警告）。
 pub fn badge(hdc: HDC, r: &RECT, label: &str, kind: BadgeKind, font: HFONT) {
     let (fg, bg) = match kind {
-        BadgeKind::On => (C_GREEN_DARK, C_GREEN_BG),
-        BadgeKind::Off => (C_GRAY_DARK, C_GRAY_BG),
-        BadgeKind::Warn => (C_AMBER_DARK, C_AMBER_BG),
+        BadgeKind::On => (theme().C_GREEN_DARK, theme().C_GREEN_BG),
+        BadgeKind::Off => (theme().C_GRAY_DARK, theme().C_GRAY_BG),
+        BadgeKind::Warn => (theme().C_AMBER_DARK, theme().C_AMBER_BG),
     };
     fill_round(hdc, r, scale(10), bg);
     text(hdc, r, label, font, fg, true);
@@ -832,7 +855,7 @@ pub enum BadgeKind {
 /// 图标瓦片：主色圆角方块 + 白色字母（C++ 版的彩色瓦片同思路）。
 pub fn icon_tile(hdc: HDC, r: &RECT, letter: &str, color: Color, font: HFONT) {
     fill_round(hdc, r, scale(6), color);
-    text(hdc, r, letter, font, C_ON_GRAD, true);
+    text(hdc, r, letter, font, theme().C_ON_GRAD, true);
 }
 
 /// 卡片（玻璃底 + 细描边）。
@@ -841,8 +864,8 @@ pub fn icon_tile(hdc: HDC, r: &RECT, letter: &str, color: Color, font: HFONT) {
 /// "比背景亮一层"来分层，不靠阴影——GDI 没有 alpha 通道做不出真阴影，
 /// 硬画只会变成一圈灰边。
 pub fn card(hdc: HDC, r: &RECT) {
-    fill_round(hdc, r, WIN_RADIUS, C_CARD_BG);
-    stroke_round(hdc, r, WIN_RADIUS, C_BORDER, 1);
+    fill_round(hdc, r, WIN_RADIUS, theme().C_CARD_BG);
+    stroke_round(hdc, r, WIN_RADIUS, theme().C_BORDER, 1);
 }
 
 // ============================================================
