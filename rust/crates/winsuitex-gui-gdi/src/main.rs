@@ -750,6 +750,13 @@ fn nc_hit_test(hwnd: HWND, sx: i32, sy: i32) -> i32 {
 
         let bw = scale(46);
         let right = pages::content_right(w);
+        // 主题切换按钮（页签条右侧，磁盘信息之后）：明确交回客户端区，让 WM_LBUTTONUP
+        // 处理。否则若落在边缘缩放带/标题栏拖动带会被吞掉、点击"没反应"（真机踩过：
+        // 按钮在标题栏时被 NC 判 HTCAPTION → 走拖动循环 → on_click 收不到）。
+        let tbr = pages::theme_btn_rect();
+        if y >= tbr.top && y < tbr.bottom && x >= tbr.left && x < tbr.right {
+            return HTCLIENT as i32;
+        }
         // 窗口按钮两键：命中就交回客户端区，让 WM_LBUTTONUP 去处理最小化/关闭。
         if y < pages::body_pad() + scale(TITLE_H) && x >= right - bw * 2 {
             return HTCLIENT as i32;
@@ -1063,9 +1070,9 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
     pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
 
-    // 顶栏（坐在整窗渐变上）+ 窗口按钮 + 主题切换 + 页签条
-    pages::draw_titlebar(mdc, w, h, f_title, f_sub, f_tiny);
-    pages::draw_tabbar(mdc, f_sub);
+    // 顶栏（坐在整窗渐变上）+ 窗口按钮 + 页签条（含主题切换药丸）
+    pages::draw_titlebar(mdc, w, h, f_title, f_sub);
+    pages::draw_tabbar(mdc, f_sub, f_tiny);
     wlog!("on_paint: titlebar+tabbar drawn");
 
     // 内容区可视高度（页签条下沿到底部栏上沿）。
@@ -1254,9 +1261,9 @@ unsafe fn capture_hw_page() {
         theme().C_GRAD_BOT,
     );
     pages::draw_window_frame(mdc, w, img_h);
-    pages::draw_titlebar(mdc, w, img_h, f_title, f_sub, f_tiny);
+    pages::draw_titlebar(mdc, w, img_h, f_title, f_sub);
     pages::WIN_CACHED_H.store(img_h, Ordering::Relaxed);
-    pages::draw_tabbar(mdc, f_sub);
+    pages::draw_tabbar(mdc, f_sub, f_tiny);
     // 3) 头部固定层 + 完整内容（scroll=0 → 从头画到尾，不再受可视区裁剪）
     pages::draw_hw_header(mdc, w, img_h, f_section, f_body);
     pages::draw_hw_page(&pages::PageCtx {
@@ -1405,8 +1412,8 @@ unsafe fn on_mouse_move(hwnd: HWND, lparam: LPARAM) {
     // 不随滚动移动；若用内容坐标 `y = screen_y - scroll` 会随滚动带偏，
     // 拉到底时 hover 高亮也跟着失踪（和点击失效同源）。
     let btn = pages::hit_header(x, screen_y);
-    // 窗口按钮（标题栏）在固定顶层、用屏幕坐标，与 on_click 取 .1 一致。
-    let tb = pages::hit_test(x, y).1;
+    // 窗口按钮（标题栏）+ 主题按钮（页签行）都在固定顶层、用屏幕坐标，与 on_click 取 .1 一致。
+    let tb = pages::hit_test(x, screen_y).1;
     // 开关悬停只在右键页算：其它页的开关缓存是空的，命中恒None。
     let sw = if cur_tab() == 1 {
         pages::switch_at(x, y).map_or(-1, |i| i as i32)
@@ -1468,9 +1475,8 @@ unsafe fn on_click(hwnd: HWND, lparam: LPARAM) {
     }
 
     // 窗口按钮（标题栏区）。标题栏/页签在滚动区之外，用屏幕坐标判断。
-    // `tb` 来自 `hit_test`：窗口按钮在固定顶层，其命中不受滚动影响（x 不变、
-    // y 恒 < TITLE_H），可继续用内容坐标 y 取。
-    let tb = pages::hit_test(x, y).1;
+    // `tb` 来自 `hit_test`：窗口按钮/主题按钮都在固定顶层、用屏幕坐标取 .1。
+    let tb = pages::hit_test(x, screen_y).1;
     if screen_y < pages::body_pad() + scale(TITLE_H) {
         match tb {
             0 => {

@@ -60,7 +60,7 @@ pub fn content_right(w: i32) -> i32 {
 /// 顶栏**不再单独铺底色**——整窗渐变已经铺满（见 [`draw_window_bg`]），
 /// 顶栏只是渐变最上面那一截（C++ 版就是这样：顶栏与内容区是同一条渐变，
 /// 不存在色块接缝）。
-pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT, f_tiny: HFONT) {
+pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
     let th = scale(TITLE_H);
     let pad = scale(SHADOW_PAD);
     let r = RECT {
@@ -114,23 +114,6 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT, f_t
         // 字形在键内居中（Windows 惯例；原先 DT_RIGHT 会让 ✕ 贴到窗口右缘）。
         text_center(hdc, &br, labels[i], f_sub, theme().C_ON_GRAD);
     }
-
-    // 主题切换按钮：标题栏右侧、最小化键左侧，跨页常驻。与窗口按钮同层、同用
-    // 屏幕坐标判定（hover 走 hover_tb()==2，命中走 hit_test 返回的索引 2）。
-    let tbr = theme_btn_rect();
-    let theme_hover = hover_tb() == 2;
-    fill_round(
-        hdc,
-        &tbr,
-        scale(6),
-        if theme_hover {
-            theme().C_BTN_H
-        } else {
-            theme().C_BTN
-        },
-    );
-    let tlabel = format!("主题：{} ▸", theme().NAME);
-    text_center(hdc, &tbr, &tlabel, f_tiny, theme().C_ON_GRAD);
 }
 
 /// 窗口外框：白底 + 圆角描边。
@@ -177,7 +160,7 @@ pub fn draw_window_frame(hdc: HDC, w: i32, h: i32) {
 // ============================================================
 
 /// 三个页签（硬件配置 / 右键增强 / 磁盘信息）。
-pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
+pub fn draw_tabbar(hdc: HDC, f_sub: HFONT, f_tiny: HFONT) {
     let pad = body_pad();
     let top = pad + scale(TITLE_H);
     let th = scale(TAB_H);
@@ -235,6 +218,50 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT) {
             );
         }
     }
+
+    // —— 主题切换按钮：页签条右侧（磁盘信息 tab 之后），跨页常驻 ——
+    // 与页签同层、同玻璃质感，但用**低对比玻璃药丸 + 暗淡文字**，不抢视觉
+    // （Z.W. 反馈标题栏实色按钮"突兀"）。
+    let tbr = theme_btn_rect();
+    let theme_hover = hover_tb() == 2;
+    // 浅玻璃底：比选中页签更淡（这不是"选中"语义，只是一个动作药丸），hover 时提亮。
+    fill_glass_round(
+        hdc,
+        &tbr,
+        scale(8),
+        theme().C_WHITE,
+        if theme_hover { 0.16 } else { 0.06 },
+        0,
+        WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
+    );
+    // 细描边：on-grad 暗淡色叠在渐变上（非实色边，不突兀）。
+    stroke_round(
+        hdc,
+        &tbr,
+        scale(8),
+        over(
+            grad_at(
+                tbr.top,
+                WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
+            ),
+            theme().C_ON_GRAD_FAINT,
+            0.6,
+        ),
+        scale(1),
+    );
+    // 文字：常态暗淡、悬停提亮到白。
+    let tlabel = format!("主题：{} ▸", theme().NAME);
+    text_center(
+        hdc,
+        &tbr,
+        &tlabel,
+        f_tiny,
+        if theme_hover {
+            theme().C_WHITE
+        } else {
+            theme().C_ON_GRAD_DIM
+        },
+    );
 }
 
 /// 命中测试：页签区返回页签索引，否则 -1。
@@ -298,30 +325,28 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
     text_center(hdc, &cr, &ver, f_tiny, theme().C_ON_GRAD_FAINT);
 }
 
-/// 标题栏右侧主题切换按钮矩形（**绘制与命中唯一真源**，保证两者一致）。
+/// 页签条右侧主题切换按钮矩形（**绘制与命中唯一真源**，保证两者一致）。
 ///
-/// 放在最小化键左侧、与窗口按钮同一行；跨页常驻。几何与 [`draw_titlebar`]
-/// 的窗口按钮布局完全对齐：窗口按钮两键各 `scale(46)`、右侧贴 `content_right(w)`，
-/// 主题按钮在它们左边留 `scale(8)` 间隙。
+/// 放在页签行「磁盘信息」tab 之后、右缘贴 `content_right(w) - scale(MARGIN)`，
+/// 与三个页签同一 y 带、跨页常驻。**在页签行（标题栏下方）而非标题栏**——
+/// 标题栏会被 `nc_hit_test` 判为拖动区(HTCAPTION)吞掉点击（真机踩过），
+/// 页签行是客户端区、点击正常送达 `on_click`。
 pub fn theme_btn_rect() -> RECT {
     let w = WIN_CACHED_W.load(std::sync::atomic::Ordering::Relaxed);
     let pad = body_pad();
-    let th = scale(TITLE_H);
-    let bw = scale(46); // 窗口按钮宽（与 draw_titlebar 一致）
-    let gap = scale(8);
-    let btn_w = scale(112);
-    let bh = scale(28); // 标题栏内垂直居中
-    let right_edge = content_right(w); // = w - pad
-    let x_right = right_edge - bw * 2 - gap; // 最小化键左缘
+    let top = pad + scale(TITLE_H); // 页签条顶
+    let th = scale(TAB_H);
+    let btn_w = scale(132);
+    let right = content_right(w) - scale(MARGIN);
     RECT {
-        left: x_right - btn_w,
-        top: pad + (th - bh) / 2,
-        right: x_right,
-        bottom: pad + (th + bh) / 2,
+        left: right - btn_w,
+        top: top + scale(6),
+        right,
+        bottom: top + th - scale(6),
     }
 }
 
-/// 命中 footer 主题切换按钮（屏幕坐标）。
+/// 命中主题切换按钮（屏幕坐标，固定层）。
 pub fn hit_theme_btn(x: i32, y: i32) -> bool {
     let r = theme_btn_rect();
     hit_rect(x, y, (r.left, r.top, r.right, r.bottom))
@@ -332,6 +357,10 @@ pub fn hit_theme_btn(x: i32, y: i32) -> bool {
 // ============================================================
 
 /// 返回 (命中的头部按钮：0=导出报告 / 1=截图 / -1=无, 命中的窗口按钮索引)。
+///
+/// ⚠️ `y` 必须是**屏幕坐标**（`screen_y`）：主题按钮在页签条、窗口按钮在标题栏，
+/// 都是固定层、不随滚动移动；若传内容坐标 `y = screen_y - scroll`，滚到底后
+/// 固定层按钮会被判到负 y 上（与头部按钮失效同源的坑）。调用方统一传 `screen_y`。
 pub fn hit_test(x: i32, y: i32) -> (i32, i32) {
     // 头部两颗按钮在硬件页右上角（截图在导出左边）。
     if cur_tab() == 0 {
@@ -342,16 +371,15 @@ pub fn hit_test(x: i32, y: i32) -> (i32, i32) {
             return (1, -1);
         }
     }
+    // 主题切换按钮：页签条右侧（磁盘信息之后）。固定层，用屏幕坐标；与标题栏
+    // 窗口按钮**不同 y 带**（页签行 y > TITLE_H），故不可能与最小化/关闭互相触发。
+    let tbr = theme_btn_rect();
+    if x >= tbr.left && x < tbr.right && y >= tbr.top && y < tbr.bottom {
+        return (-1, 2);
+    }
     // 窗口按钮（顶栏右侧两键）：布局与 draw_titlebar 完全一致。
     // 从右往左数 (right - x)/bw：=1 是最左键(最小化,0)，=0 是最右键(关闭,1)。
     if y < body_pad() + scale(TITLE_H) {
-        // 主题切换按钮（标题栏、最小化键左侧）：固定层，x 命中即算。
-        // 与窗口按钮同策略——只判 x 范围、由外层 y<TITLE_H 把关，避免滚动偏移
-        // 把内容坐标 y 拉负、导致 hover 失效（窗口按钮本来就只判 x）。
-        let tr = theme_btn_rect();
-        if x >= tr.left && x < tr.right {
-            return (-1, 2);
-        }
         let bw = scale(46);
         let right = content_right(WIN_CACHED_W.load(std::sync::atomic::Ordering::Relaxed));
         let from_right = (right - x) / bw;

@@ -50,6 +50,18 @@ Z.W. 对两版都满意、难取舍 → 不做二选一，把两套主题都编�
 - 底栏还原为两行满宽居中（提示行 + 版权行），错位消除。
 - `draw_titlebar` 增加 `f_tiny` 形参（两处调用点 + smoke_tests 同步）；VM 重截双主题三页（`_shot_tmp/tb_deep_*` / `tb_fluent_*` / `tb_cmp_*.png`）确认按钮位置与底栏两行对齐。
 
+## 主题按钮移到页签行 + 真实点击修复（Z.W. 反馈「放右上角后点击不生效、点最小化关闭反而是切主题」）
+
+Z.W. 二次反馈标题栏版有两个问题：①按钮"点击不生效"，反而点最小化/关闭像切主题；②按钮配色"比较突兀"。定位到**根因是 NC 命中测试吞点击**：
+
+- **点击不生效根因**：标题栏按钮落在 `nc_hit_test` 的 `HTCAPTION`（拖动）区——`nc_hit_test` 只对 `x >= right - bw*2`（最小化/关闭两键）返回 `HTCLIENT`，主题按钮在更左、被当标题栏空白 → 走拖动循环，`WM_LBUTTONUP` 根本到不了 `on_click`。此前 `SendMessageW` 脚本"验证通过"是**假象**：`SendMessage` 跳过 `WM_NCHITTEST`，绕过了这层 bug（真实鼠标走 `SetCursorPos+mouse_event` 在本 VM 又不路由，连最小化都触发不了——故复现只能源自代码推理）。
+- **修：按钮移到页签行「磁盘信息」之后**（`theme_btn_rect` 重定位到 tab row，右缘贴 `content_right-MARGIN`、与三页签同一 y 带）。页签行在标题栏下方，`nc_hit_test` 自然返回 `HTCLIENT`，点击送达 `on_click`；另加**防御性** `HTCLIENT` 分支覆盖主题按钮区，杜绝未来布局变动误入拖动/缩放带。
+- **误切主题根因**：标题栏版 `hit_test` 把主题按钮命中塞在 `y<TITLE_H` 的窗口按钮分支里，与最小化/关闭同一 y 带易串扰。现主题按钮 y 带 `[50,82]`（页签行）与窗口按钮 `[0,44]`（标题栏）**物理互斥**，`hit_theme_btn`/`hit_test` 都判 y 带，最小化/关闭不可能再触发主题切换。
+- **配色收敛（不突兀）**：弃标题栏实色按钮（`C_BTN` 亮块），改**玻璃药丸**——`fill_glass_round(C_WHITE@0.06, hover 0.16)` + `stroke_round(on-grad 暗淡细描边)` + 文字 `C_ON_GRAD_DIM`(hover 白)，与页签同质感、低对比融入渐变。
+- `hit_test` 形参语义改**屏幕坐标** `screen_y`（主题/窗口按钮都在固定层；`on_mouse_move`/`on_click` 两处调用点同步），避免滚动把固定层按钮判到负 y；`draw_titlebar` 去 `f_tiny`、`draw_tabbar` 加 `f_tiny`（两处调用点 + smoke_tests 同步）。
+- 验证：`SendMessageW` 点新按钮坐标 (505,66) 成功 deep→fluent→deep 切换；`_shot_tmp/f2_cmp_*.png` 双主题三页并排图 + `btn_cmp.png` 按钮区放大确认位置与配色；像素断言 deep bg(139,84,254)/footer(27,54,122)、fluent (48,44,75)/(25,25,40)。
+- 门禁：fmt / clippy -D / 全量测试通过；verify_gui_resource PASS（0.4.9.20261022）；dist 已部署。
+
 ## GUI 0.4.7 — 2026-10-19（硬件页内存段「插槽」标签去重）
 
 - 内存段三个字段名都叫「插槽」（汇总行 + 每根明细行），明细行改顺序编号「内存 #N」（与 硬盘#N/网卡#N/显卡#N 一致），汇总行仍叫「插槽」。
