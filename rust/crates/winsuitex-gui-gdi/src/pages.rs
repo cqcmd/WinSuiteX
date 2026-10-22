@@ -191,7 +191,7 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT, f_tiny: HFONT) {
                 WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed),
             );
         }
-        text(
+        text_center(
             hdc,
             &r,
             n,
@@ -201,7 +201,6 @@ pub fn draw_tabbar(hdc: HDC, f_sub: HFONT, f_tiny: HFONT) {
             } else {
                 theme().C_ON_GRAD_FAINT
             },
-            true,
         );
     }
 
