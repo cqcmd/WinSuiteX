@@ -25,6 +25,24 @@
 // 纯 GUI 子程序：去掉 cargo 默认的控制台窗口（与 winsuitex-gui / -coreui 一致）。
 #![windows_subsystem = "windows"]
 
+/// 无 feature 时编译期彻底消失，连调用点都不产生代码。
+///
+/// ⚠️ 宏定义必须放在 `mod draw;` 等模块声明**之前**：`macro_rules!` 只对
+/// 文本顺序上位于定义点之后、且在本模块树内的代码可见（2026-10-22 在
+/// `draw.rs` 里用 `wlog!` 编译失败后上移）。
+#[cfg(not(feature = "crash-log"))]
+macro_rules! wlog {
+    ($($arg:tt)*) => {{}};
+}
+
+/// 有 feature 时写一行格式化日志。
+#[cfg(feature = "crash-log")]
+macro_rules! wlog {
+    ($($arg:tt)*) => {{
+        $crate::log_line(&format!($($arg)*));
+    }};
+}
+
 mod draw;
 mod icons;
 mod pages;
@@ -131,20 +149,6 @@ fn install_crash_logger() {
         log_line(&format!("BACKTRACE:\n{bt}"));
     }));
     log_line("crash logger installed");
-}
-
-/// 无 feature 时编译期彻底消失，连调用点都不产生代码。
-#[cfg(not(feature = "crash-log"))]
-macro_rules! wlog {
-    ($($arg:tt)*) => {{}};
-}
-
-/// 有 feature 时写一行格式化日志。
-#[cfg(feature = "crash-log")]
-macro_rules! wlog {
-    ($($arg:tt)*) => {{
-        $crate::log_line(&format!($($arg)*));
-    }};
 }
 
 use windows::core::{w, PCWSTR};
@@ -1089,20 +1093,165 @@ unsafe extern "system" fn wnd_proc(
     }
 }
 
-/// 整窗绘制：双缓冲 → 背景 → 顶栏 → 页签 → 内容页 → 底部栏 → 分层呈现。
+/// 磁盘页自适应高度的**目标客户区高度**（纯函数，收敛根基）。
+///
+/// - tab==2（磁盘页）：内容底边 `total` + 底栏 + 间隙 16，clamp 到
+///   `DISK_MIN_H..=cap`（下限防分区极少时窗口畸形，上限让多分区靠滚动）；
+/// - 其它页：恒为 `cap`（= `max_win_h()`，小屏钳工作区）——切回硬件/右键页
+///   窗口自动长回默认高。
+///
+/// ⚠️ **只依赖内容量，绝不依赖当前窗口高度**——这是自适应不震荡的根基：
+/// `total` 来自 `draw_disk_page` 的返回值（详情卡真实底边），量高只与内容和
+/// 宽度有关、与 `h` 无关，于是 `desired` 到达后下一帧 `|h-desired|≤2` 零动作。
+/// 任何给本函数引入 `cur_h` 的改动都会重新引入短/高往返震荡
+/// （2026-10-22 磁盘页事故，见 `on_paint` 的顺序不变式注释）。
+fn desired_win_height(total: i32, tab: i32, cap: i32) -> i32 {
+    if tab == 2 {
+        // 间隙 16：详情卡真实底边（total）到底栏顶要留出可见净空——
+        // 之前是 8，footer 顶与卡片底边**相切**，视觉上两个框融在一起
+        // （Z.W. 报告的"下面两个框重叠"，16 分区实机复现确认）。
+        (total + scale(FOOTER_H) + scale(16)).clamp(scale(DISK_MIN_H), cap)
+    } else {
+        cap
+    }
+}
+
+/// 释放 `on_paint` 临时创建的 5 个 UI 字体（多出口收尾共用）。
+fn delete_ui_fonts(fonts: [HFONT; 5]) {
+    for f in fonts {
+        if !font_invalid(f) {
+            // SAFETY: 字体是本帧 CreateFontW 的合法句柄，成对删除是标准用法。
+            unsafe {
+                let _ = DeleteObject(f.into());
+            }
+        }
+    }
+}
+
+/// 整窗绘制：量高 →（必要时）定窗高 → 双缓冲 → 背景 → 顶栏 → 页签 → 内容页 →
+/// 底部栏 → 分层呈现。
+///
+/// ⚠️ **顺序不变式（2026-10-22 短/高震荡事故）**：磁盘页自适应的
+/// `SetWindowPos` 必须发生在 `Backbuffer::new(w, h)` **之前**。改造分层窗口时
+/// `present_layered`（`UpdateLayeredWindow`）的 `psize` = 窗口新尺寸，若
+/// Backbuffer 还是调整前的旧高度，每帧末尾 ULW 都把窗口**改回旧高** →
+/// WM_SIZE → InvalidateRect → 下一帧又 SetWindowPos 拉到目标高……短/高两尺寸
+/// 无限往返（磁盘页实测"一直在短窗口和长窗口反复绘画"）。现在：先量高算
+/// desired → SetWindowPos → **重读客户区** → 用最终 w/h 建 Backbuffer → 绘制
+/// → 呈现，bb/窗口/ULW 三方尺寸同源，resize 后下一帧零动作、天然收敛。
 unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     wlog!("on_paint enter (top)");
     let mut rc = RECT::default();
     let _ = GetClientRect(hwnd, &mut rc);
-    let w = rc.right - rc.left;
-    let h = rc.bottom - rc.top;
+    let mut w = rc.right - rc.left;
+    let mut h = rc.bottom - rc.top;
     if w <= 0 || h <= 0 {
         wlog!("on_paint early-return: w={w} h={h}");
         return;
     }
 
+    // 字体（临时创建，用完即删；字体族读当前皮肤，切皮肤下一帧自动生效——
+    // 因为字体不缓存，每帧重建，这是"切换即时"的免费午餐）。先建：量高趟要用。
+    let f_title = font(FONT_UI, -scale(16), FW_BOLD.0 as i32);
+    let f_body = font(FONT_UI, -scale(14), 400);
+    let f_sub = font(FONT_UI, -scale(13), 400);
+    let f_tiny = font(FONT_UI, -scale(12), 400);
+    let f_section = font(FONT_UI, -scale(15), FW_BOLD.0 as i32);
+
+    // ⚠️ 把真实客户区宽高同步给命中测试与布局缓存（详见下方重复 store 处注释）。
+    pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
+    pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
+    LAST_CLIENT_H.store(h, Ordering::Relaxed);
+
+    let snap = snapshot();
+    let view_top = pages::content_top();
+
+    // 第一趟：1x1 哑 DC 量内容总高（绘制会被裁到1px 外，等于只跑布局不落像素）。
+    // 这样页面绘制函数不需要"干跑"开关，滚动条比例也拿得到真值。
+    // 量高在定窗高**之前**：`draw_disk_page` 的返回值只依赖内容与宽度、与窗口
+    // 高度无关，先量再定高正是收敛性的根（见 `desired_win_height`）。
+    let total = match Backbuffer::new(1, 1) {
+        Some(measure) => {
+            let mctx = pages::PageCtx {
+                hdc: measure.mem,
+                w,
+                h,
+                snap,
+                scroll: scroll_y(),
+                f_sec: f_section,
+                f_body,
+                f_sub,
+                f_tiny,
+            };
+            match cur_tab() {
+                1 => pages::draw_menu_page(&mctx),
+                2 => pages::draw_disk_page(&mctx),
+                _ => pages::draw_hw_page(&mctx),
+            }
+        }
+        // 极端内存压力下 DIB 建不出来：当作内容刚好一屏，不滚（宁可不滚也不崩）。
+        None => {
+            set_content_h(view_top);
+            view_top
+        }
+    };
+    set_content_h(total);
+    // —— 磁盘页按分区数自适应窗口高度（第九轮）——
+    // 仅磁盘页（tab 2）按内容量缩/放窗口高度，其它页保持默认 `WIN_H`。
+    // 未最大化时才调（最大化态下窗口应占满工作区，不能自作主张缩）。
+    // `total` 是内容底边（客户坐标，已含顶栏+页签），加底部栏即理想客户高度；
+    // 非磁盘页恒为 `cap`，于是切回硬件/右键页窗口自动长回默认高。
+    // 收敛性：resize 触发 WM_SIZE→本帧后重绘，下一帧 `desired==h` 不再 resize。
+    // 高度上限 `max_win_h()`（=min(设计高, 工作区)）：小屏（1024×768 工作区 ≈ 738
+    // 高 < 948）上窗口高不会超过工作区，标题栏/底栏留在屏内、内容靠滚动；
+    // 大屏仍取设计尺寸（零回归）。
+    // ⚠️ 本块必须在 Backbuffer::new 之前（见本函数文档的顺序不变式）。
+    if !is_zoomed() {
+        let desired = desired_win_height(total, cur_tab(), max_win_h());
+        if (h - desired).abs() > scale(2) {
+            let mut rcw = RECT::default();
+            if GetWindowRect(hwnd, &mut rcw).is_ok() {
+                let nw = rcw.right - rcw.left;
+                // 顶左不变、只改高度：分区少→窗口向下收矮；分区多→clamp 到上限靠滚动。
+                let _ = SetWindowPos(
+                    hwnd,
+                    None,
+                    rcw.left,
+                    rcw.top,
+                    nw,
+                    desired,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                apply_rounded_region(hwnd);
+            }
+            // SetWindowPos 同步发 WM_SIZE，窗口尺寸已变——立刻重读客户区，
+            // 后面 Backbuffer / 布局 / ULW 全部用**调整后**的尺寸（三方同源）。
+            // 读不到/读到 0（窗口正在销毁）就沿用旧值画完本帧，不再折腾。
+            let mut rc2 = RECT::default();
+            if GetClientRect(hwnd, &mut rc2).is_ok() {
+                let nw2 = rc2.right - rc2.left;
+                let nh2 = rc2.bottom - rc2.top;
+                if nw2 > 0 && nh2 > 0 {
+                    w = nw2;
+                    h = nh2;
+                    pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
+                    pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
+                    LAST_CLIENT_H.store(h, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+    // 钳制滚动范围：内容不足一屏时归零，超出时不能滚过头（底部露白很难看）。
+    // 依赖 LAST_CLIENT_H=最终高度，故放在定高之后。
+    let max_scroll = max_scroll();
+    if scroll_y() > max_scroll {
+        set_scroll_y(max_scroll);
+    }
+
+    // 定高之后才建 Backbuffer：尺寸 == 最终窗口尺寸（顺序不变式）。
     let Some(bb) = Backbuffer::new(w, h) else {
         wlog!("on_paint: Backbuffer::new failed (w={w} h={h})");
+        delete_ui_fonts([f_title, f_body, f_sub, f_tiny, f_section]);
         return;
     };
     let mdc = bb.mem;
@@ -1124,14 +1273,6 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
         theme().C_GRAD_BOT,
     );
 
-    // 字体（临时创建，用完即删；字体族读当前皮肤，切皮肤下一帧自动生效——
-    // 因为字体不缓存，每帧重建，这是"切换即时"的免费午餐）。
-    let f_title = font(FONT_UI, -scale(16), FW_BOLD.0 as i32);
-    let f_body = font(FONT_UI, -scale(14), 400);
-    let f_sub = font(FONT_UI, -scale(13), 400);
-    let f_tiny = font(FONT_UI, -scale(12), 400);
-    let f_section = font(FONT_UI, -scale(15), FW_BOLD.0 as i32);
-
     // frameless 窗口没有系统阴影/边框，先自绘外框，再叠内容。
     pages::draw_window_frame(mdc, w, h);
 
@@ -1149,12 +1290,9 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     wlog!("on_paint: titlebar+tabbar drawn");
 
     // 内容区可视高度（页签条下沿到底部栏上沿）。
-    LAST_CLIENT_H.store(h, Ordering::Relaxed);
-    let view_top = pages::content_top();
     let view_h = (h - scale(FOOTER_H) - pages::body_pad() - view_top).max(1);
 
     // 页面绘制的公共入参（DC / 尺寸 / 快照 / 字体组打包，见 `pages::PageCtx`）。
-    let snap = snapshot();
     let ctx = |hdc: HDC| pages::PageCtx {
         hdc,
         w,
@@ -1166,67 +1304,6 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
         f_sub,
         f_tiny,
     };
-
-    // 第一趟：1x1 哑 DC 量内容总高（绘制会被裁到1px 外，等于只跑布局不落像素）。
-    // 这样页面绘制函数不需要"干跑"开关，滚动条比例也拿得到真值。
-    let total = match Backbuffer::new(1, 1) {
-        // 正常路径：用 1x1 内存 DC 跑一遍布局，返回内容底部 y。
-        Some(measure) => match cur_tab() {
-            1 => pages::draw_menu_page(&ctx(measure.mem)),
-            2 => pages::draw_disk_page(&ctx(measure.mem)),
-            _ => pages::draw_hw_page(&ctx(measure.mem)),
-        },
-        // 极端内存压力下 DIB 建不出来：当作内容刚好一屏，不滚（宁可不滚也不崩）。
-        None => {
-            set_content_h(view_top);
-            view_top
-        }
-    };
-    set_content_h(total);
-    // —— 磁盘页按分区数自适应窗口高度（第九轮）——
-    // 仅磁盘页（tab 2）按内容量缩/放窗口高度，其它页保持默认 `WIN_H`。
-    // 未最大化时才调（最大化态下窗口应占满工作区，不能自作主张缩）。
-    // `total` 是内容底边（客户坐标，已含顶栏+页签），加底部栏即理想客户高度；
-    // 下限 `DISK_MIN_H` 防分区极少时窗口畸形，上限 `WIN_H` 让多分区时靠滚动。
-    // 非磁盘页恒为 `WIN_H`，于是切回硬件/右键页窗口自动长回默认高。
-    // 收敛性：resize 触发 WM_SIZE→本帧后重绘，下一帧 `desired==h` 不再 resize。
-    if !is_zoomed() {
-        // 高度上限从固定 `scale(WIN_H)` 改为 `max_win_h()`（=min(设计高, 工作区)）：
-        // 小屏（1024×768 工作区 ≈ 738 高 < 948）上窗口高不会超过工作区，
-        // 标题栏/底栏留在屏内、内容靠滚动；大屏仍取设计尺寸（零回归）。
-        let cap = max_win_h();
-        let desired = if cur_tab() == 2 {
-            // 间隙 16：详情卡真实底边（返回值）到底栏顶要留出可见净空——
-            // 之前是 8，footer 顶与卡片底边**相切**，视觉上两个框融在一起
-            // （Z.W. 报告的"下面两个框重叠"，16 分区实机复现确认）。
-            (total + scale(FOOTER_H) + scale(16)).clamp(scale(DISK_MIN_H), cap)
-        } else {
-            cap
-        };
-        let cur = h;
-        if (cur - desired).abs() > scale(2) {
-            let mut rc = RECT::default();
-            if GetWindowRect(hwnd, &mut rc).is_ok() {
-                let nw = rc.right - rc.left;
-                // 顶左不变、只改高度：分区少→窗口向下收矮；分区多→clamp 到 WIN_H 靠滚动。
-                let _ = SetWindowPos(
-                    hwnd,
-                    None,
-                    rc.left,
-                    rc.top,
-                    nw,
-                    desired,
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                );
-                apply_rounded_region(hwnd);
-            }
-        }
-    }
-    // 钳制滚动范围：内容不足一屏时归零，超出时不能滚过头（底部露白很难看）。
-    let max_scroll = max_scroll();
-    if scroll_y() > max_scroll {
-        set_scroll_y(max_scroll);
-    }
 
     // 第二趟：把 DC 视口上移 scroll_y 像素，实现滚动；用 SaveDC/RestoreDC 成对保存
     // clip 与视口，避免污染后续的底部栏绘制。
@@ -1277,11 +1354,7 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     // <前缀>.meta），供屏幕/窗口 DC 读回不可用的环境离线合成验证圆角 AA。
     dump_layered_frame(&bb);
 
-    for f in [f_title, f_body, f_sub, f_tiny, f_section] {
-        if !font_invalid(f) {
-            let _ = DeleteObject(f.into());
-        }
-    }
+    delete_ui_fonts([f_title, f_body, f_sub, f_tiny, f_section]);
 }
 
 /// 截屏：把**整个硬件页**（含滚动后才看得到的分组）渲成一张长图，存 PNG 到桌面并打开。

@@ -1280,3 +1280,75 @@ fn used_color_selected_row_keeps_alert_visible() {
         "选中行 ≥90% 告警不得回落成普通深字（否则红字被吞）"
     );
 }
+
+/// 磁盘页自适应窗高**不震荡**的根基：`desired_win_height` 是纯函数、只吃内容量。
+///
+/// 钉死 2026-10-22「磁盘页短窗口/长窗口反复绘画」事故的收敛条件：
+/// 目标高度绝不能依赖**当前**窗口高度（否则 h→desired→h 往返无固定点）。
+/// 当时震荡的直接根因是 `present_layered` 的 ULW `psize` 用旧 bb 高把窗口拽回去，
+/// 与本函数产出的 SetWindowPos 打架；顺序修复后本函数的纯度就是最后一道防线——
+/// 任何给它加 `cur_h` 参数或让返回值随窗口高度抖动的改动，都会让本测试外的
+/// 集成路径重新震荡，所以这里连纯度一起钉死。
+#[test]
+fn desired_win_height_is_content_only_and_clamped() {
+    use crate::theme::{scale, DISK_MIN_H, FOOTER_H};
+
+    let cap = crate::max_win_h();
+    let min_h = scale(DISK_MIN_H);
+    // 取一个远离 clamp 边界的中间内容量（避开 DISK_MIN_H 与 cap 挤在一起的小屏）
+    let mid_total = min_h; // → desired = min_h + footer + 16（仍在 clamp 区间内当 cap 足够大）
+
+    // 1) 磁盘页（tab 2）：中段走公式 total + FOOTER_H + 16
+    let expect_mid = (mid_total + scale(FOOTER_H) + scale(16)).clamp(min_h, cap);
+    assert_eq!(
+        crate::desired_win_height(mid_total, 2, cap),
+        expect_mid,
+        "磁盘页中段应走 total+footer+16 公式"
+    );
+
+    // 2) 内容极少 → 钳到 DISK_MIN_H（防窗口畸形）
+    assert_eq!(
+        crate::desired_win_height(0, 2, cap),
+        min_h,
+        "内容极少时应钳到 DISK_MIN_H"
+    );
+
+    // 3) 内容极多 → 钳到 cap（多分区靠滚动）
+    assert_eq!(
+        crate::desired_win_height(1_000_000, 2, cap),
+        cap,
+        "内容极多时应钳到工作区上限"
+    );
+
+    // 4) 非磁盘页恒为 cap（切回硬件/右键页窗口长回默认高）
+    for tab in [0, 1, 3] {
+        assert_eq!(
+            crate::desired_win_height(0, tab, cap),
+            cap,
+            "tab={tab} 应恒为 cap（与内容量无关）"
+        );
+        assert_eq!(
+            crate::desired_win_height(1_000_000, tab, cap),
+            cap,
+            "tab={tab} 应恒为 cap（与内容量无关）"
+        );
+    }
+
+    // 5) 纯度/幂等：同一输入重复计算恒等（无隐藏状态——实现里不得读全局窗高）。
+    for total in [0, min_h, mid_total, cap, cap * 2] {
+        let a = crate::desired_win_height(total, 2, cap);
+        let b = crate::desired_win_height(total, 2, cap);
+        assert_eq!(a, b, "total={total} 两次计算不一致（存在隐藏状态）");
+    }
+
+    // 6) 对 total 单调不减：内容更多窗口只会更高/持平，绝不会反而变矮（震荡源之一）
+    let mut prev = 0;
+    for total in (0..=cap * 2).step_by(64) {
+        let d = crate::desired_win_height(total, 2, cap);
+        assert!(
+            d >= prev,
+            "total={total}: desired={d} < prev={prev}（非单调）"
+        );
+        prev = d;
+    }
+}

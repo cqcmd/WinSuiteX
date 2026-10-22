@@ -989,6 +989,13 @@ impl Backbuffer {
     ///
     /// 返回 `false` = ULW 失败（个别精简系统/驱动）——调用方必须兜底降级
     /// （退回普通窗口 + region），否则窗口全透明等于"看不见程序"。
+    ///
+    /// ⚠️ **`psize` 必须传当前窗口尺寸，不能传 DIB 尺寸**（2026-10-22 事故）：
+    /// `UpdateLayeredWindow` 的 `psize` 语义是**窗口新尺寸**，传 bb 尺寸时只要
+    /// 两者不一致（如磁盘页自适应 SetWindowPos 已把窗口改高、bb 还是旧高），
+    /// ULW 就会把窗口几何**改回旧值** → WM_SIZE → 重绘 → 再 SetWindowPos……
+    /// 短/高两尺寸无限往返。恒传当前窗口尺寸 → ULW 只更新内容、永不改几何。
+    /// `on_paint` 的顺序不变式保证 bb==窗口尺寸，正常时与传 bb 等价。
     #[must_use]
     pub fn present_layered(&self, hwnd: HWND, radius: i32, rounded: bool) -> bool {
         self.finalize_alpha(radius, rounded);
@@ -1001,15 +1008,28 @@ impl Backbuffer {
             if GetWindowRect(hwnd, &mut wr).is_err() {
                 return false;
             }
+            let ww = wr.right - wr.left;
+            let wh = wr.bottom - wr.top;
+            if ww <= 0 || wh <= 0 {
+                return false;
+            }
+            if ww != self.w || wh != self.h {
+                // 不变量被打破（理论上只剩窗口销毁/外部强改尺寸）：留下痕迹好排查。
+                wlog!(
+                    "present_layered: bb {}x{} != window {}x{}（按窗口尺寸呈现）",
+                    self.w,
+                    self.h,
+                    ww,
+                    wh
+                );
+            }
             let pt_dst = POINT {
                 x: wr.left,
                 y: wr.top,
             };
             let pt_src = POINT { x: 0, y: 0 };
-            let size = SIZE {
-                cx: self.w,
-                cy: self.h,
-            };
+            // 见函数文档：窗口尺寸而非 DIB 尺寸。
+            let size = SIZE { cx: ww, cy: wh };
             let blend = BLENDFUNCTION {
                 BlendOp: AC_SRC_OVER as u8,
                 BlendFlags: 0,

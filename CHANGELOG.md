@@ -8,6 +8,20 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
+## GUI 0.5.1 — 2026-10-22（磁盘页窗高震荡修复：ULW psize 与 SetWindowPos 互拽，分支 `gdi-aa-radius`）
+
+Z.W.「现在是磁盘页面的时候，一直在短窗口和长窗口反复绘画」——0.5.0 引入分层窗口后暴露的**反馈环**，本次 A/B 实测复现并修复：
+
+- **根因**：`on_paint` 的磁盘页自适应高度 `SetWindowPos` 发生在建 Backbuffer **之后**，而 `present_layered` 的 `UpdateLayeredWindow` 的 `psize` 语义是**窗口新尺寸**（传的是 bb 旧高）——每帧末尾 ULW 都把刚调高的窗口**拽回旧高**，触发 WM_SIZE → InvalidateRect → 重绘 → 再 SetWindowPos……短/高两尺寸无限往返（探针实测高度在 492↔950 间翻转、dump 每秒重写 7+ 次）。
+- **修复（双保险）**：
+  1. **顺序不变式**：`on_paint` 重排为「量高 → SetWindowPos 定窗高 → **重读客户区** → 用最终 w/h 建 Backbuffer → 绘制 → 呈现」，bb/窗口/ULW 三方尺寸同源，resize 后下一帧 `desired==h` 零动作天然收敛；
+  2. **ULW 几何中立**：`present_layered` 的 `psize` 改传**当前窗口尺寸**而非 DIB 尺寸——ULW 只更新内容、永不改窗口几何，即使顺序不变式被打破也不会与 SetWindowPos 打架（尺寸不一致时留 wlog 痕迹）。
+- **收敛根基钉死**：目标高度抽纯函数 `desired_win_height(total, tab, cap)`（只吃内容量、绝不读当前窗高），回归测试钉死 clamp 区间/非磁盘页恒 cap/幂等/对 total 单调——任何引入 `cur_h` 依赖的改动都会让测试外的集成路径重新震荡。
+- **A/B 物证**（`tools/osc_probe.py`，SendMessageW 切磁盘页 + 紧循环采样 GetWindowRect + dump 重写计数）：
+  - 修复前（HEAD 5cbb7c8）：基线 950 稳定 → 切页后 `{492: 378k, 950: 856k}` 双值翻转，1s 内 dump 重写 7 次 = **OSCILLATING**；
+  - 修复后：切页后 `{492: 1254k}` 单值（收敛到内容适配高度），1s 内 dump 重写 0 = **STABLE**。
+- 回归测试：`desired_win_height_is_content_only_and_clamped`；门禁：fmt / clippy -D（默认+all-features）/ 362 测试全绿；verify_gui_resource PASS；部署 `dist/winsuitex-gui-gdi.exe`（0.5.1.20261022）。
+
 ## GUI 0.5.0 — 2026-10-22（窗口圆角真羽化：分层窗口 per-pixel alpha，分支 `gdi-aa-radius`）
 
 Z.W.「窗口圆角在深色背景下面看不太出来羽化，但在浅色背景下还是很明显」——`SetWindowRgn` 的 1-bit 形状掩码是天花板（深色壁纸把阶梯压住、浅色壁纸高对比炸出来），真 AA 只有分层窗口一条路能钉住 WIN_RADIUS=12（DWM 圆角半径固定 ~8px 且仅 Win11，已排除）：
