@@ -44,6 +44,12 @@ Z.W. 对两版都满意、难取舍 → 不做二选一，把两套主题都编�
 - 验证：VM 内 `tools/gdi_interact.py` 发 `SendMessageW` 点击 footer 按钮坐标触发切换，生成深空/流畅两套三页截图（`_shot_tmp/sw_deep_*.png` / `sw_fluent_*.png`）与并排对比图（`_shot_tmp/sw_cmp_*.png`）；像素证据确认两版均为 AA 圆角 + 各自色板，差异集中在背景梯度与卡片色调。
 - 门禁：fmt / clippy -D / 全量测试通过；verify_gui_resource PASS；dist 已部署运行（0.4.9.20261022）。
 
+## 主题按钮移到标题栏（Z.W. 反馈「放下面后两排字错位」）
+
+- 底栏按钮与版权行挤在一行导致 hint/版权两排字错位 → 切换按钮**移到标题栏右上角**（最小化键左侧，`theme_btn_rect` 重定位，与窗口按钮同层同几何）；hover 走 `hover_tb()==2`（`hit_test` 标题栏分支只判 x 范围、由 `y<TITLE_H` 把关，滚动偏移不再影响 hover）。
+- 底栏还原为两行满宽居中（提示行 + 版权行），错位消除。
+- `draw_titlebar` 增加 `f_tiny` 形参（两处调用点 + smoke_tests 同步）；VM 重截双主题三页（`_shot_tmp/tb_deep_*` / `tb_fluent_*` / `tb_cmp_*.png`）确认按钮位置与底栏两行对齐。
+
 ## GUI 0.4.7 — 2026-10-19（硬件页内存段「插槽」标签去重）
 
 - 内存段三个字段名都叫「插槽」（汇总行 + 每根明细行），明细行改顺序编号「内存 #N」（与 硬盘#N/网卡#N/显卡#N 一致），汇总行仍叫「插槽」。

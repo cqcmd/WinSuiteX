@@ -1063,8 +1063,8 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
     pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
 
-    // 顶栏（坐在整窗渐变上）+ 窗口按钮 + 页签条
-    pages::draw_titlebar(mdc, w, h, f_title, f_sub);
+    // 顶栏（坐在整窗渐变上）+ 窗口按钮 + 主题切换 + 页签条
+    pages::draw_titlebar(mdc, w, h, f_title, f_sub, f_tiny);
     pages::draw_tabbar(mdc, f_sub);
     wlog!("on_paint: titlebar+tabbar drawn");
 
@@ -1254,7 +1254,7 @@ unsafe fn capture_hw_page() {
         theme().C_GRAD_BOT,
     );
     pages::draw_window_frame(mdc, w, img_h);
-    pages::draw_titlebar(mdc, w, img_h, f_title, f_sub);
+    pages::draw_titlebar(mdc, w, img_h, f_title, f_sub, f_tiny);
     pages::WIN_CACHED_H.store(img_h, Ordering::Relaxed);
     pages::draw_tabbar(mdc, f_sub);
     // 3) 头部固定层 + 完整内容（scroll=0 → 从头画到尾，不再受可视区裁剪）

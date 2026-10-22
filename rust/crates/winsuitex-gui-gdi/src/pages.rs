@@ -60,7 +60,7 @@ pub fn content_right(w: i32) -> i32 {
 /// 顶栏**不再单独铺底色**——整窗渐变已经铺满（见 [`draw_window_bg`]），
 /// 顶栏只是渐变最上面那一截（C++ 版就是这样：顶栏与内容区是同一条渐变，
 /// 不存在色块接缝）。
-pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
+pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT, f_tiny: HFONT) {
     let th = scale(TITLE_H);
     let pad = scale(SHADOW_PAD);
     let r = RECT {
@@ -114,6 +114,23 @@ pub fn draw_titlebar(hdc: HDC, w: i32, h: i32, f_title: HFONT, f_sub: HFONT) {
         // 字形在键内居中（Windows 惯例；原先 DT_RIGHT 会让 ✕ 贴到窗口右缘）。
         text_center(hdc, &br, labels[i], f_sub, theme().C_ON_GRAD);
     }
+
+    // 主题切换按钮：标题栏右侧、最小化键左侧，跨页常驻。与窗口按钮同层、同用
+    // 屏幕坐标判定（hover 走 hover_tb()==2，命中走 hit_test 返回的索引 2）。
+    let tbr = theme_btn_rect();
+    let theme_hover = hover_tb() == 2;
+    fill_round(
+        hdc,
+        &tbr,
+        scale(6),
+        if theme_hover {
+            theme().C_BTN_H
+        } else {
+            theme().C_BTN
+        },
+    );
+    let tlabel = format!("主题：{} ▸", theme().NAME);
+    text_center(hdc, &tbr, &tlabel, f_tiny, theme().C_ON_GRAD);
 }
 
 /// 窗口外框：白底 + 圆角描边。
@@ -269,35 +286,38 @@ pub fn draw_footer(hdc: HDC, w: i32, h: i32, f_sub: HFONT, f_tiny: HFONT) {
     };
     text_center(hdc, &hr, hint, f_sub, theme().C_ON_GRAD_DIM);
 
-    // 右下角主题切换按钮（绘制与命中共用 theme_btn_rect）。
-    let tb = theme_btn_rect();
-    fill_round(hdc, &tb, scale(6), theme().C_BTN);
-    let label = format!("主题：{} ▸", theme().NAME);
-    text_center(hdc, &tb, &label, f_tiny, theme().C_ON_GRAD);
-
-    // 版权行：左半显示，右半让给主题按钮。
+    // 版权行：两行均满宽居中（主题切换已移到标题栏，底栏不再挤按钮，
+    // 两排字各占一行、宽度一致，避免之前与按钮同排错位的问题）。
     let ver = format!("{} · v{}", FOOTER_COPYRIGHT, env!("WSX_GUI_VERSION"));
     let cr = RECT {
         left: fr.left + scale(MARGIN),
         top: top + scale(30),
-        right: tb.left - scale(8),
+        right: fr.right - scale(MARGIN),
         bottom: fr.bottom - scale(4),
     };
     text_center(hdc, &cr, &ver, f_tiny, theme().C_ON_GRAD_FAINT);
 }
 
-/// footer 右下角的主题切换按钮矩形（**绘制与命中唯一真源**，保证两者一致）。
+/// 标题栏右侧主题切换按钮矩形（**绘制与命中唯一真源**，保证两者一致）。
+///
+/// 放在最小化键左侧、与窗口按钮同一行；跨页常驻。几何与 [`draw_titlebar`]
+/// 的窗口按钮布局完全对齐：窗口按钮两键各 `scale(46)`、右侧贴 `content_right(w)`，
+/// 主题按钮在它们左边留 `scale(8)` 间隙。
 pub fn theme_btn_rect() -> RECT {
     let w = WIN_CACHED_W.load(std::sync::atomic::Ordering::Relaxed);
-    let h = WIN_CACHED_H.load(std::sync::atomic::Ordering::Relaxed);
     let pad = body_pad();
-    let fr_right = content_right(w);
-    let btn_w = scale(108);
+    let th = scale(TITLE_H);
+    let bw = scale(46); // 窗口按钮宽（与 draw_titlebar 一致）
+    let gap = scale(8);
+    let btn_w = scale(112);
+    let bh = scale(28); // 标题栏内垂直居中
+    let right_edge = content_right(w); // = w - pad
+    let x_right = right_edge - bw * 2 - gap; // 最小化键左缘
     RECT {
-        left: fr_right - scale(MARGIN) - btn_w,
-        top: (h - pad) - scale(4) - scale(20),
-        right: fr_right - scale(MARGIN),
-        bottom: (h - pad) - scale(4),
+        left: x_right - btn_w,
+        top: pad + (th - bh) / 2,
+        right: x_right,
+        bottom: pad + (th + bh) / 2,
     }
 }
 
@@ -325,6 +345,13 @@ pub fn hit_test(x: i32, y: i32) -> (i32, i32) {
     // 窗口按钮（顶栏右侧两键）：布局与 draw_titlebar 完全一致。
     // 从右往左数 (right - x)/bw：=1 是最左键(最小化,0)，=0 是最右键(关闭,1)。
     if y < body_pad() + scale(TITLE_H) {
+        // 主题切换按钮（标题栏、最小化键左侧）：固定层，x 命中即算。
+        // 与窗口按钮同策略——只判 x 范围、由外层 y<TITLE_H 把关，避免滚动偏移
+        // 把内容坐标 y 拉负、导致 hover 失效（窗口按钮本来就只判 x）。
+        let tr = theme_btn_rect();
+        if x >= tr.left && x < tr.right {
+            return (-1, 2);
+        }
         let bw = scale(46);
         let right = content_right(WIN_CACHED_W.load(std::sync::atomic::Ordering::Relaxed));
         let from_right = (right - x) / bw;

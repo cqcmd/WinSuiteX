@@ -320,7 +320,7 @@ fn renders_all_three_pages_without_panicking() {
     // 因为它们只碰传进来的 HDC），所以这里不需要 `unsafe` 壳。
     for w in [480i32, 593, 900] {
         for h in [600i32, 738, 948] {
-            crate::pages::draw_titlebar(mem, w, h, fonts.0, fonts.3);
+            crate::pages::draw_titlebar(mem, w, h, fonts.0, fonts.3, fonts.4);
             crate::pages::draw_tabbar(mem, fonts.3);
             // 首屏固定头部：第十八轮之前这里曾有越界 bug（gdi_err.txt 崩溃点
             // 就在同区域），必须随窗口尺寸一起遍历，否则"头部在 1024×768 才崩"
