@@ -47,6 +47,11 @@ dist/*/
 # ---- 开发期 QA 截图（各轮视觉自测产物，如 r17_final_hw.png / _vm_font_*.png，不入库）----
 tools/*.png
 
+# ---- WSX_DUMP_LAYERED 调试转储（分层窗口 alpha 缓冲裸转储，不入库）----
+tools/*.bgra
+tools/*.meta
+tools/*.probe
+
 # ---- 开发期 QA 截图/调试产物（根目录各轮自测，不入库）----
 r15_*.png
 r16_*.png
