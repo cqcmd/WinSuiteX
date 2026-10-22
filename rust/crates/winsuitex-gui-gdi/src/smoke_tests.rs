@@ -1250,3 +1250,33 @@ fn theme_constants_regression() {
         "glass_alpha() 默认应 0.50"
     );
 }
+
+/// 磁盘「已用%」告警色：选中行（浅绿底）必须切**深色**告警变体，深底切亮色变体。
+///
+/// 钉死 Z.W. 反馈"选中第一行后面红色 93% 显不出来"的修复：选中行的已用% 不能被
+/// 统一深字吞掉，且浅底上要用深红/深橙保证对比（亮橙在浅绿底对比仅 ~1.7:1 隐身）。
+#[test]
+fn used_color_selected_row_keeps_alert_visible() {
+    use crate::pages::used_color;
+    use crate::theme::rgb;
+    // 浅底（选中行）：≥90% 深红、≥75% 深橙、正常=选中行深字
+    assert_eq!(used_color(93, true), rgb(176, 32, 38), "选中行 ≥90% 应深红");
+    assert_eq!(used_color(80, true), rgb(150, 84, 8), "选中行 ≥75% 应深橙");
+    assert_eq!(
+        used_color(50, true),
+        crate::theme::theme().C_SEL_ROW_TEXT,
+        "选中行正常档应回落选中行深字"
+    );
+    // 深底（非选中）：≥90% 亮红（C_ERROR，白字对比充足）
+    assert_eq!(
+        used_color(93, false),
+        crate::theme::theme().C_ERROR,
+        "非选中 ≥90% 应亮红 C_ERROR"
+    );
+    // 关键回归：选中行 ≥90% 的色**不得等于**选中行深字（否则又"显不出来"）
+    assert_ne!(
+        used_color(93, true),
+        crate::theme::theme().C_SEL_ROW_TEXT,
+        "选中行 ≥90% 告警不得回落成普通深字（否则红字被吞）"
+    );
+}

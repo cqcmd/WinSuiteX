@@ -1683,59 +1683,67 @@ fn feature_row(
     y + row_h + scale(10)
 }
 
-/// 开关本体：圆角轨道 + 白色圆形滑块（开=靛蓝轨道，关=叠白玻璃轨道），
-/// 滑块下方带 1px 软阴影（伪厚度），整体用 `aa_round` 抗锯齿。
+/// 开关本体：Fluent 药丸轨道 + 纯白圆形旋钮（**扁平无阴影**）。
 ///
-/// 第十四轮重设计（Z.W. 反馈"开关不舒服"）：
-/// - 去掉上一版"淡灰描边环 + 白旋钮"的双环——双环在深色卡片上显脏、边界乱；
-/// - 改成**单色白旋钮 + 软阴影**，像一颗实体拨钮，观感更安静、更舒适；
-/// - 关态轨道用叠白玻璃（`over(grad, theme().C_WHITE, 0.30)`），清晰可读的"关"态，
-///   不再用半透明白导致发灰不清。
+/// 借鉴 ZSUI 的令牌化控件方法（`qiu7824/zsui`）——4px 网格 / 满药丸 radius / 语义色 /
+/// 扁平无脏投影。具体：
+/// - **开=绿**（`C_SUCCESS`，与「已启用」文字、卡片描边 `C_CARD_EDGE_ON` 同一"启用=绿"语言），
+///   **关=叠白玻璃灰紫**——两态**异色相**一眼分清；此前开态靛 `C_BTN`、关态灰紫同为紫调、
+///   区分度低显"闷"。
+/// - 旋钮**纯白、无阴影无描边环**：上一版在旋钮下画 `aa_round`"软阴影"，小控件上渲染成
+///   一块脏月牙（Z.W. 圈"太丑"），彻底删除。白在绿/灰紫轨道上对比都够，无需描边。
+/// - 轨道 1px 描边用**双层硬边填充**（外边色 + 内缩轨道色）画，不用 AA stroke——小控件
+///   AA 描边发虚；轨道/旋钮一律 `fill_round_crisp`（硬边铁律）。
 fn draw_switch(hdc: HDC, r: &RECT, on: bool, hovered: bool, scroll: i32, win_h: i32) {
     let grad = grad_at(r.top - scroll, win_h);
-    // 轨道：开=品牌靛蓝（hover 提亮），关=叠白玻璃（清晰的"关"态）。
-    let track = if on {
-        if hovered {
-            theme().C_BTN_H
-        } else {
-            theme().C_BTN
-        }
-    } else {
-        over(grad, theme().C_WHITE, 0.30)
-    };
-    // 轨道圆角（硬边：小控件 AA 反而发虚）。
-    fill_round_crisp(hdc, r, (r.bottom - r.top) / 2, track);
+    let radius = (r.bottom - r.top) / 2; // 满药丸（ZSUI Pill radius = h/2）
 
-    // 滑块：白色圆 + 下方 1px 软阴影。
-    let d = r.bottom - r.top - scale(6);
-    let cx = if on {
-        r.right - d / 2 - scale(3)
+    // —— 轨道（ZSUI/Fluent：药丸 + 1px 描边，语义色）——
+    // 开 = 绿（与「已启用」文字 / 卡片描边 `C_CARD_EDGE_ON` 同语言，语义=启用），
+    // 关 = 叠白玻璃（灰紫，贴玻璃卡片质感）。两态**异色相**（绿↔灰紫），一眼分清
+    // ——此前开态用靛 `C_BTN`、关态灰紫，两态同为紫调、区分度低显"闷"。
+    // hover 各自提亮一档。轨道/旋钮**硬边**（小控件 AA 发虚，见 fill_round_crisp 铁律）。
+    let (track, edge) = if on {
+        let c = if hovered {
+            mix(theme().C_SUCCESS, rgb(255, 255, 255), 0.14)
+        } else {
+            theme().C_SUCCESS
+        };
+        (c, mix(c, rgb(0, 0, 0), 0.22)) // 边=同色相压暗，融进绿轨
     } else {
-        r.left + d / 2 + scale(3)
+        (
+            over(grad, theme().C_WHITE, if hovered { 0.32 } else { 0.22 }),
+            over(grad, theme().C_WHITE, if hovered { 0.50 } else { 0.40 }),
+        )
     };
+    // 1px 描边用**双层硬边填充**画（外层边色 + 内缩 1px 轨道色），不用 AA stroke——
+    // 小控件 AA 描边会发虚，硬边更利落。
+    fill_round_crisp(hdc, r, radius, edge);
+    let r_in = RECT {
+        left: r.left + scale(1),
+        top: r.top + scale(1),
+        right: r.right - scale(1),
+        bottom: r.bottom - scale(1),
+    };
+    fill_round_crisp(hdc, &r_in, radius - scale(1), track);
+
+    // —— 旋钮：纯白圆，**无阴影无描边环**（ZSUI 扁平；白在绿/灰紫轨道上对比都够）。——
+    // 上一版曾在旋钮下画"软阴影"（aa_round），小控件上渲染成一块脏月牙——已彻底删除。
+    let d = r.bottom - r.top - scale(6); // 18px，与轨道高 24 留 3px 内边距
+    let pad = scale(3);
     let cy = (r.top + r.bottom) / 2;
-    // 软阴影：比滑块大 1px、整体下移 1~2px 的暗圆（bg=轨道色 → 圆角外无缝融进轨道）。
-    let sh = RECT {
-        left: cx - d / 2 - scale(1),
-        top: cy - d / 2,
-        right: cx + d / 2 + scale(1),
-        bottom: cy + d / 2 + scale(2),
+    let cx = if on {
+        r.right - pad - d / 2
+    } else {
+        r.left + pad + d / 2
     };
-    aa_round(
-        hdc,
-        &sh,
-        (sh.bottom - sh.top) / 2,
-        over(grad, rgb(0, 0, 0), 0.30),
-        track,
-    );
-    // 白色滑块（硬边：小控件 AA 反而发虚）。
     let knob = RECT {
         left: cx - d / 2,
         top: cy - d / 2,
         right: cx + d / 2,
         bottom: cy + d / 2,
     };
-    fill_round_crisp(hdc, &knob, d / 2, theme().C_ON_GRAD);
+    fill_round_crisp(hdc, &knob, d / 2, rgb(255, 255, 255));
 }
 
 thread_local! {
@@ -2055,10 +2063,12 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
     // 后右缘顶到"簇大小"左缘。各列最小宽（96-DPI，f_tiny 表头/f_sub 数据）：
     //   盘符 44(图标+字母) 磁盘 30 文件系统 48 分区格式 48 簇大小 46
     //   类型 52(本地磁盘) 总容量 71(2048.0 GiB) 可用 71 已用% 37
-    // 权重按此比例给，且每列留 ≥7px  gutter；数值列(总容量/可用/已用%)权重不动，
-    // 保住 2048.0 GiB 不被右对齐裁掉。
+    // 权重按此比例给，且每列留 gutter。⚠️ 末列「已用%」与倒数第二列「可用」都**右对齐**，
+    // 两值/两表头的视觉间隙 = 已用%列宽 − 已用%文本宽（右对齐相邻列的固有关系），
+    // 所以"可用 / 已用% 挨太紧"（Z.W. 2026-10-22 圈红）**只能靠加宽已用%列**解决。
+    // 已用% 权重 6→9（列宽 38→55px，间隙 13→30px）；数值列 总容量/可用 不动，保 2048.0 GiB 不被裁。
     let table_w = (right - left - scale(20)).max(scale(200));
-    let weights = [8i32, 5, 9, 9, 8, 10, 13, 14, 6];
+    let weights = [8i32, 5, 9, 9, 8, 10, 13, 14, 9];
     let total_w: i32 = weights.iter().sum();
     let rowh = scale(34);
     // 列边界数组：**长度必须是列数 + 1**（10 而不是 9）——
@@ -2162,7 +2172,10 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             "-".to_string()
         };
         let used_col = if total > 0 {
-            used_color(used_pct)
+            // 已用% 告警色：选中行(浅底)走深色变体，否则走深底亮色变体。
+            used_color(used_pct, selected)
+        } else if selected {
+            theme().C_SEL_ROW_TEXT
         } else {
             theme().C_ON_GRAD_DIM
         };
@@ -2200,12 +2213,14 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
                 bottom: y + rowh,
             };
             // 容量三列（总容量/可用/已用%）右对齐，扫数字比扫字段名快。
-            // 已用% 非选中行按阈值上色（满盘红 / 偏满橙），一眼看出哪块盘快满了。
+            // ⚠️ 已用% 列**无条件**走 `used_col` 告警色（含选中行）：used_col 已按
+            // 底色明暗适配（选中行深红/深橙），这样"选中快满盘"时红色 % 依然醒目
+            // （此前选中行统一深字、把红/橙告警吞掉 → 选第一行 93% 显不出来）。
             let numeric = j >= 6;
-            let fg = if selected {
-                theme().C_SEL_ROW_TEXT
-            } else if j == 8 {
+            let fg = if j == 8 {
                 used_col
+            } else if selected {
+                theme().C_SEL_ROW_TEXT
             } else {
                 theme().C_ON_GRAD
             };
@@ -2274,7 +2289,7 @@ pub fn draw_disk_page(ctx: &PageCtx<'_>) -> i32 {
             None
         };
         let used_line: (String, Color) = match used_pct {
-            Some(p) => (format!("已用率 {p}%"), used_color(p)),
+            Some(p) => (format!("已用率 {p}%"), used_color(p, false)),
             None => ("已用率 -".to_string(), theme().C_ON_GRAD_DIM),
         };
 
@@ -2403,14 +2418,31 @@ fn temp_color(t: i32) -> Color {
 }
 
 /// 磁盘已用率阈值色：与 HTML 报告分区使用率口径一致——≥90% 红（将满）、
-/// ≥75% 橙（偏满）、其余白字。用于磁盘页表格「已用%」列，满盘一眼可辨。
-fn used_color(pct: i32) -> Color {
-    if pct >= 90 {
-        theme().C_ERROR
-    } else if pct >= 75 {
-        theme().C_WARNING
+/// ≥75% 橙（偏满）、其余正常色。用于磁盘页表格「已用%」列，满盘一眼可辨。
+///
+/// ⚠️ `on_light`=选中行（浅绿底 `C_SEL_ROW`）须切**深色**告警变体：亮红/亮橙是为
+/// 深底调的，在浅绿底上对比度暴跌（亮橙(250,173,20) 对比仅 ~1.7:1 几乎隐形；亮红
+/// ~3.4:1 也偏弱）——Z.W. 反馈"选中第一行后面红色 93% 显不出来"。深红/深橙在浅底
+/// 上对比 5.7:1 / 4.9:1 达标，选中态告警依然醒目。
+pub(crate) fn used_color(pct: i32, on_light: bool) -> Color {
+    if on_light {
+        // 浅色选中底：深色告警（保证对比度）
+        if pct >= 90 {
+            rgb(176, 32, 38) // 深红，浅底 ~5.7:1
+        } else if pct >= 75 {
+            rgb(150, 84, 8) // 深橙，浅底 ~4.9:1
+        } else {
+            theme().C_SEL_ROW_TEXT // 正常=随选中行深字
+        }
     } else {
-        theme().C_ON_GRAD
+        // 深色卡底：亮色告警
+        if pct >= 90 {
+            theme().C_ERROR
+        } else if pct >= 75 {
+            theme().C_WARNING
+        } else {
+            theme().C_ON_GRAD
+        }
     }
 }
 
