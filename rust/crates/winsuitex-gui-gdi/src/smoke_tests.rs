@@ -1352,3 +1352,61 @@ fn desired_win_height_is_content_only_and_clamped() {
         prev = d;
     }
 }
+
+/// 加载页（采集未就绪）在任意 DC 上不崩。
+///
+/// 钉死 2026-10-22 启动提速改造：`on_paint` 的 snap.is_none() 早退分支
+/// 走 `draw_loading_page`，它必须与正常页一样"任何 GDI 失败都不 panic"。
+#[test]
+fn loading_page_never_panics_on_tiny_dc() {
+    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::Graphics::Gdi::*;
+
+    let screen = unsafe { GetDC(None) };
+    let mem = unsafe { CreateCompatibleDC(Some(screen)) };
+    unsafe {
+        let _ = ReleaseDC(None, screen);
+    }
+    if mem.is_invalid() {
+        eprintln!("[skip] 无法创建内存 DC");
+        return;
+    }
+    let bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: 1,
+            biHeight: -1,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits: *mut core::ffi::c_void = core::ptr::null_mut();
+    let bmp = unsafe { CreateDIBSection(Some(mem), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) };
+    let Ok(bmp) = bmp else {
+        unsafe {
+            let _ = DeleteDC(mem);
+        }
+        eprintln!("[skip] 无法创建 DIB");
+        return;
+    };
+    unsafe {
+        let old = SelectObject(mem, bmp.into());
+        let f_sec = crate::draw::font(crate::draw::FONT_UI, -15, 700);
+        let f_sub = crate::draw::font(crate::draw::FONT_UI, -13, 400);
+        // 与真实加载页同参（w=593 是常规模拟窗宽）。
+        crate::pages::draw_loading_page(mem, 593, 948, f_sec, f_sub);
+        if !crate::draw::font_invalid(f_sec) {
+            let _ = DeleteObject(f_sec.into());
+        }
+        if !crate::draw::font_invalid(f_sub) {
+            let _ = DeleteObject(f_sub.into());
+        }
+        let _ = SelectObject(mem, old);
+        let _ = DeleteObject(bmp.into());
+        let _ = DeleteDC(mem);
+        let _ = COLORREF(0); // 仅占位，保持 use 成功（tiny DIB 无像素可断言）
+    }
+}

@@ -353,17 +353,16 @@ impl AaSurface {
         if w <= 0 || h <= 0 {
             return None;
         }
-        // 视口偏移自适应：on_paint 用 OffsetViewportOrgEx(0,-scroll) 滚动，
-        // r 是内容坐标；读目标 DC 当前像素必须换算到设备坐标——
-        // GetViewportOrgEx 拿到的原点即补偿量（无需调用方传 scroll）。
-        let mut org = POINT { x: 0, y: 0 };
-        let (sx, sy) = unsafe {
-            if GetViewportOrgEx(hdc, &mut org).as_bool() {
-                (r.left + org.x, r.top + org.y)
-            } else {
-                (r.left, r.top)
-            }
-        };
+        // ⚠️ StretchBlt 的源坐标是**源 DC 的逻辑坐标**，GDI 按该 DC 自身的
+        // WindowOrg/ViewportOrg 映射到设备像素。on_paint 用
+        // `OffsetViewportOrgEx(0,-scroll)` 滚动后，直接传 `r.left/r.top`
+        // （内容坐标）恰好落到屏幕 `r.top-scroll` 处——**不要**再手动补偿视口。
+        //
+        // ❌ 历史 bug（2026-10-22 Z.W.「滚动竖条后内容界面有问题」）：
+        // 曾把 `GetViewportOrgEx` 的原点加到坐标上（误以为 StretchBlt 吃设备坐标），
+        // 滚动量被算了两遍：AA 元素（玻璃大卡/SMART 徽标/分组横条）整体上移一个
+        // scroll，与 DrawTextW 的文字错位——截图里暗条盖字、徽标串到内存区、
+        // 导出按钮文字漂移。scroll=0 时 org=(0,0) 两路径等价，所以只有滚起来才暴露。
         let mut ss = AA_SS;
         if (w as i64 * h as i64) > AA_MAX_PIXELS / (AA_SS as i64 * AA_SS as i64) {
             ss = 2; // 巨型卡降倍率（600×800 → 1200×1600 = 7.7MB）
@@ -405,7 +404,7 @@ impl AaSurface {
             // 把目标区当前背景放大抠入（HALFTONE 平滑放大；渐变低频无可见损失）。
             // 失败（返回 0，如个别远程会话禁屏幕读取）→ 整体放弃 AA 走原路径。
             let prev = SetStretchBltMode(tmp, HALFTONE);
-            let ok = StretchBlt(tmp, 0, 0, tw, th, Some(hdc), sx, sy, w, h, SRCCOPY);
+            let ok = StretchBlt(tmp, 0, 0, tw, th, Some(hdc), r.left, r.top, w, h, SRCCOPY);
             let _ = SetStretchBltMode(tmp, STRETCH_BLT_MODE(prev));
             if !ok.as_bool() {
                 let _ = SelectObject(tmp, old_bmp);
@@ -423,24 +422,20 @@ impl AaSurface {
         }
     }
 
-    /// HALFTONE 缩回目标 DC（设备坐标同 `new` 的换算）并释放全部 GDI 资源。
+    /// HALFTONE 缩回目标 DC（坐标同 `new`：逻辑坐标，不补偿视口）并释放全部 GDI 资源。
     fn finish(self, hdc: HDC, r: &RECT) {
         let w = r.right - r.left;
         let h = r.bottom - r.top;
         // SAFETY: 成员句柄均由 new 创建；这里成对释放，无跨调用泄漏。
         unsafe {
-            let mut org = POINT { x: 0, y: 0 };
-            let (dx, dy) = if GetViewportOrgEx(hdc, &mut org).as_bool() {
-                (r.left + org.x, r.top + org.y)
-            } else {
-                (r.left, r.top)
-            };
+            // ⚠️ 目标坐标同样**不要**加视口偏移（见 `new` 里的教训）：
+            // StretchBlt 目标吃 hdc 的逻辑坐标，GDI 自己映射到设备。
             // 保存/恢复拉伸模式，避免影响同帧其它绘制（HALFTONE 是 DC 级状态）。
             let prev = SetStretchBltMode(hdc, HALFTONE);
             let _ = StretchBlt(
                 hdc,
-                dx,
-                dy,
+                r.left,
+                r.top,
                 w,
                 h,
                 Some(self.tmp),
@@ -1230,6 +1225,96 @@ mod aa_tests {
             // 退化矩形（宽高 ≤ 0，直接返回）。
             fill_round(mem, &r(5, 5, 5, 50), 8, c);
             stroke_round(mem, &r(5, 5, 50, 5), 8, c, 1);
+            let _ = SelectObject(mem, old);
+            let _ = DeleteObject(bmp.into());
+            let _ = DeleteDC(mem);
+        }
+    }
+
+    /// 读顶向 32bpp DIB 的 BGR 像素。
+    fn px(bits: *mut core::ffi::c_void, w: i32, x: i32, y: i32) -> (u8, u8, u8) {
+        unsafe {
+            let p = (bits as *const u8).add(((y * w + x) * 4) as usize);
+            (*p, *p.add(1), *p.add(2))
+        }
+    }
+
+    /// 视口偏移下 AA 元素必须落在**逻辑坐标**映射处，不得二次补偿滚动量。
+    ///
+    /// 钉死 2026-10-22「滚动竖条后内容界面有问题」事故：AaSurface 曾把
+    /// `GetViewportOrgEx` 偏移加进 StretchBlt 坐标（误以为它吃设备坐标），
+    /// 滚动量被算两遍——AA 元素整体上移一个 scroll，与 DrawTextW 文字错位
+    /// （暗条盖字、SMART 徽标串区）。scroll=0 时两路径等价，必须在
+    /// offset≠0 时做像素级断言才能抓到回归。
+    #[test]
+    fn aa_draws_at_logical_coords_under_viewport_offset() {
+        const W: i32 = 160;
+        const H: i32 = 160;
+        const SCROLL: i32 = 60;
+        let screen = unsafe { GetDC(None) };
+        let mem = unsafe { CreateCompatibleDC(Some(screen)) };
+        unsafe {
+            let _ = ReleaseDC(None, screen);
+        }
+        if mem.is_invalid() {
+            eprintln!("[skip] 无法创建内存 DC");
+            return;
+        }
+        let bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: W,
+                biHeight: -H,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut bits: *mut core::ffi::c_void = core::ptr::null_mut();
+        let bmp = unsafe { CreateDIBSection(Some(mem), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) };
+        let Ok(bmp) = bmp else {
+            unsafe {
+                let _ = DeleteDC(mem);
+            }
+            eprintln!("[skip] 无法创建 DIB");
+            return;
+        };
+        unsafe {
+            let old = SelectObject(mem, bmp.into());
+            // 铺纯黑底。
+            fill(
+                mem,
+                &RECT {
+                    left: 0,
+                    top: 0,
+                    right: W,
+                    bottom: H,
+                },
+                COLORREF(0),
+            );
+            // 模拟 on_paint 的滚动变换：视口 y 偏移 -SCROLL。
+            let saved = SaveDC(mem);
+            let _ = OffsetViewportOrgEx(mem, 0, -SCROLL, None);
+            // 白色圆角块画在**内容坐标** y=100..140（设备应落在 40..80）。
+            fill_round(mem, &r(20, 100, 80, 140), 8, COLORREF(0x00FFFFFF));
+            let _ = RestoreDC(mem, saved);
+
+            // 正确落点：内容 y=120 → 设备 y=120-60=60，x=50 居中。
+            let (b, g, rr) = px(bits, W, 50, 60);
+            assert!(
+                b > 200 && g > 200 && rr > 200,
+                "视口偏移下 AA 块应画在逻辑坐标映射处（设备 50,60），实测 BGR=({b},{g},{rr})"
+            );
+            // 双倍补偿的落点：内容 100 + org(-60) = 逻辑 40 → 设备 40-60 = -20，
+            // 底缘落到设备 y≈20；y=5 落在错误区域内。此处必须仍是黑底。
+            let (b, g, rr) = px(bits, W, 50, 5);
+            assert!(
+                b < 40 && g < 40 && rr < 40,
+                "设备 (50,5) 应保持黑底（若变亮说明滚动量被算了两遍），实测 BGR=({b},{g},{rr})"
+            );
+
             let _ = SelectObject(mem, old);
             let _ = DeleteObject(bmp.into());
             let _ = DeleteDC(mem);

@@ -177,6 +177,9 @@ const WND_TITLE: &[u16] = &[0x57, 0x69, 0x6E, 0x53, 0x75, 0x69, 0x74, 0x65, 0x58
 /// 值必须与 rc 里的一致，否则 `LoadImageW` 取不到 → 任务栏/Alt+Tab 无图标。
 const IDI_APP_ICON: PCWSTR = PCWSTR(101 as *const u16); // MAKEINTRESOURCE(101)
 
+/// 后台采集完成通知（私有窗口消息）：加载页 → 正式内容的切换触发器。
+const WM_APP_SNAPSHOT_READY: u32 = WM_APP + 1;
+
 /// 从本模块资源加载图标：大图（Alt+Tab / 窗口）与小图（任务栏 / 标题栏）。
 ///
 /// 尺寸取**系统指标**而不是写死 32/16：高 DPI 下 `SM_CXICON` 会变大，
@@ -517,10 +520,9 @@ fn main() {
             return;
         }
 
-        // 采集：复用平台引擎（与 CLI / egui GUI 同一条链路）。
-        wlog!("collect start");
-        let _ = SNAPSHOT.set(collect());
-        wlog!("collect done");
+        // 采集移到窗口显示**之后**的后台线程（见下方 thread::spawn）：
+        // 旧路径把 WMI 采集卡在 CreateWindowExW 之前，双击 exe 到窗口出现
+        // 要白等几秒（Z.W. 2026-10-22「界面要等一阵才弹得出来」）。
 
         // 初始 DPI：虚拟机/高分屏下让布局一开始就是对的，而不是等 WM_DPICHANGED。
         // 窗口尺寸先按工作区钳制：小屏（如 1024×768 工作区 ≈ 738 高）下窗口高不会
@@ -589,6 +591,26 @@ fn main() {
                 "window created + shown; hwnd={hwnd:?} dpi={}",
                 theme::scale(96)
             );
+
+            // 后台采集：窗口已显示加载页，WMI/SMART 的几秒读取不再挡住出窗。
+            // COM 纪律不变——`collect_all` 仍在**单一线程内串行**跑完所有源
+            // （audio 的 STA `CoInitializeEx` 与 WMI 的 MTA 各自在调用线程内
+            // 自洽），与旧路径的差别只是"哪条线程"，不是"多线程交叉采集"。
+            std::thread::spawn(|| {
+                wlog!("collect start (bg)");
+                let r = collect();
+                let _ = SNAPSHOT.set(r);
+                wlog!("collect done (bg)");
+                // FindWindowW 是只读查询；PostMessageW 向已建窗口的
+                // 消息队列投递，跨线程安全（这是它的设计用途）。
+                // （本闭包在外层 `unsafe` 的词法作用域内，无需再嵌一层。）
+                if let Ok(h) = FindWindowW(PCWSTR(WND_CLASS.as_ptr()), None) {
+                    let _ = PostMessageW(Some(h), WM_APP_SNAPSHOT_READY, WPARAM(0), LPARAM(0));
+                    wlog!("snapshot-ready posted to hwnd={h:?}");
+                } else {
+                    wlog!("snapshot-ready: window not found (early exit?)");
+                }
+            });
 
             // 消息循环
             let mut msg: MSG = std::mem::zeroed();
@@ -931,6 +953,13 @@ unsafe extern "system" fn wnd_proc(
             let _ = EndPaint(hwnd, &ps);
             LRESULT(0)
         }
+        WM_APP_SNAPSHOT_READY => {
+            // 后台采集就绪：重绘一次，加载页换成正式内容（磁盘页高度自适应
+            // 会在 on_paint 的 SetWindowPos 里收敛到内容量）。
+            wlog!("WM_APP_SNAPSHOT_READY: invalidating for real content");
+            let _ = InvalidateRect(Some(hwnd), None, true);
+            LRESULT(0)
+        }
         WM_SIZE => {
             // 同步最大化状态（绘制层靠它切"最大化/还原"图标）。
             ZOOMED.store(i32::from(IsZoomed(hwnd).as_bool()), Ordering::Relaxed);
@@ -1165,6 +1194,44 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
 
     let snap = snapshot();
     let view_top = pages::content_top();
+
+    // —— 采集未就绪：加载页早退 ——
+    // 窗口已显示（这正是异步采集的意义），但硬件数据还在后台 WMI 里读。
+    // 不走量高/自适应/滚动钳制——没有内容可量，磁盘页自适应会把窗口误压到
+    // DISK_MIN_H。标题栏/页签/底栏照常，内容区两行字（`draw_loading_page`）。
+    if snap.is_none() {
+        let Some(bb) = Backbuffer::new(w, h) else {
+            wlog!("on_paint loading: Backbuffer::new failed (w={w} h={h})");
+            delete_ui_fonts([f_title, f_body, f_sub, f_tiny, f_section]);
+            return;
+        };
+        let mdc = bb.mem;
+        fill(
+            mdc,
+            &RECT {
+                left: 0,
+                top: 0,
+                right: w,
+                bottom: h,
+            },
+            theme().C_GRAD_BOT,
+        );
+        pages::draw_window_frame(mdc, w, h);
+        pages::WIN_CACHED_W.store(w, Ordering::Relaxed);
+        pages::WIN_CACHED_H.store(h, Ordering::Relaxed);
+        pages::draw_titlebar(mdc, w, h, f_title, f_sub);
+        pages::draw_tabbar(mdc, f_sub, f_tiny);
+        pages::draw_loading_page(mdc, w, h, f_section, f_sub);
+        pages::draw_footer(mdc, w, h, f_sub, f_tiny);
+        delete_ui_fonts([f_title, f_body, f_sub, f_tiny, f_section]);
+        let ulw_ok = bb.present_layered(hwnd, scale(WIN_RADIUS), !is_zoomed());
+        if !ulw_ok {
+            degrade_to_region_window(hwnd);
+        }
+        dump_layered_frame(&bb);
+        wlog!("on_paint loading page presented");
+        return;
+    }
 
     // 第一趟：1x1 哑 DC 量内容总高（绘制会被裁到1px 外，等于只跑布局不落像素）。
     // 这样页面绘制函数不需要"干跑"开关，滚动条比例也拿得到真值。

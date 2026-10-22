@@ -1256,6 +1256,39 @@ pub fn draw_hw_page(ctx: &PageCtx<'_>) -> i32 {
     bottom
 }
 
+/// 采集未完成时的内容区加载页（窗口已显示，硬件数据还在后台读）。
+///
+/// 一句话状态 + 弱对比提示，不做重布局——加载页存在的全部意义是
+/// 让"双击 exe"立刻有反馈，别让用户盯着桌面等 WMI（2026-10-22 Z.W.
+/// 「运行的时候，界面要等一阵才弹得出来」）。标题栏/页签/底栏由 `on_paint`
+/// 照常绘制，这里只画内容区两行字。
+pub fn draw_loading_page(hdc: HDC, w: i32, _h: i32, f_sec: HFONT, f_sub: HFONT) {
+    let left = content_left() + scale(MARGIN);
+    let right = content_right(w) - scale(MARGIN);
+    let top = content_top() + scale(48);
+    let line_h = scale(32);
+    let title = RECT {
+        left,
+        top,
+        right,
+        bottom: top + line_h,
+    };
+    text_center(hdc, &title, "正在采集硬件信息…", f_sec, theme().C_ON_GRAD);
+    let sub = RECT {
+        left,
+        top: top + line_h + scale(8),
+        right,
+        bottom: top + line_h * 2 + scale(8),
+    };
+    text_center(
+        hdc,
+        &sub,
+        "首次读取硬件与磁盘数据需要几秒",
+        f_sub,
+        theme().C_ON_GRAD_DIM,
+    );
+}
+
 /// 硬件页固定头部：玻璃小卡 + 标题 + 导出按钮。
 ///
 /// 在 `on_paint` 的滚动变换**之外**绘制（屏幕坐标），滚动时钉在内容区顶部——

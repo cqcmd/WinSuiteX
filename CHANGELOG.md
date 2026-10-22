@@ -8,6 +8,16 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
+## GUI 0.5.2 — 2026-10-22（滚动错位修复 + 启动提速，分支 `gdi-aa-radius`）
+
+Z.W. 两则真机反馈：「滚动竖条后内容界面有问题」（截图暗条盖字、SMART 徽标串到内存区）+「运行的时候，界面要等一阵才弹得出来」。
+
+- **滚动错位根因**：`AaSurface::new/finish` 把 `GetViewportOrgEx` 的视口偏移加进 StretchBlt 坐标（误以为它吃设备坐标），但 StretchBlt 吃的是**逻辑坐标**、GDI 自己按视口映射——滚动量被算了两遍，AA 元素（玻璃卡/SMART 徽标/分组横条）整体上移一个 `scroll`，与 DrawTextW 的文字错位。scroll=0 时两路径等价，所以只有滚起来才暴露。修复：去掉补偿、直接传内容坐标（`aa_round` 本就正确，历史一致口径已写进注释）。
+- **像素级回归** `aa_draws_at_logical_coords_under_viewport_offset`：视口偏移 60px 下在内容 y=100 处画白色圆角块，断言设备 y=60 亮 / 设备 y=5 保持黑底。A/B 对照——注入旧补偿后测试红（实测 BGR=(0,0,0)）、恢复后绿。
+- **启动提速根因**：`collect()`（WMI/SMART 读取，秒级）同步卡在 `CreateWindowExW` 之前，双击 exe 到出窗全程白等。修复：窗口先显示加载页（`draw_loading_page`：「正在采集硬件信息…」），采集移后台线程（`collect_all` 仍单线程串行，COM 纪律不变），完成后 `PostMessageW(WM_APP_SNAPSHOT_READY)` 切正式内容。
+- **实测**（`tools/scroll_align_probe.py`）：出窗耗时 **0.04s**（旧版秒级）；`WSX_FAKE_AUDIO=30` 撑出滚动后中段帧——SMART 徽标紧贴硬盘行、暗条消失、分组带与文字对齐，与 bug 截图直接对照。
+- 门禁：fmt / clippy -D（默认+all-features）/ 364 测试全绿；verify_gui_resource PASS；部署 `dist/winsuitex-gui-gdi.exe`（0.5.2.20261022）。
+
 ## GUI 0.5.1 — 2026-10-22（磁盘页窗高震荡修复：ULW psize 与 SetWindowPos 互拽，分支 `gdi-aa-radius`）
 
 Z.W.「现在是磁盘页面的时候，一直在短窗口和长窗口反复绘画」——0.5.0 引入分层窗口后暴露的**反馈环**，本次 A/B 实测复现并修复：
