@@ -528,7 +528,11 @@ fn main() {
             scale(WIN_H)
         );
         if let Ok(hwnd) = CreateWindowExW(
-            WS_EX_APPWINDOW,
+            // WS_EX_LAYERED：窗形圆角走 per-pixel alpha 真羽化（见
+            // `draw::Backbuffer::present_layered`）。旧 `SetWindowRgn` 是 1-bit
+            // 掩码，浅色壁纸下弧线锯齿肉眼可见（Z.W. 2026-10-22 反馈），
+            // 分层窗口是钉住 WIN_RADIUS=12 的唯一真 AA 路径。
+            WS_EX_APPWINDOW | WS_EX_LAYERED,
             PCWSTR(WND_CLASS.as_ptr()),
             PCWSTR(WND_TITLE.as_ptr()),
             // ⚠️ frameless（WS_POPUP），不是 `WS_OVERLAPPEDWINDOW`：后者带系统标题栏，
@@ -592,29 +596,96 @@ fn main() {
     }
 }
 
-/// 按当前窗口尺寸重建圆角 Region（外缘与自绘边框同心）。
+/// 窗形几何同步点（旧职责：`SetWindowRgn` 重建圆角）。
 ///
-/// frameless 窗口没有系统边框，圆角只能自己做：`CreateRoundRectRgn` +
-/// `SetWindowRgn`。SetWindowRgn 成功后 HRGN 归系统所有，重复调用自动释放旧的，
-/// 不泄漏（每次 resize 都要调，所以这条性质很关键）。
+/// **2026-10-22 起窗形圆角由分层窗口 per-pixel alpha 羽化承担**
+/// （`draw::Backbuffer::present_layered` → `apply_round_alpha` 的 SDF 覆盖度），
+/// 1-bit region 反而会把 AA 羽化的角重新裁成锯齿，**两者不能共存**。
+/// 现在只负责清掉可能残留的 region，并保留调用点作为尺寸变化的显式
+/// 同步点（wlog 追踪 resize/DPI 路径）。
 fn apply_rounded_region(hwnd: HWND) {
-    // SAFETY: 全部是对 Win32 API 的正确调用；HRGN 创建后立即交给 SetWindowRgn。
+    wlog!("apply_rounded_region: clearing region (alpha owns shape)");
+    // SAFETY: SetWindowRgn(None) 清除窗形 region，是该 API 的标准用法。
     unsafe {
+        let _ = SetWindowRgn(hwnd, None, true);
+    }
+}
+
+/// ULW 失败兜底：退回普通窗口 + 旧 1-bit region 圆角（只降级一次）。
+///
+/// 分层窗口不被 ULW 提交内容时是**全透明**的——"程序在跑但看不见"比
+/// 圆角锯齿严重得多，所以这里宁可回到 `SetWindowRgn` 的老路也要保住可见性。
+/// 降级后 [`Backbuffer::present`] 的镜像 blit 自动成为真实呈现。
+fn degrade_to_region_window(hwnd: HWND) {
+    static DEGRADED: AtomicI32 = AtomicI32::new(0);
+    if DEGRADED.swap(1, Ordering::Relaxed) != 0 {
+        return;
+    }
+    wlog!("degrade_to_region_window: ULW failed, falling back to SetWindowRgn");
+    // SAFETY: 所有参数合法；降级为一次性操作。
+    unsafe {
+        let ex = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        SetWindowLongW(hwnd, GWL_EXSTYLE, ex & !WS_EX_LAYERED.0 as i32);
         let mut rc = RECT::default();
         let _ = GetWindowRect(hwnd, &mut rc);
         let (w, h) = (rc.right - rc.left, rc.bottom - rc.top);
-        if w <= 0 || h <= 0 {
-            return;
+        if w > 0 && h > 0 {
+            let r = scale(WIN_RADIUS + SHADOW_PAD);
+            let hrgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, r * 2, r * 2);
+            if !hrgn.is_invalid() {
+                let _ = SetWindowRgn(hwnd, Some(hrgn), true);
+            }
         }
-        wlog!("apply_rounded_region: w={w} h={h}");
-        let r = scale(WIN_RADIUS + SHADOW_PAD);
-        // windows 0.62：`CreateRoundRectRgn` 直接返回 HRGN（不是 Result）。
-        let hrgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, r * 2, r * 2);
-        if hrgn.is_invalid() {
-            return;
-        }
-        let _ = SetWindowRgn(hwnd, Some(hrgn), true);
+        let _ = InvalidateRect(Some(hwnd), None, true);
     }
+}
+
+/// 诊断钩子：`WSX_DUMP_LAYERED=<前缀>` 时把羽化后的预乘 ARGB 缓冲裸转储
+/// （`<前缀>.bgra` 像素流 + `<前缀>.meta` 宽高）。
+///
+/// 为什么不用截图：分层窗口的屏幕读回与窗口 DC 读回在部分环境（本 VM）
+/// 都拿不到内容，而这份缓冲就是 ULW 提交的字节本身——离线按
+/// `out = premul + bg*(1-a/255)` 合成即可精确复现任意壁纸下的圆角观感。
+/// 不设环境变量时 `OnceLock` 只查一次 env，零开销。
+fn dump_layered_frame(bb: &Backbuffer) {
+    use std::sync::OnceLock;
+    static DUMP_PREFIX: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
+    let prefix = DUMP_PREFIX.get_or_init(|| {
+        std::env::var_os("WSX_DUMP_LAYERED")
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+    });
+    let Some(prefix) = prefix.as_ref() else {
+        return;
+    };
+    // 探针：证明"env 看到了、函数被调用了"（与 .bgra/.err 三分定位）。
+    {
+        let mut probe = prefix.clone();
+        probe.set_extension("probe");
+        let _ = std::fs::write(&probe, "dump_layered_frame called\n");
+    }
+    // SAFETY: `bits` 在 bb 存活期内有效，长度 w*h*4（与 `pixels()` 同一约定）。
+    let Some(px) = (unsafe { bb.pixels() }) else {
+        return;
+    };
+    let mut bgra = prefix.clone();
+    bgra.set_extension("bgra");
+    let mut meta = prefix.clone();
+    meta.set_extension("meta");
+    // 写失败不留静默（"不许假成功"）：错误信息写 <前缀>.err 供远程排查。
+    let dump_err = |what: &str, e: std::io::Error| {
+        let mut err = prefix.clone();
+        err.set_extension("err");
+        let _ = std::fs::write(&err, format!("{what}: {e}"));
+    };
+    if let Err(e) = std::fs::write(&bgra, px) {
+        dump_err("bgra", e);
+        return;
+    }
+    if let Err(e) = std::fs::write(&meta, format!("{} {}\n", bb.w, bb.h)) {
+        dump_err("meta", e);
+    }
+    wlog!("dump_layered_frame: wrote {bgra:?}");
 }
 
 /// 工作区（任务栏除外）。
@@ -849,6 +920,8 @@ unsafe extern "system" fn wnd_proc(
     match msg {
         WM_PAINT => {
             let mut ps = PAINTSTRUCT::default();
+            // BeginPaint/EndPaint 成对走：验证更新区（缺了会 WM_PAINT 风暴）。
+            // 真实呈现是 ULW（见 `on_paint` 末尾），hdc 只剩工具镜像 blit 一个用途。
             let hdc = BeginPaint(hwnd, &mut ps);
             on_paint(hwnd, hdc);
             let _ = EndPaint(hwnd, &ps);
@@ -1016,7 +1089,7 @@ unsafe extern "system" fn wnd_proc(
     }
 }
 
-/// 整窗绘制：双缓冲 → 背景 → 顶栏 → 页签 → 内容页 → 底部栏。
+/// 整窗绘制：双缓冲 → 背景 → 顶栏 → 页签 → 内容页 → 底部栏 → 分层呈现。
 unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     wlog!("on_paint enter (top)");
     let mut rc = RECT::default();
@@ -1187,8 +1260,22 @@ unsafe fn on_paint(hwnd: HWND, hdc: HDC) {
     pages::draw_footer(mdc, w, h, f_sub, f_tiny);
     wlog!("on_paint: footer drawn; about to present");
 
-    // blit 到窗口
+    // 呈现：圆角羽化 alpha 预乘 + UpdateLayeredWindow（真实显示路径——
+    // 分层窗口的窗口 DC 不承载内容，只有 per-pixel alpha 能给出真 AA 窗形）。
+    // 最大化时方形满不透明（Win11 惯例），还原后恢复 r=scale(WIN_RADIUS) 圆角。
+    let ulw_ok = bb.present_layered(hwnd, scale(WIN_RADIUS), !is_zoomed());
+    if !ulw_ok {
+        // 兜底：ULW 失败（个别精简系统/驱动）→ 退回普通窗口 + 1-bit region 圆角。
+        // 宁可回到锯齿圆角，也不能让窗口全透明"看不见程序"。
+        degrade_to_region_window(hwnd);
+    }
+    // 工具镜像：羽化后的 DIB（含 alpha 字节）再 blit 回窗口 DC。
+    // 分层模式下系统不读这块表面（仅供 WSX_DUMP_LAYERED 之外的截图链路兜底）；
+    // 降级模式下它就是真实呈现。
     bb.present(hdc);
+    // 诊断钩子：WSX_DUMP_LAYERED=<前缀> 裸转储羽化后的预乘 ARGB（<前缀>.bgra +
+    // <前缀>.meta），供屏幕/窗口 DC 读回不可用的环境离线合成验证圆角 AA。
+    dump_layered_frame(&bb);
 
     for f in [f_title, f_body, f_sub, f_tiny, f_section] {
         if !font_invalid(f) {

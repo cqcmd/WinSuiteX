@@ -83,7 +83,7 @@ pub struct Theme {
     pub C_GRAD_BOT: Color,
     /// 底部栏实色。
     pub C_FOOTER_BG: Color,
-    /// 窗口外描边 / 压 1-bit `SetWindowRgn` 圆角锯齿的暗边环。
+    /// 窗口外描边 / 压圆角弧线对比度的暗边环（窗形由分层 alpha 羽化）。
     pub C_WIN_BORDER: Color,
     /// 主文字（卡片/渐变上的白字）。
     pub C_ON_GRAD: Color,
@@ -323,7 +323,8 @@ pub const MARGIN: i32 = 24;
 /// 窗口四周留 16px 画自绘阴影，但 GDI 无 alpha 通道，三层实色矩形近似出来
 /// 是一圈均匀的灰边（且三层绘制顺序写反，只剩最外层），看起来像窗口里还套
 /// 了层底。真机反馈后定案：**不做自绘阴影，窗口 = 内容矩形本身，圆角由
-/// `SetWindowRgn` 直接裁**。常量保留为 0 是为了让 `body_pad()` 的所有引用点
+/// 分层窗口 per-pixel alpha 羽化**（2026-10-22 起，见 `draw::apply_round_alpha`）。
+/// 常量保留为 0 是为了让 `body_pad()` 的所有引用点
 /// （布局/命中测试/窗口尺寸）自动归位，不必逐处改写。
 pub const SHADOW_PAD: i32 = 0;
 /// 内容区默认内边距。
@@ -359,7 +360,7 @@ pub const WIN_H: i32 = 948;
 /// 磁盘页自适应窗口的**最小高度**（分区极少时窗口也不至于矮到畸形）。
 pub const DISK_MIN_H: i32 = 360;
 
-/// 窗口圆角（96-DPI 基准，`SetWindowRgn` 用）。两套均为 12。
+/// 窗口圆角（96-DPI 基准；分层窗口 SDF 羽化用，见 `draw::apply_round_alpha`）。两套均为 12。
 pub const WIN_RADIUS: i32 = 12;
 
 // ============================================================

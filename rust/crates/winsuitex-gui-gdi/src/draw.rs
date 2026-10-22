@@ -15,8 +15,9 @@
 #![allow(dead_code)]
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{POINT, RECT};
+use windows::Win32::Foundation::{COLORREF, HWND, POINT, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::*;
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, UpdateLayeredWindow, ULW_ALPHA};
 
 use crate::theme::*;
 
@@ -226,7 +227,7 @@ pub fn fill_round(hdc: HDC, r: &RECT, radius: i32, color: Color) {
 
 /// 圆角填充的**硬边**版本（不走 AA 超采样）：用于小尺寸高对比控件
 /// （开关旋钮 / 轨道）。AA 的 1px 灰度过渡在这种控件上反而显得"发虚 / 羽化"，
-/// 硬边更利落。窗形圆角（`SetWindowRgn`）与卡片大圆角不在此列。
+/// 硬边更利落。窗形圆角（分层 alpha，见 [`apply_round_alpha`]）与卡片大圆角不在此列。
 pub fn fill_round_crisp(hdc: HDC, r: &RECT, radius: i32, color: Color) {
     fill_round_raw(hdc, r, radius, color);
 }
@@ -312,10 +313,11 @@ fn stroke_round_raw(hdc: HDC, r: &RECT, radius: i32, color: Color, width: i32) {
 // 在 3x 离屏上画，`StretchBlt(HALFTONE)` 缩回时区域平均自动生成边缘
 // 灰度过渡，肉眼即平滑。纯 GDI、无新 DLL、无 GPU 依赖（RDP/VM 照常）。
 //
-// ⚠️ 窗口形状圆角（`SetWindowRgn`）**不在本机制射程内**——region 是二值
-// 形状掩码不是绘制内容，超采样无解；那条路只有 DWM 圆角（Win11）或分层
-// 窗口（per-pixel alpha）才是真 AA，已评估记录在案（2026-10-21 日志）。
-// 这里治的是**绘制出来的**圆角：卡片、按钮、选中行、滑块轨道等。
+// ⚠️ 窗口形状圆角**不走本机制**——region 是二值形状掩码不是绘制内容，
+// 超采样无解。真 AA 已于 2026-10-22 落地：分层窗口（`WS_EX_LAYERED` +
+// `UpdateLayeredWindow`）按 per-pixel alpha 合成，窗形圆角由
+// [`apply_round_alpha`] 的 SDF 覆盖度采样羽化（见 [`Backbuffer::present_layered`]）。
+// 本机制治的是**绘制出来的**圆角：卡片、按钮、选中行、滑块轨道等。
 // ============================================================
 
 /// 超采样倍率：3x 是质量/开销平衡点（2x 过渡生硬，4x 内存耗时翻倍）。
@@ -940,11 +942,92 @@ impl Backbuffer {
         }
     }
 
-    /// 把离屏内容贴到窗口 DC。
+    /// 把离屏内容 blit 到窗口 DC——**工具镜像**，不是真实呈现路径。
+    ///
+    /// 真实呈现是 [`Self::present_layered`]（`UpdateLayeredWindow`）；分层窗口的
+    /// 屏幕合成不经过窗口 DC，而本 VM 屏幕读回又是坏的（`ImageGrab`/GetDC 抓屏
+    /// 全黑），`tools/gdi_shot.py` 的验证链路全靠 `GetWindowDC` 读这块表面。
+    /// 每帧多一次 blit（亚毫秒级），换来截图/回归工具与改造前完全一致。
+    ///
+    /// ⚠️ 32bpp DIB → 32bpp 窗口表面的 SRCCOPY 会连 alpha 字节一起拷，
+    /// 所以要放在 [`Self::finalize_alpha`] **之后**调用——这样截到的图带
+    /// 羽化 alpha，Python 端按 `premul + bg*(1-a)` 合成即可复现任意壁纸下的观感。
     pub fn present(&self, hdc: HDC) {
         // SAFETY: 前后端尺寸一致时逐像素 blit 正确；两端 DC 均有效。
         unsafe {
             let _ = BitBlt(hdc, 0, 0, self.w, self.h, Some(self.mem), 0, 0, SRCCOPY);
+        }
+    }
+
+    /// 写入窗形羽化 alpha 并预乘 RGB（[`apply_round_alpha`] 的批量入口）。
+    /// 调用后 DIB 进入**预乘 ARGB** 状态，只能交给 ULW 或镜像 blit。
+    pub fn finalize_alpha(&self, radius: i32, rounded: bool) {
+        // SAFETY: `bits` 在对象存活期内有效、长度 w*h*4。
+        unsafe {
+            if self.bits.is_null() || self.w <= 0 || self.h <= 0 {
+                return;
+            }
+            let buf = std::slice::from_raw_parts_mut(
+                self.bits as *mut u8,
+                (self.w * self.h * 4) as usize,
+            );
+            apply_round_alpha(buf, self.w, self.h, radius, rounded);
+        }
+    }
+
+    /// 分层窗口呈现：把预乘 ARGB 的 DIB 交给 `UpdateLayeredWindow`（`ULW_ALPHA`）。
+    ///
+    /// **为什么不再 `BitBlt` 呈现**：旧路径用 `SetWindowRgn` 裁窗形，region 是 1-bit
+    /// 掩码——圆角弧线只能整像素砍/留。深色壁纸下锯齿被暗边环压住看不出来，
+    /// 浅色壁纸下高对比直接把阶梯暴露出来（Z.W. 2026-10-22 真机反馈）。
+    /// 分层窗口按 per-pixel alpha 合成，弧线过渡带用 SDF 覆盖度采样（见
+    /// [`apply_round_alpha`]），是保 `WIN_RADIUS=12` 的唯一真 AA 路径
+    /// （`DWMWA_WINDOW_CORNER_PREFERENCE` 半径固定 ~8px 且仅 Win11，钉不住 12，已排除）。
+    ///
+    /// `rounded=false`（最大化）时整窗不透明方形，与 Win11 最大化惯例一致。
+    /// 调用前必须先 [`Self::finalize_alpha`]（ULW 要求预乘 ARGB）。
+    ///
+    /// 返回 `false` = ULW 失败（个别精简系统/驱动）——调用方必须兜底降级
+    /// （退回普通窗口 + region），否则窗口全透明等于"看不见程序"。
+    #[must_use]
+    pub fn present_layered(&self, hwnd: HWND, radius: i32, rounded: bool) -> bool {
+        self.finalize_alpha(radius, rounded);
+        // SAFETY: ULW 只读 mem DIB 与窗口几何，参数均为合法句柄/坐标。
+        unsafe {
+            if self.bits.is_null() || self.w <= 0 || self.h <= 0 {
+                return false;
+            }
+            let mut wr = RECT::default();
+            if GetWindowRect(hwnd, &mut wr).is_err() {
+                return false;
+            }
+            let pt_dst = POINT {
+                x: wr.left,
+                y: wr.top,
+            };
+            let pt_src = POINT { x: 0, y: 0 };
+            let size = SIZE {
+                cx: self.w,
+                cy: self.h,
+            };
+            let blend = BLENDFUNCTION {
+                BlendOp: AC_SRC_OVER as u8,
+                BlendFlags: 0,
+                SourceConstantAlpha: 255,
+                AlphaFormat: AC_SRC_ALPHA as u8,
+            };
+            UpdateLayeredWindow(
+                hwnd,
+                None,
+                Some(&pt_dst),
+                Some(&size),
+                Some(self.mem),
+                Some(&pt_src),
+                COLORREF(0),
+                Some(&blend),
+                ULW_ALPHA,
+            )
+            .is_ok()
         }
     }
 
@@ -974,6 +1057,77 @@ impl Drop for Backbuffer {
             let _ = SelectObject(self.mem, self.old_bmp);
             let _ = DeleteObject(self.bmp.into());
             let _ = DeleteDC(self.mem);
+        }
+    }
+}
+
+// ============================================================
+// 窗形圆角羽化（分层窗口 per-pixel alpha 专用）
+// ============================================================
+
+/// iq 圆角矩形 SDF：点 (px,py) 到圆角矩形边界的**有符号距离**（负=内、正=外）。
+/// 矩形占 `[0,w] × [0,h]`，圆角半径 `r`（自动钳到 `min(w,h)/2`）。
+pub fn round_rect_sd(px: f32, py: f32, w: f32, h: f32, r: f32) -> f32 {
+    let r = r.clamp(0.0, w.min(h) * 0.5);
+    let (cx, cy) = (w * 0.5, h * 0.5);
+    let qx = (px - cx).abs() - (cx - r);
+    let qy = (py - cy).abs() - (cy - r);
+    let (ox, oy) = (qx.max(0.0), qy.max(0.0));
+    (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.0) - r
+}
+
+/// SDF → 羽化覆盖度（0..=255）：边界两侧各约半像素的**1px 过渡带**。
+///
+/// 只做覆盖度 AA、不做宽羽化——宽羽化在浅色壁纸下会发虚发毛，
+/// 要的是"干净的抗锯齿边"，不是柔化边。
+pub fn sd_coverage(sd: f32) -> u8 {
+    let a = (0.5 - sd).clamp(0.0, 1.0);
+    (a * 255.0 + 0.5) as u8
+}
+
+/// 给 BGRA 缓冲（32bpp 自上而下 DIB，行距 = `w*4`）写入圆角窗形的羽化 alpha
+/// 并**预乘** RGB——`UpdateLayeredWindow` 的前置要求（`AC_SRC_ALPHA`）。
+///
+/// GDI 绘制只写 RGB、alpha 字节恒 0，所以必须在呈现前统一补齐：
+/// - `rounded=false`（最大化）：整窗不透明（alpha=255），RGB 不动；
+/// - `rounded=true`：直边像素对齐恒不透明，只有**四角弧线**进 SDF 过渡带
+///   （锯齿只出现在弧线上，正是 AA 的目标区域），角外清零、过渡带预乘。
+pub fn apply_round_alpha(buf: &mut [u8], w: i32, h: i32, radius: i32, rounded: bool) {
+    if w <= 0 || h <= 0 || buf.len() < (w * h * 4) as usize {
+        return;
+    }
+    let (fw, fh, fr) = (w as f32, h as f32, radius.max(0) as f32);
+    for y in 0..h {
+        for x in 0..w {
+            let i = ((y * w + x) * 4) as usize;
+            // 快路径：内缩 r+1 的内接矩形离弧线足够远（sd ≤ -1），恒不透明，
+            // 不进 SDF/开方；全窗像素的大头都在这条路径上。
+            let far = !rounded
+                || (x as f32 >= fr + 1.0
+                    && (x as f32) < fw - fr - 1.0
+                    && y as f32 >= fr + 1.0
+                    && (y as f32) < fh - fr - 1.0);
+            let a = if far {
+                255u8
+            } else {
+                sd_coverage(round_rect_sd(x as f32 + 0.5, y as f32 + 0.5, fw, fh, fr))
+            };
+            match a {
+                255 => buf[i + 3] = 255,
+                0 => {
+                    buf[i] = 0;
+                    buf[i + 1] = 0;
+                    buf[i + 2] = 0;
+                    buf[i + 3] = 0;
+                }
+                _ => {
+                    let a32 = u32::from(a);
+                    buf[i] = ((u32::from(buf[i]) * a32 + 127) / 255) as u8;
+                    buf[i + 1] = ((u32::from(buf[i + 1]) * a32 + 127) / 255) as u8;
+                    buf[i + 2] = ((u32::from(buf[i + 2]) * a32 + 127) / 255) as u8;
+                    buf[i + 3] = a;
+                }
+            }
         }
     }
 }
@@ -1059,6 +1213,87 @@ mod aa_tests {
             let _ = SelectObject(mem, old);
             let _ = DeleteObject(bmp.into());
             let _ = DeleteDC(mem);
+        }
+    }
+
+    /// 圆角矩形 SDF：直边内半像素、角尖在外、弧线过零。
+    #[test]
+    fn round_rect_sd_sign_and_magnitude() {
+        // 100×100、r=12。左边缘中点：像素中心 (0.5,50) 在内 0.5px。
+        let sd = round_rect_sd(0.5, 50.0, 100.0, 100.0, 12.0);
+        assert!((sd + 0.5).abs() < 1e-4, "左边缘中点 sd={sd}");
+        // 左上角像素中心 (0.5,0.5) 在弧线外。
+        let sd = round_rect_sd(0.5, 0.5, 100.0, 100.0, 12.0);
+        assert!(sd > 1.0, "角尖应在外，sd={sd}");
+        // 内部深处。
+        assert!(round_rect_sd(50.0, 50.0, 100.0, 100.0, 12.0) < -10.0);
+        // 弧上点（左上弧心 (12,12) 沿对角线外推 r）：sd ≈ 0。
+        let o = 12.0 - 12.0 / std::f32::consts::SQRT_2;
+        let sd = round_rect_sd(o, o, 100.0, 100.0, 12.0);
+        assert!(sd.abs() < 0.05, "弧上点 sd 应≈0，实际 {sd}");
+    }
+
+    /// 覆盖度：边界两侧 1px 过渡带，带外饱和。
+    #[test]
+    fn sd_coverage_transition_band() {
+        assert_eq!(sd_coverage(-1.0), 255);
+        assert_eq!(sd_coverage(-0.5), 255);
+        assert_eq!(sd_coverage(0.0), 128);
+        assert_eq!(sd_coverage(0.5), 0);
+        assert_eq!(sd_coverage(2.0), 0);
+    }
+
+    /// `apply_round_alpha`：内区不透明不动 RGB、角外清零、过渡带预乘。
+    #[test]
+    fn apply_round_alpha_writes_premultiplied_feather() {
+        let (w, h) = (40i32, 40i32);
+        let mut buf = vec![0u8; (w * h * 4) as usize];
+        // 模拟 GDI：RGB=白 (255,255,255)、alpha 字节 0。
+        for px in buf.chunks_exact_mut(4) {
+            px[0] = 255;
+            px[1] = 255;
+            px[2] = 255;
+        }
+        apply_round_alpha(&mut buf, w, h, 8, true);
+        let at = |x: i32, y: i32| -> [u8; 4] {
+            let i = ((y * w + x) * 4) as usize;
+            [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
+        };
+        // 直边中点：不透明、RGB 不动。
+        assert_eq!(at(0, h / 2), [255, 255, 255, 255]);
+        // 角尖：全透明（弧线外）。
+        let c = at(0, 0);
+        assert_eq!(c[3], 0, "角尖应透明，实际 {c:?}");
+        assert_eq!([c[0], c[1], c[2]], [0, 0, 0]);
+        // 弧线附近应存在**部分透明**像素（AA 过渡带），且 RGB 已预乘。
+        let mut saw_partial = false;
+        for y in 0..8 {
+            for x in 0..8 {
+                let p = at(x, y);
+                if (1..=254).contains(&p[3]) {
+                    saw_partial = true;
+                    // 白底预乘：通道值 = round(255·a/255) = a（±1 容差）。
+                    for ch in &p[0..3] {
+                        assert!(
+                            (i32::from(*ch) - i32::from(p[3])).abs() <= 1,
+                            "预乘不符 {p:?}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(saw_partial, "弧线过渡带应出现部分透明像素");
+
+        // 最大化（rounded=false）：全窗 255，RGB 不动。
+        let mut buf2 = vec![0u8; (w * h * 4) as usize];
+        for px in buf2.chunks_exact_mut(4) {
+            px[0] = 10;
+            px[1] = 20;
+            px[2] = 30;
+        }
+        apply_round_alpha(&mut buf2, w, h, 8, false);
+        for px in buf2.chunks_exact(4) {
+            assert_eq!(px, [10, 20, 30, 255]);
         }
     }
 }

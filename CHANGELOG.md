@@ -8,6 +8,18 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
+## GUI 0.5.0 — 2026-10-22（窗口圆角真羽化：分层窗口 per-pixel alpha，分支 `gdi-aa-radius`）
+
+Z.W.「窗口圆角在深色背景下面看不太出来羽化，但在浅色背景下还是很明显」——`SetWindowRgn` 的 1-bit 形状掩码是天花板（深色壁纸把阶梯压住、浅色壁纸高对比炸出来），真 AA 只有分层窗口一条路能钉住 WIN_RADIUS=12（DWM 圆角半径固定 ~8px 且仅 Win11，已排除）：
+
+- **呈现模型切换**：窗口创建加 `WS_EX_LAYERED`，`Backbuffer::present` 的 BitBlt 呈现改为 `present_layered`（`UpdateLayeredWindow` + `ULW_ALPHA` 预乘 ARGB）；`SetWindowRgn` 废除（1-bit region 会把 AA 角重新裁成锯齿，两者不能共存）。
+- **SDF 羽化**（`draw::apply_round_alpha`）：iq 圆角矩形 SDF 覆盖度采样，边界两侧 1px 过渡带（只做覆盖度 AA 不做宽羽化——宽羽化在浅色壁纸下会发虚）；直边像素对齐全不透明，锯齿只出现在四角弧线。内缩 r+1 内接矩形走快路径（不进开方），每帧开销可忽略。最大化时方形满不透明（Win11 惯例）。
+- **物证**（`WSX_DUMP_LAYERED` 裸转储 → Python 合成，`tools/layered_on_{white,black,lightgray}.png` + 角部 8x 放大）：弧线 alpha 呈 0→38→122→187→230→252→255 连续 SDF 梯度（角尖全透明、直边全不透明、过渡带占比 0.013%）；羽化像素反推直色 =(68,66,104)=`C_WIN_BORDER`，预乘精确。白底合成窗口边角无阶梯。
+- **鲁棒性**：ULW 失败（个别精简系统/驱动）自动降级——去掉 `WS_EX_LAYERED` + 恢复 `SetWindowRgn` 1-bit 圆角，宁可回到锯齿也不能"窗口全透明看不见程序"；降级后工具镜像 blit 即真实呈现。
+- **诊断钩子** `WSX_DUMP_LAYERED=<前缀>`：把羽化后的预乘 ARGB 裸转储（.bgra+.meta，写失败落 .err 不静默）——本 VM 屏幕读回（`GetDC(0)`/ImageGrab）与分层窗口 DC 读回均不可用，这份缓冲就是 ULW 提交的字节本身，离线按 `out = premul + bg*(1-a/255)` 可精确复现任意壁纸观感。
+- 回归测试：`round_rect_sd_sign_and_magnitude`（SDF 符号/弧上过零）、`sd_coverage_transition_band`（1px 过渡带）、`apply_round_alpha_writes_premultiplied_feather`（角尖清零/直边不动/过渡带预乘/最大化全 255）。
+- 门禁：fmt / clippy -D（默认+all-features）/ 361 测试全绿；verify_gui_resource PASS；部署 `dist/winsuitex-gui-gdi.exe`（0.5.0.20261022）。**待 Z.W. 真机浅色壁纸目检后合回 main**。
+
 ## GUI 0.4.9 — 2026-10-22（圆角超采样抗锯齿，分支 `gdi-aa-radius`）
 
 Z.W.「主线的『圆角』还有一招没试过，试一下」→ 纯 GDI 的 3x 超采样 AA（环境无关，VM/RDP 照常）：
