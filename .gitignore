@@ -69,3 +69,6 @@ dist/winsuitex-gui-gdi.exe.bak_*
 
 # 截图/对比用的临时目录（_shot_tmp：对比 exe 与按标题抓图脚本；不入库）
 _shot_tmp/
+
+# ZSUI 源码参照快照（第三方版权代码，仅本地提取画法用；不入仓，走 GitHub contents API 可重取）
+.workbuddy/zsui-ref/
