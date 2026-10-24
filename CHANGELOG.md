@@ -4,9 +4,21 @@
 
 > **两条产品线并存，版本号独立编排**：
 > - **C++ 版**（`dist/客户机/winsuitex.exe`，1.7.x 线）自 2026-09-26 起**冻结**，只作只读参照，不再接受新需求；其变更历史见下方 v1.x 各节。
-> - **Rust 线**（本表）是唯一活跃线，产物为 `dist/winsuitex-gui-gdi.exe`（面板，0.4.x 线）+ `dist/winsuitex.exe`（命令行，0.1.0.x 线），与 C++ 的 1.7.x 无对应关系。
+> - **Rust 线**（本表）是唯一活跃线，产物为 `dist/winsuitex-gui-gdi.exe`（面板，0.5.x 线，最新 **v0.5.5.20261023**）+ `dist/winsuitex.exe`（命令行，0.1.0.x 线，最新 **v0.1.0.20261019**），与 C++ 的 1.7.x 无对应关系。
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
+
+## GUI 0.5.5 — 2026-10-23（4 皮肤体系 + 共享 token 层，分支 `gdi-aa-radius` → 并入 `main`）
+
+Z.W.「把这几套以网页形式展现一下，我选择看看」+「结合 ZSUI 完善 UI SKILL」→ 主题系统从双主题升级为 N 路皮肤体系，并抽共享 token 层保视觉语言一致：
+
+- **4 套皮肤**：深空玻璃（默认）/ 流畅灰紫 / 琥珀暖调 / 薄荷青竹。双主题（深空/流畅）经用户比对后嫌"跟本来就有的太像"，由 ZSUI 取法另立琥珀、薄荷两套拉开差异。
+- **共享 token 层**（`theme.rs` 的 `S_*` 常量约 23 个）：按钮度量 / 语义色 / 徽章 / 图标粉彩 / 选中行 / `GLASS_ALPHA` 等跨皮肤不变——这是产品的视觉语言、与皮肤无关，单一数据源，136 处 `theme()` 调用点零改动（值引用常量）。
+- **N 路化**：`set_theme(id)` 越界钳到 `min(id, THEME_COUNT-1)`；`THEME_COUNT` 常量驱动；无偏好时按纳秒时间戳 `% THEME_COUNT` 取随机皮肤（零依赖不引 rand）。切肤走 `WM_APP` 消息 → 重绘，单实例下跨窗口一致。
+- **UI 技能库完善**：结合 `qiu7824/zsui` 提炼 `djjz-gdi-widget-drawing` 控件画法卡技能（21 张卡 + Type Scale / 对比度 / 图标粉彩 + C++/Rust 双语对照），与 `djjz-gdi-glass-borderless` 成姊妹篇；并做了 13 个 UI 技能的覆盖面/双语横评与瘦身（停用 8 个退役件）。
+- **真机验收**：在 VM/RDP 会话对 `dist/winsuitex-gui-gdi.exe` 抓三页（菜单/硬件/磁盘）目检 + `check_shot` 断言 + 单实例回归全过；抓屏工具改为 `PrintWindow`（分层窗口在 RDP 下 BitBlt 抓黑，非渲染缺陷）。
+
+门禁：fmt / clippy -D（默认+all-features）/ 366 测试全绿；verify_gui_resource PASS（版权「持玛多网络 / Z.W.」、图标#101、清单#1、版本四段式齐全）；部署 `dist/winsuitex-gui-gdi.exe`（0.5.5.20261023），并打 `v0.5.5.20261023` 标签、仓库收敛为单 `main` 主线。
 
 ## GUI 0.5.4 — 2026-10-22（页签药丸化 + 按钮 WinUI 度量，分支 `gdi-aa-radius`）
 
@@ -172,6 +184,12 @@ Z.W. 二次反馈标题栏版有两个问题：①按钮"点击不生效"，反�
 内存幻影槽显式化（面板/报告只统计真实生效内存、幽灵槽口径小字说明、容量口径告警入 core 单一真源）、芯片组识别增强（AMD 家族 token + 主板型号兜底）、Win11 误报 Win10 修复、显示器品牌回归 core 单一数据源、`center_window` 窄工作区 clamp 越界崩溃修复、厂商中文名收敛单一数据源、SAS/RAID 盘 WMI 通电时间兜底、磁盘 SMART 健康徽标与排查脚本等。GUI 面板自 2026-09-23 首版（egui 即时模式）起，2026-10-14 起为 GDI 自绘版（0.4.0 皮肤化），egui/coreui 废弃版已删。
 
 ---
+
+## v1.7.0 — 2026-09-16（C++ 冻结线最终版本 · 不再更新）
+
+> **🔒 本版本为 C++ 线的冻结终态**：自 2026-09-26 起 C++ 版（`dist/客户机/winsuitex.exe`、`shell.rc` 右键模块）进入冻结，只作 Rust 线的只读参照，不再接受新需求、不再发版。下方 v1.0.x–v1.3.5 为冻结前已记录的变更；v1.3.6–v1.7.0 为内部版本号递增（资源 `FileVersion` 在 `app.rc` / `shell.rc` 中最终钉为 `1,7,0,260916` = **v1.7.0.20260916**），无独立用户可见 changelog 条目。
+>
+> 新功能与维护统一在 Rust 线（见顶部「Rust 重写线」及 GUI 0.4.x / 0.5.x 各节）。C++ 冻结线的版本资源以根 `app.rc` 的 `FileVersion` 为准。
 
 ## v1.3.5 — 2026-09-11（内存容量去小数 + 选中分区显示卷标）
 
