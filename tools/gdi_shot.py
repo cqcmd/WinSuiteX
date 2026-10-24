@@ -50,13 +50,11 @@ def capture(hwnd: int, out_path: str) -> tuple[int, int]:
     if w <= 0 or h <= 0:
         raise SystemExit(f"窗口尺寸异常: {w}x{h}")
 
-    # 走**窗口 DC**（GetWindowDC+BitBlt）：本 VM 屏幕读回是坏的（GetDC(0)/ImageGrab
-    # 抓屏全黑/失败），而 exe 在 `on_paint` 末尾有"工具镜像 blit"把羽化后的 DIB
-    # （含 alpha 字节）同步到窗口 DC，正是给这条链路用的。存 RGBA——
-    # alpha 就是窗形羽化通道，Python 端按 `premul + bg*(1-a)` 合成可复现任意壁纸观感。
-    win_dc = user32.GetWindowDC(hwnd)
-    mem_dc = gdi32.CreateCompatibleDC(win_dc)
-
+    # WS_EX_LAYERED 窗口（exe 走 UpdateLayeredWindow）的内容不在常规窗口 DC 上，
+    # GetWindowDC+BitBlt 在 RDP/无显示合成会话下抓到全黑。改用 PrintWindow 强制窗口
+    # 把整窗（含 frameless 标题栏、NC 区）重绘进离屏 DIBSection，RDP 下也能抓到真图。
+    scr = user32.GetDC(0)
+    mem_dc = gdi32.CreateCompatibleDC(scr)
     bmi = BITMAPINFO()
     bmi.bmiHeader.biSize = ctypes.sizeof(BITMAPINFOHEADER)
     bmi.bmiHeader.biWidth = w
@@ -66,22 +64,24 @@ def capture(hwnd: int, out_path: str) -> tuple[int, int]:
     bmi.bmiHeader.biCompression = 0  # BI_RGB
 
     bits = ctypes.c_void_p()
-    bmp = gdi32.CreateDIBSection(
-        mem_dc, ctypes.byref(bmi), DIB_RGB_COLORS, ctypes.byref(bits), None, 0
+    dib = gdi32.CreateDIBSection(
+        scr, ctypes.byref(bmi), DIB_RGB_COLORS, ctypes.byref(bits), None, 0
     )
-    if not bmp:
+    if not dib:
         raise SystemExit("CreateDIBSection 失败")
-    old = gdi32.SelectObject(mem_dc, bmp)
-    gdi32.BitBlt(mem_dc, 0, 0, w, h, win_dc, 0, 0, SRCCOPY)
+    old = gdi32.SelectObject(mem_dc, dib)
+    ok = user32.PrintWindow(hwnd, mem_dc, 0)  # 0 = 抓整个窗口（含 NC/标题栏）
+    if not ok:
+        print("WARN: PrintWindow 返回 0，可能抓到空图")
 
     buf = ctypes.string_at(bits, w * h * 4)
     img = Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1)
     img.save(out_path)
 
     gdi32.SelectObject(mem_dc, old)
-    gdi32.DeleteObject(bmp)
+    gdi32.DeleteObject(dib)
     gdi32.DeleteDC(mem_dc)
-    user32.ReleaseDC(hwnd, win_dc)
+    user32.ReleaseDC(0, scr)
     return w, h
 
 
