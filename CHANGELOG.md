@@ -8,7 +8,7 @@
 >
 > 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
 
-## GUI 0.5.5 — 2026-10-23（4 皮肤体系 + 共享 token 层，分支 `gdi-aa-radius` → 并入 `main`）
+## GUI 0.5.5 — 2026-10-23（4 皮肤体系 + 共享 token 层，已正式发布 2026-10-24，分支 `gdi-aa-radius` → 并入 `main`）
 
 Z.W.「把这几套以网页形式展现一下，我选择看看」+「结合 ZSUI 完善 UI SKILL」→ 主题系统从双主题升级为 N 路皮肤体系，并抽共享 token 层保视觉语言一致：
 
@@ -18,7 +18,7 @@ Z.W.「把这几套以网页形式展现一下，我选择看看」+「结合 ZS
 - **UI 技能库完善**：结合 `qiu7824/zsui` 提炼 `djjz-gdi-widget-drawing` 控件画法卡技能（21 张卡 + Type Scale / 对比度 / 图标粉彩 + C++/Rust 双语对照），与 `djjz-gdi-glass-borderless` 成姊妹篇；并做了 13 个 UI 技能的覆盖面/双语横评与瘦身（停用 8 个退役件）。
 - **真机验收**：在 VM/RDP 会话对 `dist/winsuitex-gui-gdi.exe` 抓三页（菜单/硬件/磁盘）目检 + `check_shot` 断言 + 单实例回归全过；抓屏工具改为 `PrintWindow`（分层窗口在 RDP 下 BitBlt 抓黑，非渲染缺陷）。
 
-门禁：fmt / clippy -D（默认+all-features）/ 366 测试全绿；verify_gui_resource PASS（版权「持玛多网络 / Z.W.」、图标#101、清单#1、版本四段式齐全）；部署 `dist/winsuitex-gui-gdi.exe`（0.5.5.20261023），并打 `v0.5.5.20261023` 标签、仓库收敛为单 `main` 主线。
+门禁：fmt / clippy -D（默认+all-features）/ 366 测试全绿；verify_gui_resource PASS（版权「持玛多网络 / Z.W.」、图标#101、清单#1、版本四段式齐全）；部署 `dist/winsuitex-gui-gdi.exe`（0.5.5.20261023），并打 `v0.5.5.20261023` 标签、仓库收敛为单 `main` 主线。**✅ 2026-10-24 正式发布（发布前审查 GO + 真机验收三页断言全过，四门禁复验全绿）。**
 
 ## GUI 0.5.4 — 2026-10-22（页签药丸化 + 按钮 WinUI 度量，分支 `gdi-aa-radius`）
 
