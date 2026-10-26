@@ -1,0 +1,2 @@
+# 分发包二进制不入库，可用 tools/release_zip.py 重建
+*.zip
