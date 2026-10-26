@@ -8,6 +8,10 @@ Windows 套件，双产品线：**Rust 主推**（纯 Rust + GDI 自绘）+ **C+
 
 **📦 [下载最新版](https://github.com/cqcmd/WinSuiteX/releases/latest)**（解压后以管理员身份运行）
 
+![WinSuiteX 4 套皮肤预览](releases/skins-preview.png)
+
+*4 套皮肤：深空玻璃 / 流畅灰紫 / 琥珀暖调 / 薄荷青竹（Rust 面板，主题页一键切换、记忆本地、共享语义色）*
+
 > **⚠️ 两条产品线，版本号独立编排（2026-10 起）**：
 > - **C++ 版**（1.7.x 线）自 2026-09-26 起**冻结**，只作只读参照，不再更新；下方「当前版本」一行是它的最后状态。
 > - **Rust 线是当前主推**：面板 `winsuitex-gui-gdi.exe`（0.5.x 线，最新 **v0.5.5.20261023**）+ 命令行 `winsuitex.exe`（0.1.0.x 线，最新 **v0.1.0.20261019**），Rust workspace 五 crate，纯 Rust + GDI 自绘单 exe（零 dll、零 GPU）。Rust 线各轮变更见 [CHANGELOG](CHANGELOG.md) 顶部「Rust 重写线」。
