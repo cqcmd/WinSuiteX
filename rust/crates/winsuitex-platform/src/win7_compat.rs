@@ -59,3 +59,112 @@ pub unsafe extern "system" fn CoTaskMemFree(pv: *mut c_void) {
         f(pv);
     }
 }
+
+// ============================================================================
+// DPI / 精确时间：Win8+ 导入（被 windows crate 按模块整块链接"连坐"引入）
+// ----------------------------------------------------------------------------
+// `windows` crate 0.62 按模块整块链接：只要用到某模块里的一个函数，整个模块的
+// 全部函数（含 Win8+ 才有的）都会被写进 exe 导入表。下面用 `#[no_mangle]` 强符号
+// 覆盖这些 Win8+ 导入，链接器据此丢弃对应条目；函数体在运行时用 `GetProcAddress`
+// 探测真实实现，存在则走真实路径（Win10+ 行为不变），不存在则回退 Win7 等价实现。
+// 调用点零改动。仅 `--cfg winsuitex_win7`（x86_64-win7-windows-msvc 构建）编译。
+
+use windows::core::PCSTR;
+use windows::Win32::Foundation::FILETIME;
+use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
+
+/// 运行时从指定系统 DLL 解析函数，返回原始指针（`fn() -> isize`）。
+/// 调用方需自行 transmute 到真实签名。Win7 上该符号不存在则返回 None。
+unsafe fn load_fn(
+    module: windows::core::PCWSTR,
+    name: PCSTR,
+) -> Option<unsafe extern "system" fn() -> isize> {
+    let h = LoadLibraryW(module).ok()?;
+    GetProcAddress(h, name)
+}
+
+// ---- 精确时间：GetSystemTimePreciseAsFileTime (Win8+) -> GetSystemTimeAsFileTime (Win2000+) ----
+#[no_mangle]
+pub unsafe extern "system" fn GetSystemTimePreciseAsFileTime(lp: *mut FILETIME) {
+    if let Some(p) = load_fn(w!("kernel32.dll"), s!("GetSystemTimePreciseAsFileTime")) {
+        let f: unsafe extern "system" fn(*mut FILETIME) = core::mem::transmute(p);
+        f(lp);
+        return;
+    }
+    // 本工具对时钟精度无强需求；Win7 退化为 GetSystemTimeAsFileTime 即可。
+    let ft = GetSystemTimeAsFileTime();
+    if !lp.is_null() {
+        *lp = ft;
+    }
+}
+
+// ---- DPI：Win10 专有函数，Win7 回退 ----
+#[no_mangle]
+pub unsafe extern "system" fn SetProcessDpiAwarenessContext(value: isize) -> i32 {
+    if let Some(p) = load_fn(w!("user32.dll"), s!("SetProcessDpiAwarenessContext")) {
+        let f: unsafe extern "system" fn(isize) -> i32 = core::mem::transmute(p);
+        return f(value);
+    }
+    // Win7：退化为系统级 DPI 感知（Win2000+）。
+    if let Some(p) = load_fn(w!("user32.dll"), s!("SetProcessDPIAware")) {
+        let f: unsafe extern "system" fn() -> i32 = core::mem::transmute(p);
+        return f();
+    }
+    1 // DPI 感知非致命，失败按成功处理，避免上层误判
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn SetProcessDpiAwareness(value: i32) -> i32 {
+    if let Some(p) = load_fn(w!("shcore.dll"), s!("SetProcessDpiAwareness")) {
+        let f: unsafe extern "system" fn(i32) -> i32 = core::mem::transmute(p);
+        return f(value);
+    }
+    if let Some(p) = load_fn(w!("user32.dll"), s!("SetProcessDPIAware")) {
+        let f: unsafe extern "system" fn() -> i32 = core::mem::transmute(p);
+        return f();
+    }
+    1
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn GetDpiForSystem() -> u32 {
+    if let Some(p) = load_fn(w!("user32.dll"), s!("GetDpiForSystem")) {
+        let f: unsafe extern "system" fn() -> u32 = core::mem::transmute(p);
+        return f();
+    }
+    96 // Win7 默认系统 DPI
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn GetDpiForWindow(hwnd: isize) -> u32 {
+    if let Some(p) = load_fn(w!("user32.dll"), s!("GetDpiForWindow")) {
+        let f: unsafe extern "system" fn(isize) -> u32 = core::mem::transmute(p);
+        return f(hwnd);
+    }
+    96
+}
+
+// ---- 以下 HiDpi 模块的其余 Win8+ 符号被整块链接"连坐"引入，本程序不调用，
+//      但必须提供同名强符号覆盖才能丢弃 api-ms-win-shcore-scaling 导入。
+//      实现仅返回占位值（不会真正走到）。 ----
+#[no_mangle]
+pub unsafe extern "system" fn GetDpiAwarenessContextForProcess(_hprocess: isize) -> isize {
+    0
+}
+#[no_mangle]
+pub unsafe extern "system" fn GetDpiForMonitor(
+    _hmonitor: isize,
+    _dpitype: i32,
+    _dpix: *mut u32,
+    _dpiy: *mut u32,
+) -> i32 {
+    0
+}
+#[no_mangle]
+pub unsafe extern "system" fn GetDpiFromDpiAwarenessContext(_value: isize) -> u32 {
+    96
+}
+#[no_mangle]
+pub unsafe extern "system" fn GetProcessDpiAwareness(_hprocess: isize, _value: *mut i32) -> i32 {
+    0
+}

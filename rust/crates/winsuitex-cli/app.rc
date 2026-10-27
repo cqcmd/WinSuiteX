@@ -12,8 +12,8 @@ VS_VERSION_INFO VERSIONINFO
 // 第四段是 MMDD 日期戳（≤1231 恒 <65535）；完整「主.次.修订.日期戳(YYYYMMDD)」
 // 只放字符串。语义号（前三段）必须与 workspace Cargo.toml 的 version 一致——
 // build.rs 会 warning、`version_string_follows_four_segment_scheme` 测试会钉死。
-FILEVERSION 0,1,0,1019
-PRODUCTVERSION 0,1,0,1019
+FILEVERSION 0,1,0,1027
+PRODUCTVERSION 0,1,0,1027
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -23,12 +23,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "重庆持玛多网络科技有限公司"
             VALUE "FileDescription", "WinSuiteX 命令行采集/报告工具"
-            VALUE "FileVersion", "0.1.0.20261019"
+            VALUE "FileVersion", "0.1.0.20261027"
             VALUE "InternalName", "WinSuiteX.Cli"
             VALUE "LegalCopyright", "持玛多网络 / Z.W."
             VALUE "OriginalFilename", "winsuitex.exe"
             VALUE "ProductName", "WinSuiteX"
-            VALUE "ProductVersion", "0.1.0.20261019"
+            VALUE "ProductVersion", "0.1.0.20261027"
         END
     END
     BLOCK "VarFileInfo"
