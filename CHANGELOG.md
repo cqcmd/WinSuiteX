@@ -4,9 +4,19 @@
 
 > **两条产品线并存，版本号独立编排**：
 > - **C++ 版**（`dist/客户机/winsuitex.exe`，1.7.x 线）自 2026-09-26 起**冻结**，只作只读参照，不再接受新需求；其变更历史见下方 v1.x 各节。
-> - **Rust 线**（本表）是唯一活跃线，产物为 `dist/winsuitex-gui-gdi.exe`（面板，0.5.x 线，最新 **v0.5.5.20261023**）+ `dist/winsuitex.exe`（命令行，0.1.0.x 线，最新 **v0.1.0.20261019**），与 C++ 的 1.7.x 无对应关系。
+> - **Rust 线**（本表）是唯一活跃线，产物为 `dist/winsuitex-gui-gdi.exe`（面板，0.5.x 线，最新 **v0.5.6.20261027**）+ `dist/winsuitex.exe`（命令行，0.1.0.x 线，最新 **v0.1.0.20261027**），与 C++ 的 1.7.x 无对应关系。
 >
-> 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈830KB），面向网吧/电竞酒店单 exe 分发场景。
+> 版本号四段式 `主.次.修订.编译日期戳(YYYYMMDD)`；技术形态为 Rust workspace（core / platform / report / gui-gdi / cli 五 crate），GUI 是纯 Rust + GDI 自绘单 exe（零 dll、零 GPU、≈860KB），面向网吧/电竞酒店单 exe 分发场景。
+
+## GUI 0.5.6 — 2026-10-27（Win7 通用构建：GUI 全面兼容 Win7 SP1+，单一 exe 通吃 Win7~Win11）
+
+Z.W. 真机截图：GUI 在 Win7/2008R2 弹「无法定位程序输入点 GetSystemTimePreciseAsFileTime 于动态链接库 kernel32.dll」加载即崩。根因：0.5.5 分发的 GUI exe 用普通 `x86_64-pc-windows-msvc` target 编译，导入表带一整套 Win8+ 依赖——2026-09-22 的 Win7 通用化只覆盖了 CLI，GUI 是之后才大量开发的：
+
+- **根因（windows-rs 按模块整块链接"连坐"）**：`Win32_System_SystemInformation` 里只用了 `GetSystemInfo`/`GetTickCount64`/`GlobalMemoryStatusEx`（全是 Win7 既有），但同模块 Win8+ 的 `GetSystemTimePreciseAsFileTime` 被一并写进导入表；`Win32_UI_HiDpi` 同理连坐 `api-ms-win-shcore-scaling` 一组，`main.rs` 还显式调用 Win10 专有的 `SetProcessDpiAwarenessContext` 等 DPI 四函数；外加 std 的 `api-ms-win-core-synch`、UCRT 的 `api-ms-win-crt-*`。
+- **修复（`win7_compat.rs` 新增 9 个 `#[no_mangle]` 垫片，仅 `--cfg winsuitex_win7` 编译）**：运行时 `GetProcAddress` 探测真实函数——存在走原路径（Win10+ 行为不变），不存在回退 Win7 等价实现（精确时间→`GetSystemTimeAsFileTime`；DPI 四函数→`SetProcessDPIAware`/96；`SetProcessDpiAwareness`→shcore 探测）。4 个未调用但被连坐的符号用哑元覆盖以丢弃导入。调用点零改动。
+- **构建统一**：GUI + CLI 都改走 `x86_64-win7-windows-msvc` target（nightly `-Z build-std=std,panic_abort` + `+crt-static`），延续"单一通用 exe 通吃 Win7 SP1~Win11"模型。
+- **验证（全绿）**：PE 导入表铁证——GUI/CLI 产物零 `api-ms-win-*`、零 `combase`、零 Win8+ 符号（kernel32/user32 全量函数逐个核对）；fmt / clippy -D warnings / 366 tests 通过；图标+版本资源校验双 PASS；Win10/11 实跑（CLI 采集 + GUI 截图渲染）正常；**Z.W. Win7 真机实测启动通过**。
+- **部署**：`dist/winsuitex-gui-gdi.exe` 0.5.6.20261027（bump）；`dist/winsuitex.exe` 0.1.0.20261027（`--set 0.1.0` 刷日期戳保 workspace parity）。
 
 ## GUI 0.5.5 — 2026-10-23（4 皮肤体系 + 共享 token 层，已正式发布 2026-10-24，分支 `gdi-aa-radius` → 并入 `main`）
 
