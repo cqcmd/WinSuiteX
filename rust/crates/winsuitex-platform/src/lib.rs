@@ -14,6 +14,7 @@ mod gpu_telemetry;
 pub mod hid;
 pub mod memory_wmi;
 pub mod nic;
+mod pci_gpu;
 pub mod peripheral_db;
 pub mod physical_disk;
 pub mod pid_model_table;

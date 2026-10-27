@@ -46,6 +46,13 @@ impl HardwareSource for GpuSource {
             gpus = dxgi_adapters(true);
         }
 
+        // 无驱动兜底（2026-10-27 立项）：DXGI/GDI 报占位名（基本显示适配器/
+        // 标准 VGA）时，用 PCI 硬件 ID 查内置表（pci.ids 生成的 N/A/I 三家
+        // 2579 条）补真实型号与板卡品牌。
+        // ⚠️ 必须先于 `dedup_by_name`（QA 建议#4）：双卡同报
+        // "Microsoft 基本显示适配器" 会被按名折叠成一条，第二张卡永远救不回；
+        // 先救成真实型号（两家型号名必不同）再去重，双卡才都保得住。
+        identify_unknown_gpus_via_pci(&mut gpus);
         let gpus = dedup_by_name(gpus);
         // 遥测增强：N 卡走 NVML、A 卡走 ADL；无驱动则两项都为空，telemetry 维持 None。
         let nvml = nvml_collect();
@@ -53,6 +60,68 @@ impl HardwareSource for GpuSource {
         let gpus = enrich_gpus_with_telemetry(gpus, &nvml, &adl);
         ctx.set_gpus(gpus);
         Ok(())
+    }
+}
+
+/// 把无驱动场景下的占位名 GPU 换成 PCI 表里的真实型号。
+///
+/// 只处理 `Physical` 且名字是占位（基本显示适配器/标准 VGA）的条目——
+/// 软件渲染器（Basic Render）与间接显示驱动（RDP/Oray）不是 PCI 设备，不掺和。
+/// 配对策略：占位名 GPU 与 PCI Display 设备按出现顺序一一对应——iCafe 主流的
+/// 单卡场景 1:1 精确；多卡多占位没有更好的关联锚点，按序配对，配不上的保持
+/// 占位名诚实留白。表外 DEV 降级为 `芯片厂商 (PCI ven:dev)`，绝不猜型号。
+fn identify_unknown_gpus_via_pci(gpus: &mut [Gpu]) {
+    let generic_positions: Vec<usize> = gpus
+        .iter()
+        .enumerate()
+        .filter(|(_, g)| g.kind == GpuKind::Physical && is_placeholder_gpu_adapter(&g.name))
+        .map(|(i, _)| i)
+        .collect();
+    if generic_positions.is_empty() {
+        return;
+    }
+    // 只认 N/A/I 三家芯片（QA 建议#2）：ASPEED/Matrox 等 BMC 显示芯片同样挂在
+    // PCI Display 类里，混进配对会把网吧卡贴上服务器的 BMC 型号。
+    let pci: Vec<_> = crate::pci_gpu::display_devices()
+        .into_iter()
+        .filter(|d| crate::pci_gpu::chip_vendor_name(d.vendor_id).is_some())
+        .collect();
+    // 数量守恒守卫（QA 建议#3）：占位数 ≠ 三家芯片设备数时，枚举序没有关联锚点
+    // （如双卡只装了一张的驱动：1 个占位 + 2 个 PCI 设备），按序配对可能张冠李戴
+    // ——错误数据比留白更有害，此时诚实保持占位名，只救 1:1 / n:n 的确定场景。
+    if pci.len() != generic_positions.len() {
+        gtrace(&format!(
+            "PCI 兜底：占位名 GPU {} 个 vs 三家芯片 PCI 设备 {} 个，数量不守恒，\
+             为避免张冠李戴保持占位名",
+            generic_positions.len(),
+            pci.len()
+        ));
+        return;
+    }
+    gtrace(&format!(
+        "PCI 兜底：{} 个占位名 GPU × {} 个三家芯片 PCI 设备",
+        generic_positions.len(),
+        pci.len()
+    ));
+    for (pos, dev) in generic_positions.iter().zip(pci.iter()) {
+        let g = &mut gpus[*pos];
+        let Some(model) = crate::pci_gpu::identify(dev.vendor_id, dev.device_id) else {
+            gtrace(&format!(
+                "PCI 表外芯片 {:04X}:{:04X}，保持占位名 \"{}\"",
+                dev.vendor_id, dev.device_id, g.name
+            ));
+            continue;
+        };
+        gtrace(&format!(
+            "PCI 命中 {:04X}:{:04X} → \"{}\"（原占位名 \"{}\"）",
+            dev.vendor_id, dev.device_id, model, g.name
+        ));
+        g.name = model;
+        // 板卡品牌：SUBSYS 低 16 位复用既有 AIB 映射（Colorful/ASUS/…），
+        // 识别不到留 None，绝不臆造。芯片厂（NVIDIA 等）由型号名自带，不重复挂。
+        if let Some(aib) = dev.subsys_vendor_id.and_then(pci_subsys_vendor_to_brand) {
+            g.vendor = Some(aib.to_string());
+        }
     }
 }
 
@@ -240,7 +309,11 @@ fn gdi_adapters() -> Vec<Gpu> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
         {
-            if !is_placeholder_gpu_adapter(&name) {
+            // 只丢软件渲染器占位（basic render/warp）——"基本显示适配器/标准 VGA"
+            // 是真实 PCI 设备的占位名，必须保留给 PCI 兜底救回真实型号
+            // （QA 建议#5：中文系统无驱动 + DXGI 枚举失败时，若把占位名整体过滤，
+            // GPU 列表会从 1 条变 0 条，违反"至少 1 个 GPU"不变量）。
+            if !is_software_placeholder(&name) {
                 out.push(Gpu {
                     name: name.clone(),
                     vram_mb: None,
@@ -256,13 +329,28 @@ fn gdi_adapters() -> Vec<Gpu> {
 
 /// 占位显卡适配器判定（对应 C++ `IsGpuPlaceholderName`，hardware.cpp:781）。
 ///
-/// 宽松匹配（大小写无关），覆盖中英文驱动描述与未来变体。
+/// 宽松匹配（大小写无关），覆盖中英文驱动描述与未来变体：
+/// - `Microsoft Basic Display Adapter` / `Standard VGA Graphics Adapter`（英文）；
+/// - `Microsoft 基本显示适配器` / `标准 VGA 图形适配器`（中文 Win7/10 无驱动实况）。
 fn is_placeholder_gpu_adapter(name: &str) -> bool {
     if name.is_empty() {
         return true;
     }
-    const PLACEHOLDERS: &[&str] = &["basic display", "basic render", "standard vga"];
+    const PLACEHOLDERS: &[&str] = &[
+        "basic display",
+        "basic render",
+        "standard vga",
+        "基本显示",
+        "标准 vga",
+    ];
     PLACEHOLDERS.iter().any(|p| name.to_lowercase().contains(p))
+}
+
+/// 软件渲染器占位（WARP/Basic Render）：不是 PCI 设备，PCI 兜底救不了，
+/// GDI 合并时直接丢弃（与 [`is_placeholder_gpu_adapter`] 的区别见 gdi_adapters）。
+fn is_software_placeholder(name: &str) -> bool {
+    let l = name.to_lowercase();
+    l.contains("basic render") || l.contains("warp")
 }
 
 /// 按名称关键词判断 GPU 类型（非软件适配器路径）。
@@ -375,6 +463,19 @@ mod tests {
     use crate::GpuSource;
     use winsuitex_core::model::{Gpu, GpuKind, GpuTelemetry, MebiBytes};
     use winsuitex_core::traits::{CollectContext, HardwareSource};
+
+    #[test]
+    fn placeholder_gpu_adapter_covers_chinese_basic_display() {
+        // 中文 Windows 无驱动实况（2026-10-27 立项无驱动识别）：
+        // Win10 = "Microsoft 基本显示适配器"、Win7 = "标准 VGA 图形适配器"。
+        assert!(is_placeholder_gpu_adapter("Microsoft 基本显示适配器"));
+        assert!(is_placeholder_gpu_adapter("标准 VGA 图形适配器"));
+        assert!(is_placeholder_gpu_adapter(
+            "Microsoft Basic Display Adapter"
+        ));
+        // 真实型号不是占位名。
+        assert!(!is_placeholder_gpu_adapter("NVIDIA GeForce GT 220"));
+    }
 
     #[test]
     fn gpu_vendor_from_name_recognizes_bmc_chips() {
