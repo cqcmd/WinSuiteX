@@ -1651,11 +1651,10 @@ fn parse_nvme_smart(log: &[u8]) -> Option<DiskSmart> {
         Some(media_errors_raw)
     };
     // DataUnitsWritten 单位 = 1000 个 512B 扇区，换算字节必须 × 512000（直接当字节差 1000 倍）。
-    let host_written_bytes = if data_units_written == 0 {
-        None
-    } else {
-        Some(data_units_written * 512_000)
-    };
+    // ⚠️ 必须 checked：畸形 log page（损坏固件/错位回包把字段填成 0xFFFF…）时
+    // 裸乘 debug 构建 panic、release 环绕成天文数字入报告——溢出按"未上报"诚实留白
+    // （QA 对抗审查 2026-10-27 建议#3，全文件唯一漏网的一处无界算术）。
+    let host_written_bytes = data_units_written.checked_mul(512_000).filter(|b| *b > 0);
     // 复合温度开尔文，减 273 得摄氏；0 开尔文 = 未上报，不给 -273°C 的鬼值。
     let temperature_c = if temp_kelvin == 0 {
         None

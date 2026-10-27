@@ -25,4 +25,5 @@ pub use model::{
 pub use traits::{collect_all, CollectContext, HardwareSource, Registry, ThreadAffinity};
 pub use vendor_zh::{
     brand_display, brand_display_or, brand_parts, brand_zh, brand_zh_or, gpu_brand_for_display,
+    is_placeholder_text,
 };

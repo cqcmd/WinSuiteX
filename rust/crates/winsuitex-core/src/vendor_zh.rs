@@ -252,6 +252,43 @@ pub fn brand_display_or(raw: &str) -> String {
     brand_display(raw).unwrap_or_else(|| raw.trim().to_string())
 }
 
+/// 固件常见「占位串」判定（**单一真源**：report 与 GUI 共用，勿在下游再抄一份）。
+///
+/// 这些串来自 BIOS/UEFI 模板默认值或空槽/未读 SPD 的填充垃圾（Phoenix/Award/AMI
+/// 都会填），并非真实数据，一旦当成真实厂商/型号/料号渲染会直接污染资产盘点：
+/// - 模板默认值：`To Be Filled By O.E.M.`、`System Manufacturer`、`NO DIMM` 等；
+/// - 未读 SPD 填充（真实案例 PRINT 机 ASUS P8H61，2026-10-27）：`0000`、
+///   `[Empty]`、`00000000` —— BIOS 没读出内存条 SPD 时把 vendor/part/serial
+///   字段填成零串或方括号占位。
+///
+/// 大小写与前后空白不敏感。序列号另有零串/递增串模式判定（report 的
+/// `real_serial`），本函数管 vendor / part / 型号这类文本字段。
+pub fn is_placeholder_text(v: &str) -> bool {
+    const P: &[&str] = &[
+        "default string",
+        "unknown",
+        "to be filled by o.e.m.",
+        "to be filled by oem",
+        "not specified",
+        "no dimm",
+        "not applicable",
+        "system product name",
+        "system manufacturer",
+        "system version",
+        "serial number",
+        "system serial number",
+        "0",
+        "0000",
+        "00000000",
+        "[empty]",
+        "empty",
+        "none",
+        "null",
+    ];
+    let t = v.trim().to_lowercase();
+    P.contains(&t.as_str())
+}
+
 /// 物理显卡板卡品牌展示名（GUI 与报告共用的**单一数据源**）。
 ///
 /// 渲染口径与 [`brand_display`] 一致：命中时 `英文（中文）` 全角括号，未收录返回原文。
@@ -282,6 +319,23 @@ pub fn gpu_brand_for_display(vendor: &Option<String>, name: &str) -> Option<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placeholder_text_covers_zero_and_bracket_fillers() {
+        // 真实案例（PRINT 机 ASUS P8H61，2026-10-27）：BIOS 未读出内存 SPD 时
+        // 把 vendor/part/serial 填成零串或方括号占位，渲染会污染资产盘点。
+        for s in [
+            "0000", "00000000", "[Empty]", "EMPTY", " 0 ", "none", "null",
+        ] {
+            assert!(is_placeholder_text(s), "{s} 应判为占位串");
+        }
+        // 模板默认值（原有清单）仍然命中。
+        assert!(is_placeholder_text("  To Be Filled By O.E.M.  "));
+        // 真实值不受影响。
+        for s in ["Kingston", "99P5471-010.A00LF", "672A8A11", "Samsung"] {
+            assert!(!is_placeholder_text(s), "{s} 不应判为占位串");
+        }
+    }
 
     #[test]
     fn exact_match_case_insensitive() {

@@ -259,11 +259,16 @@ fn parse_cpu(body: &[u8], strings: &[&[u8]]) -> Option<Cpu> {
     })
 }
 
-/// 校正每个 CPU 的线程数。
+/// 校正每个 CPU 的线程数，并剔除「幽灵 Type4」占位条目。
 ///
 /// 部分老旧主板（如 ASUS H61 系）的 SMBIOS Type 4 会把 `Thread Count` 报成
 /// 单核线程数甚至「小于核数」，与 `Core Count` 矛盾。物理上线程数必须 ≥ 核数，
 /// 出现这种情况属于固件数据损坏，不能直接信任。
+///
+/// **幽灵 Type4 剔除（对抗审查发现，2026-10-27）**：部分单路板固件会多吐一个
+/// 占位 Type4（`model`/`vendor` 全缺且 `cores` 缺失或 0）。这种条目参与路数
+/// 计数会把 OS 逻辑处理器均摊值稀释一半，恰好让瞒报（threads == cores）漏修；
+/// 它本身渲染出来也是"0 核"占位行，毫无信息量 —— 直接从列表剔除。
 ///
 /// 修正策略：
 /// - 当 SMBIOS 线程数缺失，或 `< 核数`（矛盾）时，用操作系统逻辑处理器总数按
@@ -276,8 +281,15 @@ fn parse_cpu(body: &[u8], strings: &[&[u8]]) -> Option<Cpu> {
 /// - 均摊值仍 `< 核数` 时退化为「至少等于核数」；
 /// - 已经合理的线程数原样保留。
 ///
-/// 函数幂等，可在采集端与渲染端各调用一次，保证快照与报告一致。
-pub fn sanitize_thread_counts(cpus: &mut [Cpu], logical_processors: Option<u32>) {
+/// 函数幂等（剔除后二次调用无幽灵可剔），可在采集端与渲染端各调用一次。
+pub fn sanitize_thread_counts(cpus: &mut Vec<Cpu>, logical_processors: Option<u32>) {
+    // 幽灵 Type4 剔除：无身份（model/vendor 全缺）或无核数（cores 缺失/0）的
+    // 占位条目先移除，避免稀释路数均摊、也避免"0 核"占位行渲染进报告。
+    cpus.retain(|c| {
+        let no_core_count = c.cores.is_none_or(|n| n == 0);
+        let no_identity = c.model.is_none() && c.vendor.is_none();
+        !(no_core_count || no_identity)
+    });
     if cpus.is_empty() {
         return;
     }
@@ -474,9 +486,68 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_drops_ghost_type4_and_fixes_underscored_threads() {
+        // 对抗审查攻击复现（QA 建议#1）：单路板固件多吐一个幽灵 Type4 占位
+        // （cores=0、无身份）。旧逻辑 n=2 把 per_socket 稀释成 2，i3-3220 的
+        // threads=2 瞒报（threads==cores）恰好漏改。幽灵剔除后 n=1 → 修正为 4。
+        let mut cpus = vec![
+            Cpu {
+                socket: Some("CPU1".into()),
+                model: Some("Intel(R) Core(TM) i3-3220 CPU @ 3.30GHz".into()),
+                vendor: Some("Intel".into()),
+                codename: None,
+                cores: Some(2),
+                threads: Some(2), // BIOS 瞒报：应为 4
+                speed_mhz: Some(3300),
+            },
+            Cpu {
+                socket: Some("CPU2".into()),
+                model: None, // 幽灵占位：无身份、无核数
+                vendor: None,
+                codename: None,
+                cores: Some(0),
+                threads: Some(0),
+                speed_mhz: None,
+            },
+        ];
+        sanitize_thread_counts(&mut cpus, Some(4));
+        assert_eq!(cpus.len(), 1, "幽灵 Type4 占位应被剔除");
+        assert_eq!(cpus[0].threads, Some(4), "剔除后瞒报应被向上修正");
+    }
+
+    #[test]
+    fn sanitize_ghost_dilution_threads_none_fills_truth() {
+        // 同场景的 threads=None 变体：稀释时 bad 分支会把均摊值 2 自信写入
+        // （错误值）；剔除幽灵后 per_socket=4 ≥ cores=2 → 写入正确的 4。
+        let mut cpus = vec![
+            Cpu {
+                socket: Some("CPU1".into()),
+                model: Some("Xeon E3-1220".into()),
+                vendor: Some("Intel".into()),
+                codename: None,
+                cores: Some(4),
+                threads: None,
+                speed_mhz: Some(3100),
+            },
+            Cpu {
+                socket: Some("CPU2".into()),
+                model: None,
+                vendor: None,
+                codename: None,
+                cores: None,
+                threads: None,
+                speed_mhz: None,
+            },
+        ];
+        sanitize_thread_counts(&mut cpus, Some(4));
+        assert_eq!(cpus.len(), 1);
+        assert_eq!(cpus[0].threads, Some(4));
+    }
+
+    #[test]
     fn sanitize_never_shrinks_valid_threads() {
-        // 双路服务器 + 一个空槽占位 Type4（虚报 threads=2）：均摊 lp/n = 2
-        // 小于真实 CPU 的 4 线程。只向上修正的纪律下，正确值不能被改小。
+        // 双路服务器双真实 CPU（4 线程各一）：幽灵剔除后 n=2、per_socket=2，
+        // 真实 CPU 的 4 线程不被改小；lp=4 与 sum(threads)=4 一致。
         let mut cpus = vec![
             Cpu {
                 socket: Some("CPU1".into()),
@@ -489,17 +560,18 @@ mod tests {
             },
             Cpu {
                 socket: Some("CPU2".into()),
-                model: None,
-                vendor: None,
+                model: Some("Xeon".into()),
+                vendor: Some("Intel".into()),
                 codename: None,
-                cores: Some(0),
-                threads: Some(2), // 空槽占位脏数据
-                speed_mhz: None,
+                cores: Some(2),
+                threads: Some(4),
+                speed_mhz: Some(2000),
             },
         ];
         sanitize_thread_counts(&mut cpus, Some(4));
-        assert_eq!(cpus[0].threads, Some(4), "真实 CPU 的线程数不得被改小");
-        // 空槽占位（cores=0）被均摊值顶上去也无所谓——不是真实 CPU。
+        assert_eq!(cpus.len(), 2);
+        assert_eq!(cpus[0].threads, Some(4));
+        assert_eq!(cpus[1].threads, Some(4));
     }
 
     #[test]

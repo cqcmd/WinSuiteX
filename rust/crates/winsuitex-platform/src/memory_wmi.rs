@@ -99,15 +99,24 @@ pub(crate) struct WmiMem {
 /// 从而在同一物理插槽上正确匹配（华硕双 "DIMM 0" 同序的怪象靠 bank 区分）。
 fn normalize_slot(locator: &Option<String>, bank: &Option<String>) -> String {
     let clean = |s: &str| -> String {
-        let mut t = s.to_ascii_lowercase();
-        t = t
-            .trim()
-            .trim_start_matches("p0 ")
-            .trim_start_matches("bank ")
-            .trim_start_matches('b')
-            .trim()
-            .to_string();
-        // 抽掉所有非字母数字，避免空格/连字符差异干扰
+        let mut t = s.trim().to_ascii_lowercase();
+        t = t.trim_start_matches("p0 ").trim().to_string();
+        // "bank" 前缀：带不带空格都剥（"BANK 0"/"BANK0"→"0"），但仅当前缀后
+        // 是空白/数字/结尾，防把 "bankx" 这类真实标识符咬坏。
+        if let Some(rest) = t.strip_prefix("bank") {
+            if rest.is_empty() || rest.starts_with(|c: char| c != '-' && !c.is_alphabetic()) {
+                t = rest.trim().to_string();
+            }
+        }
+        // "b" 前缀（WMI 把 Bank 缩写成 "B0"/"B 0"）：仅当后随数字才剥掉单层。
+        // 不可用 trim_start_matches('b')——它会重复剥，且把无空格的 "bank0"
+        // 咬成 "ank0"，与 SMBIOS "BANK 0"→"0" 归一失配（QA 2026-10-27 观察#6）。
+        if t.starts_with('b') {
+            let rest = t[1..].trim();
+            if rest.starts_with(|c: char| c.is_ascii_digit()) {
+                t = rest.to_string();
+            }
+        }
         t.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
     };
     format!(
@@ -494,15 +503,27 @@ fn fill_capacity_by_locator_secondary(sticks: &mut [MemStick], wmi: &[WmiMem]) {
 /// 纯函数：用 WMI 数据回填 SMBIOS 已采的内存条。
 ///
 /// 匹配策略：
-/// - 槽数一致 → 索引对齐补速度/型号（安全，不改变占用状态），容量仍要求键匹配；
-/// - 槽数不一致 → 按归一化 (locator,bank) 键匹配，且要求**唯一**命中，否则跳过（避免歧义误补）；
+/// - 槽数一致**且归一化 locator 逐位相等** → 索引对齐补速度/型号/类型（同一物理槽
+///   顺序得到验证），容量仍要求键匹配；
+/// - 其余情况（含槽数一致但顺序无法验证）→ 按归一化 (locator,bank) 键匹配，
+///   且要求**唯一**命中，否则跳过（避免歧义误补）；
 /// - 主键（含索引对齐）仍未补上容量的，再走 `fill_capacity_by_locator_secondary`
 ///   （仅以 locator 唯一匹配，回收固件把 bank 回显成 locator 导致的容量缺口）。
 pub(crate) fn enrich_from_wmi(sticks: &mut [MemStick], wmi: &[WmiMem]) {
     if wmi.is_empty() {
         return;
     }
-    if sticks.len() == wmi.len() {
+    // 索引对齐的**安全前置**（QA 对抗审查 2026-10-27 建议#2）：Win32_PhysicalMemory
+    // 的枚举顺序规范上不保证与 SMBIOS Type 17 一致。混插机器（如 16G@3200 +
+    // 32G@5600）一旦顺序错位，纯下标 zip 会把 A 槽的速度/厂商/型号/序列号静默
+    // 挂到 B 槽——容量有 keyed 保护，这四个字段没有。locator 归一后逐位相等才
+    // 认定"同一物理槽顺序"；对不齐一律走 keyed 路径，键不中留 None（诚实）。
+    let idx_aligned = sticks.len() == wmi.len()
+        && sticks.iter().zip(wmi.iter()).all(|(s, w)| {
+            let sk = normalize_slot(&s.locator, &None);
+            !sk.is_empty() && sk == normalize_slot(&w.locator, &None)
+        });
+    if idx_aligned {
         for (s, w) in sticks.iter_mut().zip(wmi.iter()) {
             fill_speed(s, w);
             fill_meta(s, w);
@@ -914,5 +935,69 @@ mod tests {
             normalize_slot(&Some("DIMM 0".into()), &Some("P0 CHANNEL A".into())),
             normalize_slot(&Some("DIMM 0".into()), &Some("P0 CHANNEL B".into())),
         );
+    }
+
+    #[test]
+    fn normalize_slot_handles_bank_without_space() {
+        // QA 2026-10-27 观察#6：trim_start_matches('b') 会把无空格 "BANK0"
+        // 咬成 "ank0"，与 SMBIOS "BANK 0"→"0" 归一失配。修复后两者同键。
+        assert_eq!(
+            normalize_slot(&Some("BANK0".into()), &None),
+            normalize_slot(&Some("BANK 0".into()), &None),
+        );
+        // WMI 缩写 "B0"/"B 0" 仍归一到 "0"（旧有行为保持）。
+        assert_eq!(normalize_slot(&Some("B0".into()), &None), "0");
+        assert_eq!(normalize_slot(&Some("B 0".into()), &None), "0");
+        // 真实标识符不被咬坏："BANKX" 不是槽号，保留原样。
+        assert_eq!(normalize_slot(&Some("BANKX".into()), &None), "bankx");
+    }
+
+    #[test]
+    fn misordered_wmi_uses_keyed_match_not_index_zip() {
+        // QA 对抗审查建议#2：槽数一致但 WMI 枚举顺序与 SMBIOS 相反（混插机器），
+        // 旧逻辑纯下标 zip 会把 B 槽的 5600 挂到 A 槽。修复后 locator 对不齐
+        // 走 keyed 路径，唯一命中各自回填正确值。
+        let mut sticks = vec![
+            stick("ChannelA-DIMM0", "BANK 0", Some(16384), None, None),
+            stick("ChannelB-DIMM0", "BANK 2", Some(32768), None, None),
+        ];
+        // WMI 顺序故意与 SMBIOS 相反：B 槽(5600) 在前、A 槽(3200) 在后。
+        // ccs 传 None 让 fill_speed 走 Speed 回退，断言口径清晰。
+        let wmi = vec![
+            mk_wmi(
+                "ChannelB-DIMM0",
+                "BANK 2",
+                Some(34359738368),
+                None,
+                Some(5600),
+            ),
+            mk_wmi(
+                "ChannelA-DIMM0",
+                "BANK 0",
+                Some(17179869184),
+                None,
+                Some(3200),
+            ),
+        ];
+        enrich_from_wmi(&mut sticks, &wmi);
+        assert_eq!(sticks[0].speed_mhz, Some(3200), "A 槽不得拿到 B 槽的频率");
+        assert_eq!(sticks[1].speed_mhz, Some(5600), "B 槽不得拿到 A 槽的频率");
+    }
+
+    #[test]
+    fn unalignable_locators_stay_honest() {
+        // locator 两侧都对不上（WMI 全空）：不启用索引对齐、keyed 也无键可中
+        // → 速度/厂商诚实留 None，绝不凭下标猜。
+        let mut sticks = vec![
+            stick("DIMM0", "BANK 0", Some(16384), None, None),
+            stick("DIMM1", "BANK 1", Some(32768), None, None),
+        ];
+        let wmi = vec![
+            mk_wmi("", "", Some(17179869184), Some(1600), Some(3200)),
+            mk_wmi("", "", Some(34359738368), Some(2800), Some(5600)),
+        ];
+        enrich_from_wmi(&mut sticks, &wmi);
+        assert_eq!(sticks[0].speed_mhz, None, "无法验证槽位对应时不得下标回填");
+        assert_eq!(sticks[1].speed_mhz, None);
     }
 }

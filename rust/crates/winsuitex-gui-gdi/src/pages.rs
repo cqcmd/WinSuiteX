@@ -726,13 +726,22 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
     // C++ 版也是拆成"型号 / 规格"两行。
     if !info.cpus.is_empty() {
         let mut rows = Vec::new();
+        // 多路服务器（2 颗以上）：GUI 面板版面按单/双路设计，只展示前 2 颗；
+        // 第 3 颗起仅在 HTML 报告完整呈现（刻意取舍，Z.W. 2026-10-27 确认留痕）。
         for c in info.cpus.iter().take(2) {
             let model = c.model.clone().unwrap_or_else(|| "未知".into());
+            // 缺字段按"未知"处理，与报告层 UNKNOWN 纪律一致——
+            // 不输出 "0 核 / 0 线程 · 0 MHz" 这种像坏数据的样子（QA 2026-10-27 观察#4）。
+            let kv = |v: Option<u32>| {
+                v.filter(|n| *n > 0)
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| "未知".into())
+            };
             let spec = format!(
                 "{} 核 / {} 线程 · {} MHz",
-                c.cores.unwrap_or(0),
-                c.threads.unwrap_or(0),
-                c.speed_mhz.unwrap_or(0)
+                kv(c.cores),
+                kv(c.threads),
+                kv(c.speed_mhz)
             );
             rows.push(("型号".into(), model));
             rows.push(("规格".into(), spec));
@@ -834,7 +843,12 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
             if let Some(mhz) = s.speed_mhz.filter(|m| *m > 0) {
                 parts.push(format!("{mhz} MHz"));
             }
-            if let Some(v) = s.vendor.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+            if let Some(v) = s
+                .vendor
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty() && !winsuitex_core::is_placeholder_text(v))
+            {
                 parts.push(brand_display_or(v));
             }
             rows.push((format!("内存 #{shown}"), join_parts(&parts)));
@@ -884,11 +898,20 @@ pub(crate) fn build_hw_sections(r: &winsuitex_core::CollectResult) -> Vec<Sectio
         let mut gpu_rows: Vec<(String, String)> = Vec::new();
         let mut gpu_vc: Vec<Option<Color>> = Vec::new();
         for (i, g) in info.gpus.iter().enumerate() {
-            let vram_gb = g.vram_mb.map_or(0.0, |m| m.get() as f32 / 1024.0);
-            let sub = if vram_gb > 0.05 {
-                format!("{vram_gb:.0} GiB 显存")
-            } else {
-                "共享显存".to_string()
+            // 显存单位自适应（QA/PRINT 机实测 2026-10-27）：MiB 档显卡
+            // （GT 220=74 MiB、GT 610=512 MiB 等）按 GiB 取整会显示 "0 GiB 显存"。
+            // ≥1 GiB 用 GiB（整数不带小数），不足 1 GiB 用 MiB，拿不到/0 → 共享显存。
+            let sub = match g.vram_mb.map(|m| m.get()) {
+                Some(mb) if mb >= 1024 => {
+                    let gb = mb as f64 / 1024.0;
+                    if (gb - gb.round()).abs() < f64::EPSILON {
+                        format!("{gb:.0} GiB 显存")
+                    } else {
+                        format!("{gb:.1} GiB 显存")
+                    }
+                }
+                Some(mb) if mb > 0 => format!("{mb} MiB 显存"),
+                _ => "共享显存".to_string(),
             };
             let mut parts = vec![g.name.clone(), sub];
             // 板卡品牌（华硕/微星/七彩虹），仅物理显卡展示；

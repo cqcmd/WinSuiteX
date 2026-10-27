@@ -1504,26 +1504,11 @@ fn disp_opt(o: &Option<String>) -> &str {
 /// 固件常见的「占位串」——会被原样渲染成真实厂商/型号/序列号，直接污染资产盘点，
 /// 一律按「未知」处理。大小写/前后空白不敏感。
 ///
-/// 这些串来自 BIOS/UEFI 模板默认值（Phoenix/Award/AMI 等厂都会填），并非真实数据：
-/// `To Be Filled By O.E.M.`、`System Manufacturer`、`NO DIMM` 等。把它们当真值渲染出去，
-/// 网咖资产盘点会把"未知主板"记成一家叫"To Be Filled"的厂商——这是审查发现的头号真实性隐患。
+/// 单一真源已上收 `winsuitex_core::is_placeholder_text`（report 与 GUI 共用，
+/// 2026-10-27：PRINT 机 ASUS P8H61 未读 SPD 把 vendor/part 填成 `0000`/`[Empty]`
+/// 的教训）。本包装保留原签名，调用点零改动。
 fn is_placeholder(v: &str) -> bool {
-    const P: &[&str] = &[
-        "default string",
-        "unknown",
-        "to be filled by o.e.m.",
-        "to be filled by oem",
-        "not specified",
-        "no dimm",
-        "not applicable",
-        "system product name",
-        "system manufacturer",
-        "system version",
-        "serial number",
-        "system serial number",
-    ];
-    let t = v.trim().to_lowercase();
-    P.contains(&t.as_str())
+    winsuitex_core::is_placeholder_text(v)
 }
 
 /// 值是否可以直接渲染。
