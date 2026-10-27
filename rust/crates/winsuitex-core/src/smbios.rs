@@ -268,6 +268,11 @@ fn parse_cpu(body: &[u8], strings: &[&[u8]]) -> Option<Cpu> {
 /// 修正策略：
 /// - 当 SMBIOS 线程数缺失，或 `< 核数`（矛盾）时，用操作系统逻辑处理器总数按
 ///   CPU 路数均摊（`单路即 = logical_processors`）作为更可靠的来源；
+/// - **瞒报同样修正**（真实案例：ASUS P8H61 + i3-3220 为 2C/4T，BIOS 把
+///   `Thread Count` 写成 2，`threads == cores` 不触发矛盾检查、原逻辑漏网）——
+///   OS 逻辑处理器总数（`GetSystemInfo`）与 SMBIOS 线程数不符时，OS 为准；
+/// - 修正**只向上**（`per_socket > 现值` 才改）：多路服务器 / 空槽占位 Type4
+///   的脏数据只会让均摊值偏小，向下改会把正确值改坏；
 /// - 均摊值仍 `< 核数` 时退化为「至少等于核数」；
 /// - 已经合理的线程数原样保留。
 ///
@@ -293,6 +298,11 @@ pub fn sanitize_thread_counts(cpus: &mut [Cpu], logical_processors: Option<u32>)
             }
             if cores > 0 {
                 cpu.threads = Some(cores);
+            }
+        } else if let (Some(pt), Some(t)) = (per_socket, cpu.threads) {
+            // OS 总线程数大于 SMBIOS 报告值 → BIOS Type4 瞒报，向上修正。
+            if pt > t && pt >= cores {
+                cpu.threads = Some(pt);
             }
         }
     }
@@ -443,6 +453,69 @@ mod tests {
         }];
         sanitize_thread_counts(&mut cpus, Some(12));
         assert_eq!(cpus[0].threads, Some(12));
+    }
+
+    #[test]
+    fn sanitize_fixes_underscored_thread_count() {
+        // 真实案例（PRINT 机，2026-10-27）：ASUS P8H61-M PLUS V3 + i3-3220
+        // 为 2C/4T（带超线程），BIOS Type4 把 Thread Count 写成 2——
+        // threads == cores 不触发矛盾检查，OS 逻辑处理器 = 4 才是真相。
+        let mut cpus = vec![Cpu {
+            socket: Some("CPU1".into()),
+            model: Some("Intel(R) Core(TM) i3-3220 CPU @ 3.30GHz".into()),
+            vendor: Some("Intel".into()),
+            codename: Some("Ivy Bridge (Core i3)".into()),
+            cores: Some(2),
+            threads: Some(2), // BIOS 瞒报：应为 4
+            speed_mhz: Some(3300),
+        }];
+        sanitize_thread_counts(&mut cpus, Some(4));
+        assert_eq!(cpus[0].threads, Some(4));
+    }
+
+    #[test]
+    fn sanitize_never_shrinks_valid_threads() {
+        // 双路服务器 + 一个空槽占位 Type4（虚报 threads=2）：均摊 lp/n = 2
+        // 小于真实 CPU 的 4 线程。只向上修正的纪律下，正确值不能被改小。
+        let mut cpus = vec![
+            Cpu {
+                socket: Some("CPU1".into()),
+                model: Some("Xeon".into()),
+                vendor: Some("Intel".into()),
+                codename: None,
+                cores: Some(2),
+                threads: Some(4),
+                speed_mhz: Some(2000),
+            },
+            Cpu {
+                socket: Some("CPU2".into()),
+                model: None,
+                vendor: None,
+                codename: None,
+                cores: Some(0),
+                threads: Some(2), // 空槽占位脏数据
+                speed_mhz: None,
+            },
+        ];
+        sanitize_thread_counts(&mut cpus, Some(4));
+        assert_eq!(cpus[0].threads, Some(4), "真实 CPU 的线程数不得被改小");
+        // 空槽占位（cores=0）被均摊值顶上去也无所谓——不是真实 CPU。
+    }
+
+    #[test]
+    fn sanitize_no_lp_change_keeps_threads() {
+        // OS 逻辑处理器数未知（None）时维持旧行为：threads >= cores 原样保留。
+        let mut cpus = vec![Cpu {
+            socket: Some("CPU1".into()),
+            model: Some("i3-3220".into()),
+            vendor: Some("Intel".into()),
+            codename: None,
+            cores: Some(2),
+            threads: Some(2),
+            speed_mhz: Some(3300),
+        }];
+        sanitize_thread_counts(&mut cpus, None);
+        assert_eq!(cpus[0].threads, Some(2));
     }
 
     /// 构造一个最小 SMBIOS 缓冲区：8 字节头 + 若干结构。
